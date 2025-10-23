@@ -2,6 +2,10 @@
 config/multi-phone.json
 config/phones.json
 config/phone-numbers.json
+config/telegram-auth.json # Added for persistent authorization
+config/non-active-hours.json # Added for non-active hours configuration
+config/user-preferences.json # Added for per-user timezone preferences
+config/group-subscriptions.json # Added for group subscription management
 
 # Dependencies
 node_modules/

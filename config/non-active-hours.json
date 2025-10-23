@@ -7,7 +7,15 @@
         "name": "Night Sleep (Israeli Time)",
         "start": "01:00",
         "end": "06:00",
-        "days": ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"],
+        "days": [
+          "monday",
+          "tuesday",
+          "wednesday",
+          "thursday",
+          "friday",
+          "saturday",
+          "sunday"
+        ],
         "enabled": true,
         "behavior": "sleep"
       },
@@ -15,7 +23,10 @@
         "name": "Weekend Break (Optional)",
         "start": "00:00",
         "end": "23:59",
-        "days": ["saturday", "sunday"],
+        "days": [
+          "saturday",
+          "sunday"
+        ],
         "enabled": false,
         "behavior": "reduced"
       },
@@ -23,7 +34,15 @@
         "name": "Travel Mode - 24/7 (Disable Sleep)",
         "start": "00:00",
         "end": "23:59",
-        "days": ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"],
+        "days": [
+          "monday",
+          "tuesday",
+          "wednesday",
+          "thursday",
+          "friday",
+          "saturday",
+          "sunday"
+        ],
         "enabled": false,
         "behavior": "sleep",
         "description": "Enable this when traveling abroad for 24/7 operation"
