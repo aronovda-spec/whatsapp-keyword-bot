@@ -23,18 +23,181 @@ class TelegramCommandHandler {
     }
 
     setupCommandHandlers() {
+        // Unified message handler - handles all message types with proper flow control
+        this.bot.on('message', (msg) => {
+            const userId = msg.from.id;
+            const messageText = msg.text;
+            const userName = msg.from.first_name || msg.from.username || 'Unknown';
+            
+            // Store user name for future reference (if not already stored)
+            if (!this.authorization.getUserName(userId)) {
+                this.authorization.setUserName(userId, userName);
+            }
+            
+            // Check if this is a restart confirmation
+            if (this.pendingRestartConfirmations && this.pendingRestartConfirmations.has(userId)) {
+                const confirmation = this.pendingRestartConfirmations.get(userId);
+                
+                // Clean up expired confirmations (5 minutes)
+                if (Date.now() - confirmation.timestamp > 300000) {
+                    this.pendingRestartConfirmations.delete(userId);
+                    return;
+                }
+                
+                if (messageText === 'CONFIRM RESTART') {
+                    // Confirmed restart
+                    this.pendingRestartConfirmations.delete(userId);
+                    
+                    this.bot.sendMessage(confirmation.chatId, 
+                        '✅ <b>Restart Confirmed!</b>\n\n' +
+                        '🔄 <b>Restarting Bot...</b>\n\n' +
+                        '⚠️ <b>Important:</b>\n' +
+                        '• Bot will restart in 3 seconds\n' +
+                        '• WhatsApp QR code will need to be scanned again\n' +
+                        '• All data will be preserved\n\n' +
+                        '🔄 <b>Restarting now...</b>',
+                        { parse_mode: 'HTML' }
+                    );
+                    
+                    console.log(`🔄 Admin ${userId} confirmed bot restart`);
+                    
+                    // Give time for message to be sent, then restart
+                    setTimeout(() => {
+                        console.log('🔄 Bot restart initiated by admin');
+                        process.exit(0);
+                    }, 3000);
+                    
+                } else {
+                    // Cancelled restart
+                    this.pendingRestartConfirmations.delete(userId);
+                    
+                    this.bot.sendMessage(confirmation.chatId, 
+                        '❌ <b>Restart Cancelled</b>\n\n' +
+                        '✅ Bot will continue running normally.\n' +
+                        '🔄 Use /restart again if you need to restart later.',
+                        { parse_mode: 'HTML' }
+                    );
+                    
+                    console.log(`🔄 Admin ${userId} cancelled bot restart`);
+                }
+                
+                // Return early to prevent other handlers
+                return;
+            }
+            
+            // Check if this is a remove confirmation
+            if (this.pendingRemovalConfirmations && this.pendingRemovalConfirmations.has(userId)) {
+                const confirmation = this.pendingRemovalConfirmations.get(userId);
+                
+                // Clean up expired confirmations (5 minutes)
+                if (Date.now() - confirmation.timestamp > 300000) {
+                    this.pendingRemovalConfirmations.delete(userId);
+                    return;
+                }
+                
+                if (messageText === 'CONFIRM REMOVE') {
+                    // Confirmed removal
+                    this.pendingRemovalConfirmations.delete(userId);
+                    
+                    // Perform the removal
+                    const success = this.authorization.removeAuthorizedUser(confirmation.userIdToRemove, userId);
+                    const cleanupSuccess = this.authorization.cleanupUserData(confirmation.userIdToRemove);
+                    
+                    if (success && cleanupSuccess) {
+                        this.bot.sendMessage(confirmation.chatId, 
+                            '✅ <b>User Removal Confirmed!</b>\n\n' +
+                            `🗑️ <b>User ${confirmation.userIdToRemove} (${confirmation.userName}) has been removed</b>\n\n` +
+                            '🧹 <b>Data Cleaned Up:</b>\n' +
+                            '• ✅ Removed from authorized users\n' +
+                            '• ✅ Removed admin privileges (if any)\n' +
+                            '• ✅ Deleted personal keywords\n' +
+                            '• ✅ Removed group subscriptions\n' +
+                            '• ✅ Deleted user preferences\n' +
+                            '• ✅ Removed user name\n\n' +
+                            '⚠️ <b>User will no longer have access to the bot.</b>',
+                            { parse_mode: 'HTML' }
+                        );
+                        
+                        // Notify the removed user
+                        this.bot.sendMessage(confirmation.userIdToRemove, 
+                            '❌ <b>Access Revoked</b>\n\n' +
+                            'Your access to the WhatsApp Keyword Bot has been revoked by an administrator.\n\n' +
+                            'If you believe this is an error, please contact an admin.',
+                            { parse_mode: 'HTML' }
+                        );
+                        
+                        console.log(`🗑️ Admin ${userId} confirmed removal of user ${confirmation.userIdToRemove} (${confirmation.userName})`);
+                    } else {
+                        this.bot.sendMessage(confirmation.chatId, 
+                            '❌ <b>Removal Failed</b>\n\n' +
+                            `Failed to remove user ${confirmation.userIdToRemove} (${confirmation.userName}).\n` +
+                            'Please try again or check the logs for errors.',
+                            { parse_mode: 'HTML' }
+                        );
+                    }
+                    
+                } else {
+                    // Cancelled removal
+                    this.pendingRemovalConfirmations.delete(userId);
+                    
+                    this.bot.sendMessage(confirmation.chatId, 
+                        '❌ <b>User Removal Cancelled</b>\n\n' +
+                        `✅ User ${confirmation.userIdToRemove} (${confirmation.userName}) remains authorized.\n` +
+                        '🗑️ Use /remove again if you need to remove the user later.',
+                        { parse_mode: 'HTML' }
+                    );
+                    
+                    console.log(`🗑️ Admin ${userId} cancelled removal of user ${confirmation.userIdToRemove} (${confirmation.userName})`);
+                }
+                
+                // Return early to prevent other handlers
+                return;
+            }
+            
+            // Handle broadcast messages (non-command messages from authorized users)
+            if (!messageText.startsWith('/')) {
+                const chatId = msg.chat.id;
+                
+                if (!this.authorization.isAuthorized(userId)) {
+                    this.bot.sendMessage(chatId, '❌ You are not authorized to use this bot.');
+                    return;
+                }
+                
+                console.log(`📨 Broadcast message from ${userName} (${userId}): ${messageText}`);
+                
+                // Get all authorized users
+                const authorizedUsers = this.authorization.getAuthorizedUsers();
+                
+                // Send to all authorized users
+                authorizedUsers.forEach(authorizedUserId => {
+                    try {
+                        const broadcastMessage = `📢 <b>Message from ${userName}:</b>\n\n"${messageText}"`;
+                        this.bot.sendMessage(authorizedUserId, broadcastMessage, { parse_mode: 'HTML' });
+                    } catch (error) {
+                        console.error(`❌ Failed to send broadcast to user ${authorizedUserId}:`, error.message);
+                    }
+                });
+                
+                console.log(`📢 Broadcast sent to ${authorizedUsers.length} authorized users`);
+            }
+        });
+
         // Start command
         this.bot.onText(/\/start/, (msg) => {
             const chatId = msg.chat.id;
             const userId = msg.from.id;
+            const userName = msg.from.first_name || msg.from.username || 'Unknown';
+            
+            // Store user name for future reference
+            this.authorization.setUserName(userId, userName);
             
             // Prevent duplicate commands
             if (this.isDuplicateCommand(userId, 'start')) {
-                console.log('🚫 Duplicate /start command ignored from:', msg.from.username || msg.from.first_name);
+                console.log('🚫 Duplicate /start command ignored from:', userName);
                 return;
             }
             
-            console.log('📨 Received /start from:', msg.from.username || msg.from.first_name);
+            console.log('📨 Received /start from:', userName);
             
             if (this.authorization.isAuthorized(userId)) {
                 this.bot.sendMessage(chatId, '✅ You are authorized! Bot is working!\n\nUse /help to see available commands.');
@@ -43,13 +206,14 @@ class TelegramCommandHandler {
                     '🔐 Access Request\n\n' +
                     'You are not authorized to use this bot.\n' +
                     'Your request has been sent to administrators for approval.\n\n' +
-                    'Request ID: ' + userId
+                    'Request ID: ' + userId + '\n' +
+                    'Name: ' + userName
                 );
                 this.authorization.addPendingApproval(userId, {
                     username: msg.from.username,
                     firstName: msg.from.first_name
                 });
-                this.notifyAdmins(`🔔 New access request from user ${userId} (@${msg.from.username || 'unknown'})`);
+                this.notifyAdmins(`🔔 New access request from user ${userId} (@${msg.from.username || 'unknown'}) - ${userName}`);
             }
         });
 
@@ -103,7 +267,8 @@ class TelegramCommandHandler {
                     '👑 Admin Only:\n' +
                     '/approve <user_id> - Approve user\n' +
                     '/reject <user_id> - Reject user\n' +
-                    '/pending - Show pending requests';
+                    '/pending - Show pending requests\n' +
+                    '/remove <user_id> - Remove user (with confirmation)';
             this.bot.sendMessage(chatId, helpText);
         });
 
@@ -151,6 +316,7 @@ class TelegramCommandHandler {
                 '/removekeyword <word> - Remove global keyword\n' +
                 '/approve <user_id> - Approve user\n' +
                 '/reject <user_id> - Reject user\n' +
+                '/remove <user_id> - Remove user (with confirmation)\n' +
                 '/pending - Show pending requests';
             this.bot.sendMessage(chatId, adminText);
         });
@@ -182,8 +348,9 @@ class TelegramCommandHandler {
                     const adminBadge = isAdmin ? '👑' : '👤';
                     const adminStatus = isAdmin ? 'Admin' : 'User';
                     const adminEmoji = isAdmin ? '✅' : '👤';
+                    const userName = this.authorization.getUserName(user) || 'Unknown';
                     
-                    usersText += `${adminBadge} <b>User ${index + 1}</b>\n`;
+                    usersText += `${adminBadge} <b>User ${index + 1} - ${userName}</b>\n`;
                     usersText += `   📱 ID: ${user}\n`;
                     usersText += `   ${adminEmoji} Role: ${adminStatus}\n`;
                     usersText += `   ✅ Status: Active\n`;
@@ -221,7 +388,8 @@ class TelegramCommandHandler {
                 adminsText += '❌ No admin users found.';
             } else {
                 adminUsers.forEach((adminId, index) => {
-                    adminsText += `👑 <b>Admin ${index + 1}</b>\n`;
+                    const adminName = this.authorization.getUserName(adminId) || 'Unknown';
+                    adminsText += `👑 <b>Admin ${index + 1} - ${adminName}</b>\n`;
                     adminsText += `   📱 ID: ${adminId}\n`;
                     adminsText += `   ✅ Role: Admin\n`;
                     adminsText += `   ✅ Status: Active\n`;
@@ -783,8 +951,9 @@ class TelegramCommandHandler {
                 return;
             }
             
-            if (this.authorization.approveUser(userIdToApprove, adminId)) {
-                this.bot.sendMessage(chatId, `✅ User ${userIdToApprove} approved successfully.`);
+            const userName = this.authorization.getUserName(userIdToApprove) || 'Unknown';
+            if (this.authorization.approveUser(userIdToApprove, adminId, userName)) {
+                this.bot.sendMessage(chatId, `✅ User ${userIdToApprove} (${userName}) approved successfully.`);
                 this.bot.sendMessage(userIdToApprove, '🎉 Your access request has been approved! You can now use the bot.');
             } else {
                 this.bot.sendMessage(chatId, `❌ Failed to approve user ${userIdToApprove}.`);
@@ -808,6 +977,101 @@ class TelegramCommandHandler {
             } else {
                 this.bot.sendMessage(chatId, `❌ Failed to reject user ${userIdToReject}.`);
             }
+        });
+
+        // Remove user command - Admin only with confirmation
+        this.bot.onText(/\/remove (.+)/, (msg, match) => {
+            const chatId = msg.chat.id;
+            const adminId = msg.from.id;
+            const userIdToRemove = match[1];
+            
+            // Prevent duplicate commands
+            if (this.isDuplicateCommand(adminId, 'remove')) {
+                console.log('🚫 Duplicate /remove command ignored from:', msg.from.username || msg.from.first_name);
+                return;
+            }
+            
+            if (!this.authorization.isAdmin(adminId)) {
+                this.bot.sendMessage(chatId, '❌ Admin access required.');
+                return;
+            }
+            
+            // Check if user exists
+            if (!this.authorization.isAuthorized(userIdToRemove)) {
+                this.bot.sendMessage(chatId, `❌ User ${userIdToRemove} is not authorized or doesn't exist.`);
+                return;
+            }
+            
+            // Prevent self-removal
+            if (userIdToRemove === adminId.toString()) {
+                this.bot.sendMessage(chatId, 
+                    '❌ <b>Self-Removal Not Allowed</b>\n\n' +
+                    '⚠️ You cannot remove yourself from the system.\n' +
+                    '🔄 If you need to transfer admin privileges, promote another user first.\n' +
+                    '📱 Contact another admin if you need assistance.',
+                    { parse_mode: 'HTML' }
+                );
+                return;
+            }
+            
+            // Check if removing this admin would leave the system with no admins
+            const adminUsers = this.authorization.getAdminUsers();
+            const isTargetAdmin = this.authorization.isAdmin(userIdToRemove);
+            
+            if (isTargetAdmin && adminUsers.length <= 1) {
+                this.bot.sendMessage(chatId, 
+                    '❌ <b>Cannot Remove Last Admin</b>\n\n' +
+                    '⚠️ Removing this admin would leave the system with no administrators.\n' +
+                    '👑 At least one admin must remain in the system.\n' +
+                    '🔄 Promote another user to admin first, then remove this user.\n' +
+                    '🛡️ Set TELEGRAM_FALLBACK_ADMIN in environment for emergency recovery.',
+                    { parse_mode: 'HTML' }
+                );
+                return;
+            }
+            
+            const userName = this.authorization.getUserName(userIdToRemove) || 'Unknown';
+            
+            // Create confirmation message with special warnings for admin removal
+            let confirmationMessage = '⚠️ <b>USER REMOVAL CONFIRMATION</b>\n\n';
+            
+            if (isTargetAdmin) {
+                confirmationMessage += '👑 <b>ADMIN REMOVAL WARNING</b>\n\n';
+                confirmationMessage += `🗑️ <b>Are you sure you want to remove ADMIN ${userIdToRemove} (${userName})?</b>\n\n`;
+                confirmationMessage += '⚠️ <b>This will permanently:</b>\n';
+                confirmationMessage += '• Remove admin from authorized users\n';
+                confirmationMessage += '• Remove ALL admin privileges\n';
+                confirmationMessage += '• Delete all personal keywords\n';
+                confirmationMessage += '• Remove all group subscriptions\n';
+                confirmationMessage += '• Delete user preferences\n';
+                confirmationMessage += '• Remove user name from records\n\n';
+                confirmationMessage += '🚨 <b>ADMIN PRIVILEGES WILL BE LOST FOREVER!</b>\n\n';
+            } else {
+                confirmationMessage += `🗑️ <b>Are you sure you want to remove user ${userIdToRemove} (${userName})?</b>\n\n`;
+                confirmationMessage += '⚠️ <b>This will permanently:</b>\n';
+                confirmationMessage += '• Remove user from authorized users\n';
+                confirmationMessage += '• Delete all personal keywords\n';
+                confirmationMessage += '• Remove all group subscriptions\n';
+                confirmationMessage += '• Delete user preferences\n';
+                confirmationMessage += '• Remove user name from records\n\n';
+            }
+            
+            confirmationMessage += '🔴 <b>Type "CONFIRM REMOVE" to proceed</b>\n';
+            confirmationMessage += '❌ <b>Type anything else to cancel</b>';
+            
+            // Show confirmation prompt
+            this.bot.sendMessage(chatId, confirmationMessage, { parse_mode: 'HTML' });
+            
+            // Store pending removal confirmation
+            this.pendingRemovalConfirmations = this.pendingRemovalConfirmations || new Map();
+            this.pendingRemovalConfirmations.set(adminId, {
+                chatId: chatId,
+                userIdToRemove: userIdToRemove,
+                userName: userName,
+                timestamp: Date.now()
+            });
+            
+            console.log(`🗑️ Admin ${adminId} requested removal confirmation for user ${userIdToRemove} (${userName})`);
         });
 
         // Pending requests command
@@ -1044,94 +1308,7 @@ class TelegramCommandHandler {
             console.log(`🔄 Admin ${userId} requested restart confirmation`);
         });
 
-        // Restart confirmation handler
-        this.bot.on('message', (msg) => {
-            const userId = msg.from.id;
-            const messageText = msg.text;
-            
-            // Check if this is a restart confirmation
-            if (this.pendingRestartConfirmations && this.pendingRestartConfirmations.has(userId)) {
-                const confirmation = this.pendingRestartConfirmations.get(userId);
-                
-                // Clean up expired confirmations (5 minutes)
-                if (Date.now() - confirmation.timestamp > 300000) {
-                    this.pendingRestartConfirmations.delete(userId);
-                    return;
-                }
-                
-                if (messageText === 'CONFIRM RESTART') {
-                    // Confirmed restart
-                    this.pendingRestartConfirmations.delete(userId);
-                    
-                    this.bot.sendMessage(confirmation.chatId, 
-                        '✅ <b>Restart Confirmed!</b>\n\n' +
-                        '🔄 <b>Restarting Bot...</b>\n\n' +
-                        '⚠️ <b>Important:</b>\n' +
-                        '• Bot will restart in 3 seconds\n' +
-                        '• WhatsApp QR code will need to be scanned again\n' +
-                        '• All data will be preserved\n\n' +
-                        '🔄 <b>Restarting now...</b>',
-                        { parse_mode: 'HTML' }
-                    );
-                    
-                    console.log(`🔄 Admin ${userId} confirmed bot restart`);
-                    
-                    // Give time for message to be sent, then restart
-                    setTimeout(() => {
-                        console.log('🔄 Bot restart initiated by admin');
-                        process.exit(0);
-                    }, 3000);
-                    
-                } else {
-                    // Cancelled restart
-                    this.pendingRestartConfirmations.delete(userId);
-                    
-                    this.bot.sendMessage(confirmation.chatId, 
-                        '❌ <b>Restart Cancelled</b>\n\n' +
-                        '✅ Bot will continue running normally.\n' +
-                        '🔄 Use /restart again if you need to restart later.',
-                        { parse_mode: 'HTML' }
-                    );
-                    
-                    console.log(`🔄 Admin ${userId} cancelled bot restart`);
-                }
-                
-                // Return early to prevent other message handlers
-                return;
-            }
-        });
 
-        // Handle any other message - BROADCAST TO ALL AUTHORIZED USERS
-        this.bot.on('message', (msg) => {
-            if (!msg.text.startsWith('/')) {
-                const chatId = msg.chat.id;
-                const userId = msg.from.id;
-                const userName = msg.from.first_name || msg.from.username || 'Unknown User';
-                
-                if (!this.authorization.isAuthorized(userId)) {
-                    this.bot.sendMessage(chatId, '❌ You are not authorized to use this bot.');
-                    return;
-                }
-                
-                console.log(`📨 Broadcast message from ${userName} (${userId}): ${msg.text}`);
-                
-                // Get all authorized users
-                const authorizedUsers = this.authorization.getAuthorizedUsers();
-                
-                // Send to all authorized users
-                authorizedUsers.forEach(authorizedUserId => {
-                    try {
-                        const broadcastMessage = `📢 <b>Message from ${userName}:</b>\n\n"${msg.text}"`;
-                        this.bot.sendMessage(authorizedUserId, broadcastMessage, { parse_mode: 'HTML' });
-                    } catch (error) {
-                        console.error(`❌ Failed to send broadcast to user ${authorizedUserId}:`, error.message);
-                    }
-                });
-                
-                // Confirm to sender
-                this.bot.sendMessage(chatId, `✅ Message broadcasted to ${authorizedUsers.length} authorized users.`);
-            }
-        });
 
         // Handle polling errors
         this.bot.on('polling_error', (error) => {

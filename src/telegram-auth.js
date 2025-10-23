@@ -21,6 +21,14 @@ class TelegramAuthorization {
             this.authorizedUsers.add('1022850808'); // Your chat ID
             this.adminUsers.add('1022850808'); // Your chat ID
             
+            // Add fallback admin from environment variable (for recovery)
+            const fallbackAdmin = process.env.TELEGRAM_FALLBACK_ADMIN;
+            if (fallbackAdmin && fallbackAdmin !== '1022850808') {
+                this.authorizedUsers.add(fallbackAdmin);
+                this.adminUsers.add(fallbackAdmin);
+                console.log(`🛡️ Fallback admin loaded: ${fallbackAdmin}`);
+            }
+            
             // Load from environment variables first
             const envAuthorized = process.env.TELEGRAM_AUTHORIZED_USERS;
             const envAdmins = process.env.TELEGRAM_ADMIN_USERS;
@@ -37,6 +45,11 @@ class TelegramAuthorization {
                 const config = JSON.parse(fs.readFileSync(this.configPath, 'utf8'));
                 config.authorizedUsers.forEach(id => this.authorizedUsers.add(id));
                 config.adminUsers.forEach(id => this.adminUsers.add(id));
+                
+                // Load user names
+                if (config.userNames) {
+                    this.userNames = new Map(Object.entries(config.userNames));
+                }
                 // Pending approvals are not persisted across restarts for security
             }
             
@@ -54,9 +67,16 @@ class TelegramAuthorization {
         return this.adminUsers.has(userId.toString());
     }
 
-    addAuthorizedUser(userId, addedBy = null) {
+    addAuthorizedUser(userId, addedBy = null, userName = null) {
         this.authorizedUsers.add(userId.toString());
-        console.log(`✅ User ${userId} authorized by ${addedBy || 'system'}`);
+        
+        // Store user name if provided
+        if (userName) {
+            this.userNames = this.userNames || new Map();
+            this.userNames.set(userId.toString(), userName);
+        }
+        
+        console.log(`✅ User ${userId} (${userName || 'Unknown'}) authorized by ${addedBy || 'system'}`);
         this.saveConfig();
         return true;
     }
@@ -65,7 +85,8 @@ class TelegramAuthorization {
         try {
             const config = {
                 authorizedUsers: Array.from(this.authorizedUsers),
-                adminUsers: Array.from(this.adminUsers)
+                adminUsers: Array.from(this.adminUsers),
+                userNames: this.userNames ? Object.fromEntries(this.userNames) : {}
             };
             fs.writeFileSync(this.configPath, JSON.stringify(config, null, 2));
         } catch (error) {
@@ -74,8 +95,21 @@ class TelegramAuthorization {
     }
 
     removeAuthorizedUser(userId, removedBy = null) {
-        this.authorizedUsers.delete(userId.toString());
-        console.log(`❌ User ${userId} removed by ${removedBy || 'system'}`);
+        const userIdStr = userId.toString();
+        const userName = this.getUserName(userIdStr) || 'Unknown';
+        
+        // Remove from authorized users
+        this.authorizedUsers.delete(userIdStr);
+        
+        // Remove from admin users if they were an admin
+        this.adminUsers.delete(userIdStr);
+        
+        // Remove user name
+        if (this.userNames) {
+            this.userNames.delete(userIdStr);
+        }
+        
+        console.log(`❌ User ${userIdStr} (${userName}) removed by ${removedBy || 'system'}`);
         this.saveConfig();
         return true;
     }
@@ -89,7 +123,7 @@ class TelegramAuthorization {
         return Array.from(this.pendingApprovals.keys());
     }
 
-    approveUser(userId, approvedBy) {
+    approveUser(userId, approvedBy, userName = null) {
         const userIdStr = userId.toString();
         if (!this.pendingApprovals.has(userIdStr)) {
             console.log(`❌ Cannot approve user ${userId}: not in pending list`);
@@ -97,8 +131,8 @@ class TelegramAuthorization {
         }
         
         this.pendingApprovals.delete(userIdStr);
-        this.addAuthorizedUser(userId, approvedBy);
-        console.log(`✅ User ${userId} approved by ${approvedBy}`);
+        this.addAuthorizedUser(userId, approvedBy, userName);
+        console.log(`✅ User ${userId} (${userName || 'Unknown'}) approved by ${approvedBy}`);
         return true;
     }
 
@@ -146,6 +180,123 @@ class TelegramAuthorization {
             adminUsers: this.getAdminUsers(),
             pendingUsers: this.getPendingApprovals()
         };
+    }
+
+    getUserName(userId) {
+        if (this.userNames && this.userNames.has(userId.toString())) {
+            return this.userNames.get(userId.toString());
+        }
+        return null;
+    }
+
+    setUserName(userId, userName) {
+        this.userNames = this.userNames || new Map();
+        this.userNames.set(userId.toString(), userName);
+        this.saveConfig();
+    }
+
+    // Clean up user data from all config files
+    cleanupUserData(userId) {
+        const userIdStr = userId.toString();
+        const userName = this.getUserName(userIdStr) || 'Unknown';
+        
+        try {
+            // Clean up personal keywords
+            this.cleanupPersonalKeywords(userIdStr);
+            
+            // Clean up group subscriptions
+            this.cleanupGroupSubscriptions(userIdStr);
+            
+            // Clean up user preferences
+            this.cleanupUserPreferences(userIdStr);
+            
+            console.log(`🧹 Cleaned up all data for user ${userIdStr} (${userName})`);
+            return true;
+        } catch (error) {
+            console.error(`❌ Failed to cleanup user data for ${userIdStr}:`, error.message);
+            return false;
+        }
+    }
+
+    cleanupPersonalKeywords(userId) {
+        try {
+            const fs = require('fs');
+            const path = require('path');
+            const personalKeywordsPath = path.join(__dirname, '../config/personal-keywords.json');
+            
+            if (fs.existsSync(personalKeywordsPath)) {
+                const data = JSON.parse(fs.readFileSync(personalKeywordsPath, 'utf8'));
+                delete data[userId];
+                fs.writeFileSync(personalKeywordsPath, JSON.stringify(data, null, 2));
+                console.log(`🗑️ Removed personal keywords for user ${userId}`);
+            }
+        } catch (error) {
+            console.error(`❌ Failed to cleanup personal keywords for ${userId}:`, error.message);
+        }
+    }
+
+    cleanupGroupSubscriptions(userId) {
+        try {
+            const fs = require('fs');
+            const path = require('path');
+            const subscriptionsPath = path.join(__dirname, '../config/group-subscriptions.json');
+            
+            if (fs.existsSync(subscriptionsPath)) {
+                const data = JSON.parse(fs.readFileSync(subscriptionsPath, 'utf8'));
+                
+                // Remove user from all group subscriptions
+                Object.keys(data).forEach(groupName => {
+                    if (Array.isArray(data[groupName])) {
+                        data[groupName] = data[groupName].filter(id => id !== userId);
+                    }
+                });
+                
+                fs.writeFileSync(subscriptionsPath, JSON.stringify(data, null, 2));
+                console.log(`🗑️ Removed group subscriptions for user ${userId}`);
+            }
+        } catch (error) {
+            console.error(`❌ Failed to cleanup group subscriptions for ${userId}:`, error.message);
+        }
+    }
+
+    cleanupUserPreferences(userId) {
+        try {
+            const fs = require('fs');
+            const path = require('path');
+            const preferencesPath = path.join(__dirname, '../config/user-preferences.json');
+            
+            if (fs.existsSync(preferencesPath)) {
+                const data = JSON.parse(fs.readFileSync(preferencesPath, 'utf8'));
+                delete data[userId];
+                fs.writeFileSync(preferencesPath, JSON.stringify(data, null, 2));
+                console.log(`🗑️ Removed user preferences for user ${userId}`);
+            }
+        } catch (error) {
+            console.error(`❌ Failed to cleanup user preferences for ${userId}:`, error.message);
+        }
+    }
+
+    // Check if system has enough admins
+    hasMinimumAdmins() {
+        return this.adminUsers.size >= 1;
+    }
+
+    // Emergency recovery - restore fallback admin
+    emergencyRecovery() {
+        try {
+            const fallbackAdmin = process.env.TELEGRAM_FALLBACK_ADMIN;
+            if (fallbackAdmin) {
+                this.authorizedUsers.add(fallbackAdmin);
+                this.adminUsers.add(fallbackAdmin);
+                this.saveConfig();
+                console.log(`🛡️ Emergency recovery: Restored fallback admin ${fallbackAdmin}`);
+                return true;
+            }
+            return false;
+        } catch (error) {
+            console.error('❌ Emergency recovery failed:', error.message);
+            return false;
+        }
     }
 }
 
