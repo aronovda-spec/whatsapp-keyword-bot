@@ -3,11 +3,15 @@
  * Restricts bot access to only authorized users
  */
 
+const fs = require('fs');
+const path = require('path');
+
 class TelegramAuthorization {
     constructor() {
         this.authorizedUsers = new Set();
         this.adminUsers = new Set();
         this.pendingApprovals = new Map(); // userId -> timestamp
+        this.configPath = path.join(__dirname, '../config/telegram-auth.json');
         this.loadAuthorizedUsers();
     }
 
@@ -17,20 +21,23 @@ class TelegramAuthorization {
             this.authorizedUsers.add('1022850808'); // Your chat ID
             this.adminUsers.add('1022850808'); // Your chat ID
             
-            // Load from environment variables
-            const authorizedChatIds = process.env.TELEGRAM_AUTHORIZED_USERS || '';
-            const adminChatIds = process.env.TELEGRAM_ADMIN_USERS || '';
-            
-            if (authorizedChatIds) {
-                authorizedChatIds.split(',').forEach(id => {
-                    this.authorizedUsers.add(id.trim());
-                });
+            // Load from environment variables first
+            const envAuthorized = process.env.TELEGRAM_AUTHORIZED_USERS;
+            const envAdmins = process.env.TELEGRAM_ADMIN_USERS;
+
+            if (envAuthorized) {
+                envAuthorized.split(',').map(id => id.trim()).forEach(id => this.authorizedUsers.add(id));
             }
-            
-            if (adminChatIds) {
-                adminChatIds.split(',').forEach(id => {
-                    this.adminUsers.add(id.trim());
-                });
+            if (envAdmins) {
+                envAdmins.split(',').map(id => id.trim()).forEach(id => this.adminUsers.add(id));
+            }
+
+            // Load from file (for dynamic updates)
+            if (fs.existsSync(this.configPath)) {
+                const config = JSON.parse(fs.readFileSync(this.configPath, 'utf8'));
+                config.authorizedUsers.forEach(id => this.authorizedUsers.add(id));
+                config.adminUsers.forEach(id => this.adminUsers.add(id));
+                // Pending approvals are not persisted across restarts for security
             }
             
             console.log(`🔐 Authorization loaded: ${this.authorizedUsers.size} users, ${this.adminUsers.size} admins`);
@@ -50,12 +57,26 @@ class TelegramAuthorization {
     addAuthorizedUser(userId, addedBy = null) {
         this.authorizedUsers.add(userId.toString());
         console.log(`✅ User ${userId} authorized by ${addedBy || 'system'}`);
+        this.saveConfig();
         return true;
+    }
+
+    saveConfig() {
+        try {
+            const config = {
+                authorizedUsers: Array.from(this.authorizedUsers),
+                adminUsers: Array.from(this.adminUsers)
+            };
+            fs.writeFileSync(this.configPath, JSON.stringify(config, null, 2));
+        } catch (error) {
+            console.error('❌ Failed to save authorization config:', error.message);
+        }
     }
 
     removeAuthorizedUser(userId, removedBy = null) {
         this.authorizedUsers.delete(userId.toString());
         console.log(`❌ User ${userId} removed by ${removedBy || 'system'}`);
+        this.saveConfig();
         return true;
     }
 
