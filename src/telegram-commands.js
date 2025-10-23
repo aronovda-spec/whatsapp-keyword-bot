@@ -747,19 +747,35 @@ class TelegramCommandHandler {
             this.bot.sendMessage(chatId, pendingText);
         });
 
-        // Handle any other message
+        // Handle any other message - BROADCAST TO ALL AUTHORIZED USERS
         this.bot.on('message', (msg) => {
             if (!msg.text.startsWith('/')) {
                 const chatId = msg.chat.id;
                 const userId = msg.from.id;
+                const userName = msg.from.first_name || msg.from.username || 'Unknown User';
                 
                 if (!this.authorization.isAuthorized(userId)) {
                     this.bot.sendMessage(chatId, '❌ You are not authorized to use this bot.');
                     return;
                 }
                 
-                console.log('📨 Received message:', msg.text);
-                this.bot.sendMessage(chatId, `📨 You sent: "${msg.text}"`);
+                console.log(`📨 Broadcast message from ${userName} (${userId}): ${msg.text}`);
+                
+                // Get all authorized users
+                const authorizedUsers = this.authorization.getAuthorizedUsers();
+                
+                // Send to all authorized users
+                authorizedUsers.forEach(authorizedUserId => {
+                    try {
+                        const broadcastMessage = `📢 <b>Message from ${userName}:</b>\n\n"${msg.text}"`;
+                        this.bot.sendMessage(authorizedUserId, broadcastMessage, { parse_mode: 'HTML' });
+                    } catch (error) {
+                        console.error(`❌ Failed to send broadcast to user ${authorizedUserId}:`, error.message);
+                    }
+                });
+                
+                // Confirm to sender
+                this.bot.sendMessage(chatId, `✅ Message broadcasted to ${authorizedUsers.length} authorized users.`);
             }
         });
 
