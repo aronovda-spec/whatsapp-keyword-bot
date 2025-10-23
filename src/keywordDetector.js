@@ -32,7 +32,7 @@ class KeywordDetector {
         this.loadConfig();
     }
 
-    detectKeywords(messageText) {
+    detectKeywords(messageText, groupName = null) {
         if (!this.enabled || !messageText || typeof messageText !== 'string') {
             return [];
         }
@@ -67,28 +67,30 @@ class KeywordDetector {
             }
         }
 
-        // Check personal keywords for ALL authorized users
-        const authorizedUsers = this.getAuthorizedUsers();
-        for (const userId of authorizedUsers) {
-            const personalKeywords = this.getPersonalKeywords(userId);
-            for (const keyword of personalKeywords) {
-                const searchKeyword = this.caseSensitive ? keyword : keyword.toLowerCase();
-                
-                if (this.exactMatch) {
-                    if (this.isLatinScript(searchKeyword)) {
-                        const regex = new RegExp(`\\b${this.escapeRegex(searchKeyword)}\\b`, this.caseSensitive ? 'g' : 'gi');
-                        if (regex.test(searchText)) {
-                            detectedKeywords.push({ keyword, type: 'personal', userId });
+        // Check personal keywords ONLY for users subscribed to this specific group
+        if (groupName) {
+            const groupSubscribers = this.getGroupSubscribers(groupName);
+            for (const userId of groupSubscribers) {
+                const personalKeywords = this.getPersonalKeywords(userId);
+                for (const keyword of personalKeywords) {
+                    const searchKeyword = this.caseSensitive ? keyword : keyword.toLowerCase();
+                    
+                    if (this.exactMatch) {
+                        if (this.isLatinScript(searchKeyword)) {
+                            const regex = new RegExp(`\\b${this.escapeRegex(searchKeyword)}\\b`, this.caseSensitive ? 'g' : 'gi');
+                            if (regex.test(searchText)) {
+                                detectedKeywords.push({ keyword, type: 'personal', userId });
+                            }
+                        } else {
+                            const regex = new RegExp(`(^|[\\s\\p{P}])${this.escapeRegex(searchKeyword)}([\\s\\p{P}]|$)`, this.caseSensitive ? 'gu' : 'giu');
+                            if (regex.test(searchText)) {
+                                detectedKeywords.push({ keyword, type: 'personal', userId });
+                            }
                         }
                     } else {
-                        const regex = new RegExp(`(^|[\\s\\p{P}])${this.escapeRegex(searchKeyword)}([\\s\\p{P}]|$)`, this.caseSensitive ? 'gu' : 'giu');
-                        if (regex.test(searchText)) {
+                        if (searchText.includes(searchKeyword)) {
                             detectedKeywords.push({ keyword, type: 'personal', userId });
                         }
-                    }
-                } else {
-                    if (searchText.includes(searchKeyword)) {
-                        detectedKeywords.push({ keyword, type: 'personal', userId });
                     }
                 }
             }
@@ -159,6 +161,24 @@ class KeywordDetector {
             return [];
         } catch (error) {
             console.error('Error loading authorized users:', error.message);
+            return [];
+        }
+    }
+
+    getGroupSubscribers(groupName) {
+        try {
+            const fs = require('fs');
+            const path = require('path');
+            const subscriptionsPath = path.join(__dirname, '../config/group-subscriptions.json');
+            
+            if (fs.existsSync(subscriptionsPath)) {
+                const data = JSON.parse(fs.readFileSync(subscriptionsPath, 'utf8'));
+                return data[groupName] || [];
+            }
+            
+            return [];
+        } catch (error) {
+            console.error('Error loading group subscribers:', error.message);
             return [];
         }
     }

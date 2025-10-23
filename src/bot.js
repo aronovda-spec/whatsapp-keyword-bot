@@ -275,8 +275,8 @@ class WhatsAppKeywordBot {
             connection.antiBan.trackMessageProcessing();
             this.stats.messagesProcessed++;
 
-            // Detect keywords in the message (global + personal for all users)
-            const detectedKeywords = this.keywordDetector.detectKeywords(messageData.text);
+            // Detect keywords in the message (global + personal for subscribed users only)
+            const detectedKeywords = this.keywordDetector.detectKeywords(messageData.text, messageData.group);
 
             if (detectedKeywords.length > 0) {
                 this.stats.keywordsDetected += detectedKeywords.length;
