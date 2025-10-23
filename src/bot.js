@@ -215,9 +215,33 @@ class WhatsAppKeywordBot {
             this.notifier.sendBotStatus('Connected', 'Bot is now monitoring WhatsApp messages');
         });
 
-        this.whatsapp.on('disconnected', () => {
-            logBotEvent('bot_disconnected');
-            this.notifier.sendBotStatus('Disconnected', 'Bot lost connection to WhatsApp');
+        this.whatsapp.on('disconnected', (disconnectInfo) => {
+            logBotEvent('bot_disconnected', disconnectInfo);
+            
+            let statusMessage = 'Bot lost connection to WhatsApp';
+            let details = '';
+            
+            if (disconnectInfo) {
+                statusMessage = disconnectInfo.message || statusMessage;
+                
+                if (disconnectInfo.isVirtualNumberExpired) {
+                    details = '🚨 VIRTUAL NUMBER MAY HAVE EXPIRED!\n\n' +
+                             '📋 Action Required:\n' +
+                             '1. Check virtual number status with provider\n' +
+                             '2. Renew or get new virtual number\n' +
+                             '3. Update bot configuration\n' +
+                             '4. Restart bot and scan new QR code\n\n' +
+                             '💡 Check logs for more details';
+                    
+                    // Send critical alert to ALL authorized users
+                    this.notifier.sendCriticalAlert('Virtual Number Expired', details);
+                } else {
+                    details = `Disconnect reason: ${disconnectInfo.reason || 'Unknown'}`;
+                    this.notifier.sendBotStatus('Disconnected', details);
+                }
+            } else {
+                this.notifier.sendBotStatus('Disconnected', 'Bot lost connection to WhatsApp');
+            }
         });
     }
 

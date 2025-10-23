@@ -150,22 +150,55 @@ class WhatsAppConnection {
     handleDisconnection(lastDisconnect) {
         this.isConnected = false;
         
-        const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
+        const disconnectReason = lastDisconnect?.error?.output?.statusCode;
+        const shouldReconnect = disconnectReason !== DisconnectReason.loggedOut;
+        
+        // Determine the specific reason for disconnection
+        let disconnectMessage = 'Bot lost connection to WhatsApp';
+        let isVirtualNumberExpired = false;
+        
+        if (disconnectReason === DisconnectReason.loggedOut) {
+            disconnectMessage = 'WhatsApp logged out - Virtual number may have expired!';
+            isVirtualNumberExpired = true;
+        } else if (disconnectReason === DisconnectReason.badSession) {
+            disconnectMessage = 'Invalid session - Virtual number may have expired!';
+            isVirtualNumberExpired = true;
+        } else if (disconnectReason === DisconnectReason.connectionClosed) {
+            disconnectMessage = 'Connection closed - Check virtual number status';
+        } else if (disconnectReason === DisconnectReason.connectionLost) {
+            disconnectMessage = 'Connection lost - Network or virtual number issue';
+        } else if (disconnectReason === DisconnectReason.connectionReplaced) {
+            disconnectMessage = 'Connection replaced - Another device connected';
+        } else if (disconnectReason === DisconnectReason.timedOut) {
+            disconnectMessage = 'Connection timed out - Check virtual number';
+        } else {
+            disconnectMessage = `WhatsApp disconnected (Reason: ${disconnectReason})`;
+        }
         
         if (shouldReconnect) {
             logBotEvent('whatsapp_disconnected', { 
-                reason: lastDisconnect?.error?.output?.statusCode,
-                shouldReconnect: true 
+                reason: disconnectReason,
+                shouldReconnect: true,
+                isVirtualNumberExpired: isVirtualNumberExpired
             });
-            console.log('🔄 WhatsApp disconnected. Reconnecting...');
+            console.log(`🔄 WhatsApp disconnected. Reconnecting...`);
+            console.log(`📱 Reason: ${disconnectMessage}`);
             this.scheduleReconnect();
         } else {
-            logBotEvent('whatsapp_logged_out');
-            console.log('❌ WhatsApp logged out. Please scan QR code again.');
+            logBotEvent('whatsapp_logged_out', {
+                reason: disconnectReason,
+                isVirtualNumberExpired: isVirtualNumberExpired
+            });
+            console.log(`❌ WhatsApp logged out. Please scan QR code again.`);
+            console.log(`📱 Reason: ${disconnectMessage}`);
         }
         
-        // Emit disconnected event for bot to handle
-        this.emit('disconnected');
+        // Emit disconnected event with detailed information
+        this.emit('disconnected', {
+            reason: disconnectReason,
+            message: disconnectMessage,
+            isVirtualNumberExpired: isVirtualNumberExpired
+        });
     }
 
     scheduleReconnect() {

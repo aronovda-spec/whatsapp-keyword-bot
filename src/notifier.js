@@ -167,15 +167,50 @@ ${this.escapeHtml(truncatedMessage)}
 
 ${details ? `📝 <b>Details:</b>\n${details}` : ''}`;
 
-            // Send to all configured chat IDs
+            // Send to all configured chat IDs (primary notification method)
             const results = await Promise.allSettled(
                 this.chatIds.map(chatId => this.sendWithRetry(message, chatId))
             );
             
             const successCount = results.filter(result => result.status === 'fulfilled').length;
-            console.log(`📤 Status update sent to ${successCount}/${this.chatIds.length} users`);
+            console.log(`📤 Status update sent to ${successCount}/${this.chatIds.length} configured users`);
         } catch (error) {
             logError(error, { context: 'send_bot_status', status });
+        }
+    }
+
+    async sendCriticalAlert(alertType, details = '') {
+        if (!this.enabled) return;
+
+        try {
+            const message = `🚨 <b>CRITICAL ALERT - ${alertType}</b>
+
+📊 <b>Status:</b> ${alertType}
+🕐 <b>Time:</b> ${new Date().toLocaleString()}
+
+${details ? `📝 <b>Details:</b>\n${details}` : ''}
+
+⚠️ <b>This affects ALL users!</b>`;
+
+            // Send to ALL authorized users (not just configured chat IDs)
+            const allAuthorizedUsers = this.authorization.getAuthorizedUsers();
+            const allChatIds = [...new Set([...this.chatIds, ...allAuthorizedUsers])]; // Combine and deduplicate
+
+            const results = await Promise.allSettled(
+                allChatIds.map(chatId => this.sendWithRetry(message, chatId))
+            );
+            
+            const successCount = results.filter(result => result.status === 'fulfilled').length;
+            console.log(`🚨 Critical alert sent to ${successCount}/${allChatIds.length} authorized users`);
+            
+            logBotEvent('critical_alert_sent', {
+                alertType,
+                totalUsers: allChatIds.length,
+                successCount,
+                details: details.substring(0, 100) // Truncate for logging
+            });
+        } catch (error) {
+            logError(error, { context: 'send_critical_alert', alertType });
         }
     }
 
