@@ -144,8 +144,12 @@ class TelegramCommandHandler {
                 '/users - List all users\n' +
                 '/keywords - Show keywords\n' +
                 '/stats - Bot statistics\n' +
-                '/restart - Restart bot (if needed)\n' +
-                '/logs - Show recent logs';
+                '/restart - Restart bot (preserves all data)\n' +
+                '/addkeyword <word> - Add global keyword\n' +
+                '/removekeyword <word> - Remove global keyword\n' +
+                '/approve <user_id> - Approve user\n' +
+                '/reject <user_id> - Reject user\n' +
+                '/pending - Show pending requests';
             this.bot.sendMessage(chatId, adminText);
         });
 
@@ -927,6 +931,50 @@ class TelegramCommandHandler {
             this.removePersonalKeyword(userId, keyword);
             this.bot.sendMessage(chatId, `✅ Removed personal keyword: "${keyword}"`);
             console.log(`🔑 User ${userId} removed personal keyword: ${keyword}`);
+        });
+
+        // Restart command - Admin only
+        this.bot.onText(/\/restart/, (msg) => {
+            const chatId = msg.chat.id;
+            const userId = msg.from.id;
+            
+            // Prevent duplicate commands
+            if (this.isDuplicateCommand(userId, 'restart')) {
+                console.log('🚫 Duplicate /restart command ignored from:', msg.from.username || msg.from.first_name);
+                return;
+            }
+            
+            if (!this.authorization.isAdmin(userId)) {
+                this.bot.sendMessage(chatId, '❌ Admin access required to restart the bot.');
+                return;
+            }
+            
+            console.log('📨 Received /restart from:', msg.from.username || msg.from.first_name);
+            
+            this.bot.sendMessage(chatId, 
+                '🔄 <b>Restarting Bot...</b>\n\n' +
+                '⚠️ <b>Important:</b>\n' +
+                '• Bot will restart in 3 seconds\n' +
+                '• All authorization data will be preserved\n' +
+                '• WhatsApp QR code will need to be scanned again\n' +
+                '• All keywords and subscriptions remain intact\n\n' +
+                '✅ <b>What persists:</b>\n' +
+                '• User authorizations\n' +
+                '• Group subscriptions\n' +
+                '• Global keywords\n' +
+                '• Personal keywords\n' +
+                '• Bot configurations\n\n' +
+                '🔄 <b>Restarting now...</b>',
+                { parse_mode: 'HTML' }
+            );
+            
+            console.log(`🔄 Admin ${userId} initiated bot restart`);
+            
+            // Give time for message to be sent, then restart
+            setTimeout(() => {
+                console.log('🔄 Bot restart initiated by admin');
+                process.exit(0);
+            }, 3000);
         });
 
         // Handle any other message - BROADCAST TO ALL AUTHORIZED USERS
