@@ -1,0 +1,16 @@
+{
+  "keywords": [
+    "cake",
+    "napkins",
+    "list",
+    "urgent",
+    "emergency",
+    "important",
+    "deadline",
+    "meeting",
+    "event"
+  ],
+  "caseSensitive": false,
+  "exactMatch": true,
+  "enabled": true
+}

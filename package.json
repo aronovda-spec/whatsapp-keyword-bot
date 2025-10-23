@@ -1,0 +1,34 @@
+{
+  "name": "whatsapp-keyword-bot",
+  "version": "1.0.0",
+  "description": "WhatsApp keyword tracking bot for monitoring group messages",
+  "main": "src/bot.js",
+  "scripts": {
+    "start": "node src/bot.js",
+    "dev": "nodemon src/bot.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "whatsapp",
+    "bot",
+    "keyword",
+    "monitoring",
+    "telegram"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@whiskeysockets/baileys": "^6.6.0",
+    "express": "^4.18.2",
+    "node-telegram-bot-api": "^0.64.0",
+    "qrcode-terminal": "^0.12.0",
+    "winston": "^3.11.0",
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}

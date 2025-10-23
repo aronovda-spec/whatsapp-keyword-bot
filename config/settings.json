@@ -1,0 +1,22 @@
+{
+  "bot": {
+    "name": "WhatsApp Keyword Bot",
+    "version": "1.0.0",
+    "debug": false
+  },
+  "whatsapp": {
+    "sessionPath": "./sessions",
+    "qrTimeout": 60000,
+    "reconnectDelay": 5000
+  },
+  "telegram": {
+    "enabled": true,
+    "retryAttempts": 3,
+    "retryDelay": 1000
+  },
+  "monitoring": {
+    "healthCheckInterval": 30000,
+    "maxLogSize": "10MB",
+    "maxLogFiles": 5
+  }
+}
