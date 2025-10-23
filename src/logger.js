@@ -46,12 +46,13 @@ if (process.env.NODE_ENV !== 'production') {
 }
 
 // Helper functions for structured logging
-const logKeywordDetection = (keyword, message, sender, group) => {
+const logKeywordDetection = (keyword, message, sender, group, phoneNumber = null) => {
     logger.info('Keyword detected', {
         keyword,
         message: message.substring(0, 100), // Truncate long messages
         sender: sender || 'Unknown',
         group: group || 'Unknown',
+        phoneNumber: phoneNumber || 'Unknown',
         timestamp: new Date().toISOString()
     });
 };

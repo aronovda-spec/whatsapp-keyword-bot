@@ -33,14 +33,14 @@ class Notifier {
         }
     }
 
-    async sendKeywordAlert(keyword, message, sender, group, messageId) {
+    async sendKeywordAlert(keyword, message, sender, group, messageId, phoneNumber = null) {
         if (!this.enabled) {
             console.log('📱 Telegram notifications disabled');
             return false;
         }
 
         try {
-            const alertMessage = this.formatAlertMessage(keyword, message, sender, group, messageId);
+            const alertMessage = this.formatAlertMessage(keyword, message, sender, group, messageId, phoneNumber);
             
             await this.sendWithRetry(alertMessage);
             
@@ -48,7 +48,8 @@ class Notifier {
                 keyword,
                 sender,
                 group,
-                messageId
+                messageId,
+                phoneNumber
             });
 
             return true;
@@ -57,7 +58,8 @@ class Notifier {
                 context: 'send_keyword_alert',
                 keyword,
                 sender,
-                group
+                group,
+                phoneNumber
             });
             return false;
         }
@@ -86,7 +88,7 @@ class Notifier {
         throw lastError;
     }
 
-    formatAlertMessage(keyword, message, sender, group, messageId) {
+    formatAlertMessage(keyword, message, sender, group, messageId, phoneNumber = null) {
         const timestamp = new Date().toLocaleString();
         const truncatedMessage = message.length > 200 ? message.substring(0, 200) + '...' : message;
         
@@ -95,6 +97,7 @@ class Notifier {
 🔍 <b>Keyword:</b> ${keyword}
 👤 <b>Sender:</b> ${sender || 'Unknown'}
 👥 <b>Group:</b> ${group || 'Unknown'}
+📱 <b>Detected by:</b> ${phoneNumber || 'Unknown Phone'}
 🕐 <b>Time:</b> ${timestamp}
 
 💬 <b>Message:</b>

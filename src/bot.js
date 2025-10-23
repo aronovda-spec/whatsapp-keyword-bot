@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const path = require('path');
+const fs = require('fs');
 
 // Import our modules
 const WhatsAppConnection = require('./whatsapp');
@@ -18,7 +19,7 @@ class WhatsAppKeywordBot {
         
         this.keywordDetector = new KeywordDetector();
         this.notifier = new Notifier();
-        this.whatsapp = new WhatsAppConnection();
+        this.connections = new Map(); // Store multiple WhatsApp connections
         this.stats = {
             startTime: new Date(),
             messagesProcessed: 0,
@@ -27,19 +28,59 @@ class WhatsAppKeywordBot {
             errors: 0
         };
 
+        this.loadMultiPhoneConfig();
         this.setupExpress();
-        this.setupWhatsAppHandlers();
         this.setupHealthMonitoring();
         this.start();
     }
 
-    validateEnvironment() {
-        const requiredVars = ['TELEGRAM_BOT_TOKEN', 'TELEGRAM_CHAT_ID'];
-        const missing = requiredVars.filter(varName => !process.env[varName]);
-        
-        if (missing.length > 0) {
-            console.warn(`⚠️  Missing environment variables: ${missing.join(', ')}`);
-            console.warn('📝 Please check your .env file configuration');
+    loadMultiPhoneConfig() {
+        try {
+            const configPath = path.join(__dirname, '../config/multi-phone.json');
+            const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+            
+            console.log(`📱 Loading ${config.phones.length} phone configurations...`);
+            
+            config.phones.forEach(phone => {
+                if (phone.enabled) {
+                    this.addPhone(phone.number, phone.sessionPath, phone.description);
+                } else {
+                    console.log(`⏸️  Phone ${phone.number} is disabled`);
+                }
+            });
+            
+            this.multiPhoneConfig = config;
+        } catch (error) {
+            console.error('❌ Failed to load multi-phone config:', error.message);
+            console.log('🔄 Falling back to single phone mode...');
+            this.addPhone('+972523784909', './sessions', 'Default phone');
+        }
+    }
+
+    addPhone(phoneNumber, sessionPath, description = '') {
+        try {
+            const connection = new WhatsAppConnection(sessionPath);
+            
+            connection.on('message', (messageData) => {
+                this.handleMessage(messageData, phoneNumber);
+            });
+
+            connection.on('connected', () => {
+                console.log(`✅ Phone ${phoneNumber} connected successfully!`);
+                logBotEvent('phone_connected', { phoneNumber, description });
+            });
+
+            connection.on('disconnected', () => {
+                console.log(`❌ Phone ${phoneNumber} disconnected`);
+                logBotEvent('phone_disconnected', { phoneNumber });
+            });
+
+            this.connections.set(phoneNumber, connection);
+            console.log(`📱 Added phone ${phoneNumber} to monitoring (${description})`);
+            
+        } catch (error) {
+            logError(error, { context: 'add_phone', phoneNumber });
+            console.error(`❌ Failed to add phone ${phoneNumber}:`, error.message);
         }
     }
 
@@ -77,10 +118,15 @@ class WhatsAppKeywordBot {
 
         // Health check endpoint
         this.app.get('/health', (req, res) => {
+            const phoneStatus = {};
+            for (const [phone, connection] of this.connections) {
+                phoneStatus[phone] = connection.getConnectionStatus();
+            }
+            
             res.json({
                 status: 'healthy',
                 uptime: Date.now() - this.stats.startTime.getTime(),
-                whatsapp: this.whatsapp.getConnectionStatus(),
+                phones: phoneStatus,
                 telegram: this.notifier.isEnabled(),
                 stats: this.stats,
                 timestamp: new Date().toISOString()
@@ -89,13 +135,20 @@ class WhatsAppKeywordBot {
 
         // Stats endpoint
         this.app.get('/stats', (req, res) => {
+            const phoneStatus = {};
+            for (const [phone, connection] of this.connections) {
+                phoneStatus[phone] = connection.getConnectionStatus();
+            }
+            
             res.json({
                 stats: this.stats,
                 keywords: this.keywordDetector.getKeywords(),
+                phones: phoneStatus,
                 config: {
                     keywordsEnabled: this.keywordDetector.isEnabled(),
                     telegramEnabled: this.notifier.isEnabled(),
-                    whatsappConnected: this.whatsapp.getConnectionStatus()
+                    totalPhones: this.connections.size,
+                    enabledPhones: Array.from(this.connections.keys())
                 }
             });
         });
@@ -154,7 +207,7 @@ class WhatsAppKeywordBot {
         });
     }
 
-    async handleMessage(messageData) {
+    async handleMessage(messageData, phoneNumber) {
         try {
             // Validate message data
             if (!messageData || !messageData.text || typeof messageData.text !== 'string') {
@@ -174,7 +227,8 @@ class WhatsAppKeywordBot {
                     detectedKeywords.join(', '),
                     messageData.text,
                     messageData.sender,
-                    messageData.group
+                    messageData.group,
+                    phoneNumber
                 );
 
                 // Send notifications for each detected keyword
@@ -185,7 +239,8 @@ class WhatsAppKeywordBot {
                             messageData.text,
                             messageData.sender,
                             messageData.group,
-                            messageData.id
+                            messageData.id,
+                            phoneNumber
                         );
 
                         if (success) {
@@ -195,12 +250,13 @@ class WhatsAppKeywordBot {
                         logError(notificationError, {
                             context: 'notification_error',
                             keyword,
-                            messageId: messageData.id
+                            messageId: messageData.id,
+                            phoneNumber
                         });
                     }
                 }
 
-                console.log(`🚨 Keyword detected: "${detectedKeywords.join(', ')}" from ${messageData.sender} in ${messageData.group}`);
+                console.log(`🚨 Keyword detected: "${detectedKeywords.join(', ')}" from ${messageData.sender} in ${messageData.group} (via ${phoneNumber})`);
             }
 
         } catch (error) {
@@ -208,7 +264,8 @@ class WhatsAppKeywordBot {
             logError(error, {
                 context: 'handle_message',
                 messageId: messageData?.id,
-                sender: messageData?.sender
+                sender: messageData?.sender,
+                phoneNumber
             });
         }
     }
@@ -216,12 +273,16 @@ class WhatsAppKeywordBot {
     setupHealthMonitoring() {
         // Send periodic status updates
         setInterval(() => {
-            if (this.whatsapp.getConnectionStatus() && this.notifier.isEnabled()) {
+            const connectedPhones = Array.from(this.connections.entries())
+                .filter(([phone, connection]) => connection.getConnectionStatus())
+                .map(([phone]) => phone);
+            
+            if (connectedPhones.length > 0 && this.notifier.isEnabled()) {
                 const uptime = Math.floor((Date.now() - this.stats.startTime.getTime()) / 1000 / 60); // minutes
                 
                 if (uptime % 60 === 0) { // Every hour
                     this.notifier.sendBotStatus('Running', 
-                        `Uptime: ${uptime} minutes\nMessages: ${this.stats.messagesProcessed}\nKeywords: ${this.stats.keywordsDetected}`
+                        `Uptime: ${uptime} minutes\nMessages: ${this.stats.messagesProcessed}\nKeywords: ${this.stats.keywordsDetected}\nConnected phones: ${connectedPhones.join(', ')}`
                     );
                 }
             }
