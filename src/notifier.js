@@ -105,6 +105,65 @@ class Notifier {
         }
     }
 
+    async sendPersonalKeywordAlert(keyword, message, sender, group, messageId, phoneNumber = null, targetUserId = null) {
+        if (!this.enabled) {
+            console.log('📱 Telegram notifications disabled');
+            return false;
+        }
+
+        if (!targetUserId) {
+            console.log('⚠️ No target user ID provided for personal keyword alert');
+            return false;
+        }
+
+        try {
+            const alertMessage = this.formatPersonalAlertMessage(keyword, message, sender, group, messageId, phoneNumber);
+            
+            // Send only to the specific user
+            const success = await this.sendWithRetry(alertMessage, targetUserId);
+            
+            if (success) {
+                logBotEvent('personal_keyword_alert_sent', {
+                    keyword,
+                    sender,
+                    group,
+                    messageId,
+                    phoneNumber,
+                    targetUserId
+                });
+            }
+            
+            return success;
+        } catch (error) {
+            logError(error, {
+                context: 'send_personal_keyword_alert',
+                keyword,
+                sender,
+                group,
+                phoneNumber,
+                targetUserId
+            });
+            return false;
+        }
+    }
+
+    formatPersonalAlertMessage(keyword, message, sender, group, messageId, phoneNumber = null) {
+        const timestamp = new Date().toLocaleString();
+        const phoneInfo = phoneNumber ? ` (via ${phoneNumber})` : '';
+        
+        return `🔑 <b>Personal Keyword Alert</b>
+
+🚨 <b>Keyword:</b> ${this.escapeHtml(keyword)}
+👤 <b>From:</b> ${this.escapeHtml(sender)}
+📱 <b>Group:</b> ${this.escapeHtml(group)}${phoneInfo}
+🕐 <b>Time:</b> ${timestamp}
+
+💬 <b>Message:</b>
+"${this.escapeHtml(message.substring(0, 200))}${message.length > 200 ? '...' : ''}"
+
+🔑 <i>This is a personal keyword notification</i>`;
+    }
+
     async sendWithRetry(message, chatId = null) {
         const targetChatId = chatId || this.chatIds[0]; // Use provided chatId or primary
         let lastError;
