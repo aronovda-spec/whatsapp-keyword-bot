@@ -34,6 +34,16 @@ class WhatsAppKeywordBot {
         this.start();
     }
 
+    validateEnvironment() {
+        const requiredVars = ['TELEGRAM_BOT_TOKEN', 'TELEGRAM_CHAT_ID'];
+        const missing = requiredVars.filter(varName => !process.env[varName]);
+        
+        if (missing.length > 0) {
+            console.warn(`⚠️  Missing environment variables: ${missing.join(', ')}`);
+            console.warn('📝 Please check your .env file configuration');
+        }
+    }
+
     loadMultiPhoneConfig() {
         try {
             const configPath = path.join(__dirname, '../config/multi-phone.json');
