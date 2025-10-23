@@ -36,14 +36,22 @@ class WhatsAppConnection {
                 auth: state,
                 printQRInTerminal: false, // We'll handle QR display ourselves
                 logger: {
-                    level: 'silent', // Reduce noise in logs
+                    level: 'silent',
                     child: () => ({ 
                         level: 'silent',
                         error: () => {},
                         warn: () => {},
                         info: () => {},
-                        debug: () => {}
-                    })
+                        debug: () => {},
+                        trace: () => {},
+                        fatal: () => {}
+                    }),
+                    error: () => {},
+                    warn: () => {},
+                    info: () => {},
+                    debug: () => {},
+                    trace: () => {},
+                    fatal: () => {}
                 }
             });
 
