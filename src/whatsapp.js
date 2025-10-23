@@ -54,10 +54,20 @@ class WhatsAppConnection {
 
     async connect() {
         try {
+            // Check connection rate limiting
+            if (!this.antiBan.canConnect()) {
+                console.log('⏳ Connection rate limited, waiting...');
+                await this.antiBan.humanLikeDelay();
+                return this.scheduleReconnect();
+            }
+
             const { state, saveCreds } = await useMultiFileAuthState(this.sessionPath);
             
             // Get anti-ban optimized configuration
             const sessionConfig = this.antiBan.getSessionConfig();
+            
+            // Apply human-like delay before connecting
+            await this.antiBan.humanLikeDelay();
             
             this.sock = makeWASocket({
                 auth: state,
@@ -210,24 +220,27 @@ class WhatsAppConnection {
         }, this.reconnectDelay);
     }
 
-    handleMessages(m) {
+    async handleMessages(m) {
         const { messages, type } = m;
         
         if (type !== 'notify') return;
 
-        messages.forEach(message => {
-            this.processMessage(message);
-        });
+        for (const message of messages) {
+            await this.processMessage(message);
+        }
     }
 
-    processMessage(message) {
+    async processMessage(message) {
         try {
+            // Apply human-like delay before processing
+            await this.antiBan.humanLikeDelay();
+
             // Only process text messages
             if (!message.message?.conversation && !message.message?.extendedTextMessage?.text) {
                 return;
             }
 
-            const messageText = message.message.conversation || 
+            const messageText = message.message.conversation ||
                               message.message.extendedTextMessage?.text || '';
 
             if (!messageText.trim()) return;
