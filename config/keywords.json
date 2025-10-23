@@ -8,7 +8,10 @@
     "important",
     "deadline",
     "meeting",
-    "event"
+    "event",
+    "help",
+    "asap",
+    "critical"
   ],
   "caseSensitive": false,
   "exactMatch": true,

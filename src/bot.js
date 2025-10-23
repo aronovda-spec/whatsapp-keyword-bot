@@ -80,7 +80,7 @@ class WhatsAppKeywordBot {
             res.json({
                 status: 'healthy',
                 uptime: Date.now() - this.stats.startTime.getTime(),
-                whatsapp: this.whatsapp.isConnected(),
+                whatsapp: this.whatsapp.getConnectionStatus(),
                 telegram: this.notifier.isEnabled(),
                 stats: this.stats,
                 timestamp: new Date().toISOString()
@@ -95,7 +95,7 @@ class WhatsAppKeywordBot {
                 config: {
                     keywordsEnabled: this.keywordDetector.isEnabled(),
                     telegramEnabled: this.notifier.isEnabled(),
-                    whatsappConnected: this.whatsapp.isConnected()
+                    whatsappConnected: this.whatsapp.getConnectionStatus()
                 }
             });
         });
@@ -216,7 +216,7 @@ class WhatsAppKeywordBot {
     setupHealthMonitoring() {
         // Send periodic status updates
         setInterval(() => {
-            if (this.whatsapp.isConnected() && this.notifier.isEnabled()) {
+            if (this.whatsapp.getConnectionStatus() && this.notifier.isEnabled()) {
                 const uptime = Math.floor((Date.now() - this.stats.startTime.getTime()) / 1000 / 60); // minutes
                 
                 if (uptime % 60 === 0) { // Every hour

@@ -244,7 +244,7 @@ class WhatsAppConnection {
         this.eventHandlers[event].push(handler);
     }
 
-    isConnected() {
+    getConnectionStatus() {
         return this.isConnected;
     }
 
