@@ -8,6 +8,7 @@ const WhatsAppConnection = require('./whatsapp');
 const KeywordDetector = require('./keywordDetector');
 const Notifier = require('./notifier');
 const KeepAliveService = require('./keep-alive');
+const TelegramCommandHandler = require('./telegram-commands');
 const { logger, logKeywordDetection, logBotEvent, logError } = require('./logger');
 
 class WhatsAppKeywordBot {
@@ -22,6 +23,7 @@ class WhatsAppKeywordBot {
         this.notifier = new Notifier();
         this.connections = new Map(); // Store multiple WhatsApp connections
         this.keepAlive = new KeepAliveService(); // Anti-sleep mechanism
+        this.commandHandler = null; // Telegram command handler
         this.stats = {
             startTime: new Date(),
             messagesProcessed: 0,
@@ -320,6 +322,15 @@ class WhatsAppKeywordBot {
             // Start anti-sleep mechanism for Render free tier
             this.keepAlive.start();
             console.log('🔄 Anti-sleep mechanism activated');
+
+            // Initialize Telegram command handler for authorization
+            if (this.notifier.isEnabled()) {
+                this.commandHandler = new TelegramCommandHandler(
+                    process.env.TELEGRAM_BOT_TOKEN,
+                    this.notifier.authorization
+                );
+                console.log('🔐 Telegram authorization system activated');
+            }
 
             logBotEvent('server_started', { port: this.port });
         });

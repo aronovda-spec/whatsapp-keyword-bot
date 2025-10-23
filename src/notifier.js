@@ -1,5 +1,6 @@
 const TelegramBot = require('node-telegram-bot-api');
 const { logError, logBotEvent } = require('./logger');
+const TelegramAuthorization = require('./telegram-auth');
 
 class Notifier {
     constructor() {
@@ -8,6 +9,7 @@ class Notifier {
         this.enabled = false;
         this.retryAttempts = 3;
         this.retryDelay = 1000;
+        this.authorization = new TelegramAuthorization(); // Authorization system
         this.init();
     }
 
@@ -57,9 +59,18 @@ class Notifier {
         try {
             const alertMessage = this.formatAlertMessage(keyword, message, sender, group, messageId, phoneNumber);
             
-            // Send to all configured chat IDs
+            // Send to all authorized chat IDs only
+            const authorizedChatIds = this.chatIds.filter(chatId => 
+                this.authorization.isAuthorized(chatId)
+            );
+            
+            if (authorizedChatIds.length === 0) {
+                console.log('⚠️ No authorized users to send alerts to');
+                return false;
+            }
+            
             const results = await Promise.allSettled(
-                this.chatIds.map(chatId => this.sendWithRetry(alertMessage, chatId))
+                authorizedChatIds.map(chatId => this.sendWithRetry(alertMessage, chatId))
             );
             
             const successCount = results.filter(result => result.status === 'fulfilled').length;
