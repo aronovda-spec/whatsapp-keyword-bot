@@ -13,6 +13,10 @@ class TelegramAuthorization {
 
     loadAuthorizedUsers() {
         try {
+            // Set you as admin and authorized user by default
+            this.authorizedUsers.add('1022850808'); // Your chat ID
+            this.adminUsers.add('1022850808'); // Your chat ID
+            
             // Load from environment variables
             const authorizedChatIds = process.env.TELEGRAM_AUTHORIZED_USERS || '';
             const adminChatIds = process.env.TELEGRAM_ADMIN_USERS || '';

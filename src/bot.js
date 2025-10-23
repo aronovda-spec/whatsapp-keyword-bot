@@ -325,11 +325,16 @@ class WhatsAppKeywordBot {
 
             // Initialize Telegram command handler for authorization
             if (this.notifier.isEnabled()) {
-                this.commandHandler = new TelegramCommandHandler(
-                    process.env.TELEGRAM_BOT_TOKEN,
-                    this.notifier.authorization
-                );
-                console.log('🔐 Telegram authorization system activated');
+                try {
+                    this.commandHandler = new TelegramCommandHandler(
+                        process.env.TELEGRAM_BOT_TOKEN,
+                        this.notifier.authorization
+                    );
+                    console.log('🔐 Telegram authorization system activated');
+                } catch (error) {
+                    console.log('⚠️ Telegram command handler failed to initialize:', error.message);
+                    console.log('📱 Notifications will still work, but commands are disabled');
+                }
             }
 
             logBotEvent('server_started', { port: this.port });
