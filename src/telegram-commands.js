@@ -692,7 +692,7 @@ class TelegramCommandHandler {
                 return;
             }
             
-            if (this.authorization.approveUser(userIdToApprove)) {
+            if (this.authorization.approveUser(userIdToApprove, adminId)) {
                 this.bot.sendMessage(chatId, `✅ User ${userIdToApprove} approved successfully.`);
                 this.bot.sendMessage(userIdToApprove, '🎉 Your access request has been approved! You can now use the bot.');
             } else {
@@ -711,7 +711,7 @@ class TelegramCommandHandler {
                 return;
             }
             
-            if (this.authorization.rejectUser(userIdToReject)) {
+            if (this.authorization.rejectUser(userIdToReject, adminId)) {
                 this.bot.sendMessage(chatId, `❌ User ${userIdToReject} rejected.`);
                 this.bot.sendMessage(userIdToReject, '❌ Your access request has been rejected.');
             } else {
@@ -735,10 +735,10 @@ class TelegramCommandHandler {
             if (pending.length === 0) {
                 pendingText += 'No pending requests.';
             } else {
-                pending.forEach(req => {
-                    pendingText += `👤 User ID: ${req.userId}\n`;
-                    pendingText += `📝 Username: @${req.username || 'unknown'}\n`;
-                    pendingText += `👋 Name: ${req.firstName || 'unknown'}\n`;
+                pending.forEach(userId => {
+                    pendingText += `👤 User ID: ${userId}\n`;
+                    pendingText += `📝 Username: @unknown\n`;
+                    pendingText += `👋 Name: unknown\n`;
                     pendingText += `📅 Requested: Just now\n\n`;
                 });
                 pendingText += 'Use /approve <user_id> or /reject <user_id> to respond.';

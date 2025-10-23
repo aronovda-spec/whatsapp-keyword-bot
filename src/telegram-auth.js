@@ -90,13 +90,26 @@ class TelegramAuthorization {
     }
 
     approveUser(userId, approvedBy) {
-        this.pendingApprovals.delete(userId.toString());
+        const userIdStr = userId.toString();
+        if (!this.pendingApprovals.has(userIdStr)) {
+            console.log(`❌ Cannot approve user ${userId}: not in pending list`);
+            return false;
+        }
+        
+        this.pendingApprovals.delete(userIdStr);
         this.addAuthorizedUser(userId, approvedBy);
+        console.log(`✅ User ${userId} approved by ${approvedBy}`);
         return true;
     }
 
     rejectUser(userId, rejectedBy) {
-        this.pendingApprovals.delete(userId.toString());
+        const userIdStr = userId.toString();
+        if (!this.pendingApprovals.has(userIdStr)) {
+            console.log(`❌ Cannot reject user ${userId}: not in pending list`);
+            return false;
+        }
+        
+        this.pendingApprovals.delete(userIdStr);
         console.log(`❌ User ${userId} rejected by ${rejectedBy}`);
         return true;
     }
