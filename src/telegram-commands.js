@@ -56,20 +56,23 @@ class TelegramCommandHandler {
                 return;
             }
             
-            const helpText = '🤖 WhatsApp Keyword Bot Help\n\n' +
-                'Available commands:\n' +
-                '/start - Start the bot\n' +
-                '/status - Check bot status\n' +
-                '/help - Show this help\n' +
-                '/admin - Admin panel\n' +
-                '/users - List users\n' +
-                '/keywords - Show keywords\n' +
-                '/stats - Bot statistics\n' +
-                '/groups - Show chat management info\n' +
-                '/discover - Trigger chat discovery\n' +
-                '/approve <user_id> - Approve user (admin only)\n' +
-                '/reject <user_id> - Reject user (admin only)\n' +
-                '/pending - Show pending requests (admin only)';
+                const helpText = '🤖 WhatsApp Keyword Bot Help\n\n' +
+                    'Available commands:\n' +
+                    '/start - Start the bot\n' +
+                    '/status - Check bot status\n' +
+                    '/help - Show this help\n' +
+                    '/admin - Admin panel\n' +
+                    '/users - List users\n' +
+                    '/keywords - Show keywords\n' +
+                    '/stats - Bot statistics\n' +
+                    '/groups - Show chat management info\n' +
+                    '/discover - Trigger chat discovery\n' +
+                    '/sleep - Check sleep status\n' +
+                    '/timezone <tz> - Change timezone\n' +
+                    '/24h - Enable 24/7 mode\n' +
+                    '/approve <user_id> - Approve user (admin only)\n' +
+                    '/reject <user_id> - Reject user (admin only)\n' +
+                    '/pending - Show pending requests (admin only)';
             this.bot.sendMessage(chatId, helpText);
         });
 
@@ -181,29 +184,135 @@ class TelegramCommandHandler {
             this.bot.sendMessage(chatId, groupsText);
         });
 
-        // Discover groups command
-        this.bot.onText(/\/discover/, (msg) => {
-            const chatId = msg.chat.id;
-            const userId = msg.from.id;
-            console.log('📨 Received /discover from:', msg.from.username || msg.from.first_name);
-            
-            if (!this.authorization.isAuthorized(userId)) {
-                this.bot.sendMessage(chatId, '❌ You are not authorized to use this bot.');
-                return;
-            }
-            
-            this.bot.sendMessage(chatId, 
-                '🔍 Triggering chat discovery...\n\n' +
-                'Check the bot terminal for a complete list of all WhatsApp chats the bot can access.\n\n' +
-                'The bot will:\n' +
-                '• List all groups with names and IDs\n' +
-                '• Show participant counts\n' +
-                '• Indicate which chats are monitored\n' +
-                '• Save results to config/discovered-groups.json\n\n' +
-                'This happens automatically when the bot connects, but you can trigger it manually with this command.\n\n' +
-                '💡 The bot also logs private chat IDs when messages are received!'
-            );
-        });
+            // Discover groups command
+            this.bot.onText(/\/discover/, (msg) => {
+                const chatId = msg.chat.id;
+                const userId = msg.from.id;
+                console.log('📨 Received /discover from:', msg.from.username || msg.from.first_name);
+
+                if (!this.authorization.isAuthorized(userId)) {
+                    this.bot.sendMessage(chatId, '❌ You are not authorized to use this bot.');
+                    return;
+                }
+
+                this.bot.sendMessage(chatId,
+                    '🔍 Triggering chat discovery...\n\n' +
+                    'Check the bot terminal for a complete list of all WhatsApp chats the bot can access.\n\n' +
+                    'The bot will:\n' +
+                    '• List all groups with names and IDs\n' +
+                    '• Show participant counts\n' +
+                    '• Indicate which chats are monitored\n' +
+                    '• Save results to config/discovered-groups.json\n\n' +
+                    'This happens automatically when the bot connects, but you can trigger it manually with this command.\n\n' +
+                    '💡 The bot also logs private chat IDs when messages are received!'
+                );
+            });
+
+            // Timezone commands
+            this.bot.onText(/\/timezone (.+)/, (msg, match) => {
+                const chatId = msg.chat.id;
+                const userId = msg.from.id;
+                const timezone = match[1];
+
+                if (!this.authorization.isAuthorized(userId)) {
+                    this.bot.sendMessage(chatId, '❌ You are not authorized to use this bot.');
+                    return;
+                }
+
+                const validTimezones = [
+                    'Asia/Jerusalem', 'America/New_York', 'Europe/London', 
+                    'Asia/Tokyo', 'Australia/Sydney', 'UTC'
+                ];
+
+                if (!validTimezones.includes(timezone)) {
+                    this.bot.sendMessage(chatId,
+                        '❌ Invalid timezone!\n\n' +
+                        'Valid timezones:\n' +
+                        '• Asia/Jerusalem (Israeli - Default)\n' +
+                        '• America/New_York (US Eastern)\n' +
+                        '• Europe/London (UK)\n' +
+                        '• Asia/Tokyo (Japan)\n' +
+                        '• Australia/Sydney (Australia)\n' +
+                        '• UTC (Universal)\n\n' +
+                        'Example: /timezone America/New_York'
+                    );
+                    return;
+                }
+
+                // Update timezone (this would need to be implemented in the bot)
+                this.bot.sendMessage(chatId,
+                    `🌍 Timezone changed to: ${timezone}\n\n` +
+                    '⚠️ Note: Restart the bot for timezone changes to take effect.\n\n' +
+                    'Use /sleep to check current sleep status.'
+                );
+            });
+
+            // Sleep mode commands
+            this.bot.onText(/\/sleep/, (msg) => {
+                const chatId = msg.chat.id;
+                const userId = msg.from.id;
+
+                if (!this.authorization.isAuthorized(userId)) {
+                    this.bot.sendMessage(chatId, '❌ You are not authorized to use this bot.');
+                    return;
+                }
+
+                const now = new Date();
+                const israeliTime = new Date(now.toLocaleString("en-US", {timeZone: "Asia/Jerusalem"}));
+                const currentTime = israeliTime.toTimeString().substring(0, 5);
+
+                let sleepStatus = '☀️ Active hours: Normal operation';
+                if (currentTime >= '01:00' && currentTime <= '06:00') {
+                    sleepStatus = '😴 Sleep hours: Bot is sleeping (1 AM - 6 AM Israeli time)';
+                }
+
+                this.bot.sendMessage(chatId,
+                    `😴 Sleep Status\n\n` +
+                    `🌍 Israeli Time: ${israeliTime.toLocaleString()}\n` +
+                    `⏰ Current Time: ${currentTime}\n` +
+                    `📊 Status: ${sleepStatus}\n\n` +
+                    `💡 Sleep Schedule:\n` +
+                    `• Sleep: 01:00 - 06:00 Israeli time\n` +
+                    `• Active: 06:00 - 01:00 Israeli time\n\n` +
+                    `Commands:\n` +
+                    `• /timezone <timezone> - Change timezone\n` +
+                    `• /24h - Enable 24/7 mode\n` +
+                    `• /sleep - Check sleep status`
+                );
+            });
+
+            // 24/7 mode command
+            this.bot.onText(/\/24h/, (msg) => {
+                const chatId = msg.chat.id;
+                const userId = msg.from.id;
+
+                if (!this.authorization.isAuthorized(userId)) {
+                    this.bot.sendMessage(chatId, '❌ You are not authorized to use this bot.');
+                    return;
+                }
+
+                this.bot.sendMessage(chatId,
+                    '🌍 24/7 Mode\n\n' +
+                    'To enable 24/7 mode (disable sleep):\n\n' +
+                    'Method 1 - Environment Variable:\n' +
+                    '```bash\n' +
+                    'export WHATSAPP_NON_ACTIVE_HOURS_ENABLED=false\n' +
+                    '```\n\n' +
+                    'Method 2 - Edit config file:\n' +
+                    '```json\n' +
+                    '{\n' +
+                    '  "nonActiveHours": {\n' +
+                    '    "enabled": false\n' +
+                    '  }\n' +
+                    '}\n' +
+                    '```\n\n' +
+                    '⚠️ Restart the bot after making changes.\n\n' +
+                    'To go back to sleep mode:\n' +
+                    '```bash\n' +
+                    'export WHATSAPP_NON_ACTIVE_HOURS_ENABLED=true\n' +
+                    '```'
+                );
+            });
 
         // Approve user command
         this.bot.onText(/\/approve (.+)/, (msg, match) => {

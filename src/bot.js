@@ -252,13 +252,27 @@ class WhatsAppKeywordBot {
                 return;
             }
 
-            // Check if we should monitor this chat (group or private)
+            // Get connection for anti-ban checks
             const connection = this.connections.get(phoneNumber);
-            if (connection && !connection.shouldMonitorGroup(messageData.from)) {
+            if (!connection) {
+                console.warn(`⚠️ No connection found for phone: ${phoneNumber}`);
+                return;
+            }
+
+            // Check if we should monitor this chat (group or private)
+            if (!connection.shouldMonitorGroup(messageData.from)) {
                 // Skip this message - chat not in monitored list
                 return;
             }
 
+            // Apply anti-ban rate limiting (even for read-only monitoring)
+            if (!connection.antiBan.canSendMessage()) {
+                console.log('⏳ Message processing rate limited for anti-ban protection');
+                return;
+            }
+
+            // Track message processing for anti-ban statistics
+            connection.antiBan.trackMessageProcessing();
             this.stats.messagesProcessed++;
 
             // Detect keywords in the message
@@ -333,10 +347,27 @@ class WhatsAppKeywordBot {
             }
         }, 60000); // Check every minute
 
-        // Log stats periodically
+        // Anti-ban safety monitoring
         setInterval(() => {
-            logBotEvent('stats_update', this.stats);
-        }, 300000); // Every 5 minutes
+            this.performAntiBanCheck();
+        }, 30000); // Every 30 seconds
+    }
+
+    performAntiBanCheck() {
+        try {
+            console.log('🛡️ Anti-Ban Safety Check:');
+            for (const [phoneNumber, connection] of this.connections) {
+                console.log(`📱 Phone ${phoneNumber}:`);
+                connection.antiBan.logSafetyMetrics();
+                
+                // Check if approaching rate limits
+                if (connection.antiBan.isApproachingRateLimit()) {
+                    console.warn(`⚠️ Phone ${phoneNumber} is approaching rate limits!`);
+                }
+            }
+        } catch (error) {
+            logError(error, { context: 'anti_ban_check' });
+        }
     }
 
     start() {
@@ -367,6 +398,11 @@ class WhatsAppKeywordBot {
                     console.log('📱 Notifications will still work, but commands are disabled');
                 }
             }
+
+            // Log stats periodically
+            setInterval(() => {
+                logBotEvent('stats_update', this.stats);
+            }, 300000); // Every 5 minutes
 
             logBotEvent('server_started', { port: this.port });
         });
