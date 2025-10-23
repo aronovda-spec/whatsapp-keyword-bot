@@ -228,6 +228,13 @@ class WhatsAppKeywordBot {
                 return;
             }
 
+            // Check if we should monitor this chat (group or private)
+            const connection = this.connections.get(phoneNumber);
+            if (connection && !connection.shouldMonitorGroup(messageData.from)) {
+                // Skip this message - chat not in monitored list
+                return;
+            }
+
             this.stats.messagesProcessed++;
 
             // Detect keywords in the message

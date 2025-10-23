@@ -1,0 +1,33 @@
+{
+  "monitoredGroups": [
+    {
+      "groupId": "REPLACE_WITH_REAL_GROUP_ID_1",
+      "name": "Work Team",
+      "enabled": false,
+      "description": "Work-related discussions and meetings"
+    },
+    {
+      "groupId": "REPLACE_WITH_REAL_GROUP_ID_2", 
+      "name": "Family Events",
+      "enabled": false,
+      "description": "Family gatherings and events"
+    },
+    {
+      "groupId": "REPLACE_WITH_REAL_GROUP_ID_3",
+      "name": "Community Events", 
+      "enabled": false,
+      "description": "Local community events and activities"
+    }
+  ],
+  "settings": {
+    "ignorePrivateChats": true,
+    "ignoreBroadcastLists": true,
+    "onlyMonitoredGroups": false,
+    "logIgnoredMessages": true
+  },
+  "instructions": {
+    "howToGetGroupId": "1. Add bot to the group\n2. Send a message in the group\n3. Check bot logs for group ID\n4. Copy the group ID and update this config\n5. Set enabled: true for groups you want to monitor",
+    "exampleGroupId": "120363123456789012@g.us",
+    "note": "Group IDs end with @g.us for WhatsApp groups. Set onlyMonitoredGroups: true when you have real group IDs configured."
+  }
+}

@@ -13,7 +13,29 @@ class WhatsAppConnection {
         this.reconnectDelay = 5000;
         this.qrTimeout = 60000;
         this.antiBan = new WhatsAppAntiBan(); // Anti-ban protection
+        this.monitoredGroups = new Set(); // Track monitored groups
+        this.loadGroupConfig();
         this.init();
+    }
+
+    loadGroupConfig() {
+        try {
+            const configPath = path.join(__dirname, '../config/monitored-groups.json');
+            if (fs.existsSync(configPath)) {
+                const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+                config.monitoredGroups.forEach(group => {
+                    if (group.enabled && group.groupId !== 'GROUP_ID_PLACEHOLDER') {
+                        this.monitoredGroups.add(group.groupId);
+                        console.log(`📱 Added group to monitoring: ${group.name} (${group.groupId})`);
+                    }
+                });
+                console.log(`📱 Total monitored groups: ${this.monitoredGroups.size}`);
+            } else {
+                console.log('📱 No group configuration found - will monitor all groups');
+            }
+        } catch (error) {
+            console.error('❌ Error loading group config:', error.message);
+        }
     }
 
     async init() {
@@ -112,11 +134,14 @@ class WhatsAppConnection {
         }, this.qrTimeout);
     }
 
-    handleConnection() {
+    async handleConnection() {
         this.isConnected = true;
         logBotEvent('whatsapp_connected');
         console.log('✅ WhatsApp connected successfully!');
         console.log('🤖 Bot is now monitoring for keywords...');
+        
+        // Discover all groups the bot is a member of
+        await this.discoverGroups();
         
         // Emit connected event for bot to handle
         this.emit('connected');
@@ -175,14 +200,45 @@ class WhatsAppConnection {
             if (!messageText.trim()) return;
 
             // Extract message metadata
+            const sender = message.key.participant || message.key.remoteJid;
+            const chatId = message.key.remoteJid;
+            const isGroup = chatId.includes('@g.us');
+            const isPrivate = chatId.includes('@s.whatsapp.net');
+            const isBroadcast = chatId.includes('@broadcast');
+
+            // Log chat information for easy ID discovery
+            if (isGroup) {
+                console.log(`📱 Group Message Detected:`);
+                console.log(`   Group ID: ${chatId}`);
+                console.log(`   Sender: ${sender}`);
+                console.log(`   Message: ${messageText.substring(0, 50)}...`);
+                console.log(`   Time: ${new Date().toLocaleString()}`);
+                console.log('');
+            } else if (isPrivate) {
+                console.log(`👤 Private Chat Message Detected:`);
+                console.log(`   User ID: ${chatId}`);
+                console.log(`   Sender: ${sender}`);
+                console.log(`   Message: ${messageText.substring(0, 50)}...`);
+                console.log(`   Time: ${new Date().toLocaleString()}`);
+                console.log('');
+            } else if (isBroadcast) {
+                console.log(`📢 Broadcast Message Detected:`);
+                console.log(`   Broadcast ID: ${chatId}`);
+                console.log(`   Sender: ${sender}`);
+                console.log(`   Message: ${messageText.substring(0, 50)}...`);
+                console.log(`   Time: ${new Date().toLocaleString()}`);
+                console.log('');
+            }
+
             const messageData = {
                 id: message.key.id,
                 text: messageText,
                 timestamp: message.messageTimestamp,
-                from: message.key.remoteJid,
+                from: chatId,
                 sender: this.getSenderName(message),
-                group: this.isGroupMessage(message.key.remoteJid) ? 
-                       this.getGroupName(message.key.remoteJid) : 'Private Chat'
+                group: isGroup ? this.getGroupName(chatId) : 
+                       isPrivate ? 'Private Chat' : 
+                       isBroadcast ? 'Broadcast' : 'Unknown'
             };
 
             // Emit message event for keyword detection
@@ -251,6 +307,103 @@ class WhatsAppConnection {
 
     getConnectionStatus() {
         return this.isConnected;
+    }
+
+    shouldMonitorGroup(chatId) {
+        // If no groups configured, monitor all chats
+        if (this.monitoredGroups.size === 0) {
+            return true;
+        }
+        
+        // Check if this specific chat is in monitored list
+        return this.monitoredGroups.has(chatId);
+    }
+
+    addMonitoredGroup(groupId, groupName = 'Unknown') {
+        this.monitoredGroups.add(groupId);
+        console.log(`📱 Added group to monitoring: ${groupName} (${groupId})`);
+    }
+
+    removeMonitoredGroup(groupId) {
+        this.monitoredGroups.delete(groupId);
+        console.log(`📱 Removed group from monitoring: ${groupId}`);
+    }
+
+    getMonitoredGroups() {
+        return Array.from(this.monitoredGroups);
+    }
+
+    async discoverGroups() {
+        try {
+            console.log('🔍 Discovering WhatsApp chats and groups...');
+            
+            // Get all groups the bot is a member of
+            const groups = await this.sock.groupFetchAllParticipating();
+            
+            console.log(`📱 Found ${Object.keys(groups).length} groups:`);
+            console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+            
+            // Display all groups with their IDs
+            Object.values(groups).forEach((group, index) => {
+                const groupName = group.subject || 'Unnamed Group';
+                const groupId = group.id;
+                const participantCount = group.participants?.length || 0;
+                
+                console.log(`${index + 1}. ${groupName}`);
+                console.log(`   ID: ${groupId}`);
+                console.log(`   Participants: ${participantCount}`);
+                console.log(`   Status: ${this.monitoredGroups.has(groupId) ? '✅ Monitored' : '⏸️ Not monitored'}`);
+                console.log('');
+            });
+            
+            console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+            console.log('💡 Chat Types Detected:');
+            console.log('• Groups: @g.us (multiple participants)');
+            console.log('• Private chats: @s.whatsapp.net (single users)');
+            console.log('• Broadcast lists: @broadcast (broadcast messages)');
+            console.log('');
+            console.log('💡 To monitor chats:');
+            console.log('1. Copy the Chat ID (ending with @g.us or @s.whatsapp.net)');
+            console.log('2. Update config/monitored-groups.json');
+            console.log('3. Set enabled: true for that chat');
+            console.log('4. Restart the bot');
+            console.log('');
+            
+            // Save discovered groups to file for easy reference
+            await this.saveDiscoveredGroups(groups);
+            
+        } catch (error) {
+            console.error('❌ Error discovering groups:', error.message);
+            logError(error, { context: 'discover_groups' });
+        }
+    }
+
+    async saveDiscoveredGroups(groups) {
+        try {
+            const groupsData = Object.values(groups).map(group => ({
+                id: group.id,
+                name: group.subject || 'Unnamed Group',
+                participants: group.participants?.length || 0,
+                description: group.description || '',
+                creation: group.creation || 0
+            }));
+
+            const fs = require('fs');
+            const path = require('path');
+            const filePath = path.join(__dirname, '../config/discovered-groups.json');
+            
+            const data = {
+                discoveredAt: new Date().toISOString(),
+                totalGroups: groupsData.length,
+                groups: groupsData
+            };
+
+            fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+            console.log(`💾 Discovered groups saved to: config/discovered-groups.json`);
+            
+        } catch (error) {
+            console.error('❌ Error saving discovered groups:', error.message);
+        }
     }
 
     getSocket() {

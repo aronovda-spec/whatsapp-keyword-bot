@@ -1,0 +1,45 @@
+{
+  "monitoredGroups": [
+    {
+      "groupId": "120363123456789012@g.us",
+      "name": "School Announcements",
+      "enabled": true,
+      "description": "Official school announcements and updates"
+    },
+    {
+      "groupId": "120363987654321098@g.us", 
+      "name": "Class Parents Group",
+      "enabled": true,
+      "description": "Parent communication group"
+    },
+    {
+      "groupId": "972501234567@s.whatsapp.net",
+      "name": "Math Teacher - Mrs. Cohen",
+      "enabled": true,
+      "description": "Direct messages from math teacher"
+    },
+    {
+      "groupId": "972509876543@s.whatsapp.net",
+      "name": "Principal - Mr. Levy",
+      "enabled": true,
+      "description": "Important messages from school principal"
+    },
+    {
+      "groupId": "972505555555@s.whatsapp.net",
+      "name": "School Secretary",
+      "enabled": true,
+      "description": "Administrative messages and reminders"
+    }
+  ],
+  "settings": {
+    "ignorePrivateChats": false,
+    "ignoreBroadcastLists": true,
+    "onlyMonitoredGroups": true,
+    "logIgnoredMessages": true
+  },
+  "instructions": {
+    "howToGetIndividualIds": "1. Have the person send a message to your bot number\n2. Check bot terminal for: 👤 Private Chat Message Detected\n3. Copy the User ID (ending with @s.whatsapp.net)\n4. Add to this config with a descriptive name\n5. Set enabled: true",
+    "exampleIndividualId": "972501234567@s.whatsapp.net",
+    "note": "Individual chat IDs end with @s.whatsapp.net. Set onlyMonitoredGroups: true when you have specific chats configured."
+  }
+}

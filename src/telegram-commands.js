@@ -65,6 +65,8 @@ class TelegramCommandHandler {
                 '/users - List users\n' +
                 '/keywords - Show keywords\n' +
                 '/stats - Bot statistics\n' +
+                '/groups - Show chat management info\n' +
+                '/discover - Trigger chat discovery\n' +
                 '/approve <user_id> - Approve user (admin only)\n' +
                 '/reject <user_id> - Reject user (admin only)\n' +
                 '/pending - Show pending requests (admin only)';
@@ -137,6 +139,70 @@ class TelegramCommandHandler {
                 '📊 Notifications: Ready\n' +
                 `🕐 Last Update: ${new Date().toLocaleString()}`;
             this.bot.sendMessage(chatId, statsText);
+        });
+
+        // Groups command
+        this.bot.onText(/\/groups/, (msg) => {
+            const chatId = msg.chat.id;
+            const userId = msg.from.id;
+            console.log('📨 Received /groups from:', msg.from.username || msg.from.first_name);
+            
+            if (!this.authorization.isAuthorized(userId)) {
+                this.bot.sendMessage(chatId, '❌ You are not authorized to use this bot.');
+                return;
+            }
+            
+            const groupsText = '📱 Chat Management\n\n' +
+                '🔍 Ways to get Chat IDs:\n\n' +
+                'Method 1 - Auto Discovery (NEW!):\n' +
+                '• Bot automatically finds all groups\n' +
+                '• Check bot terminal when connected\n' +
+                '• All group IDs listed automatically\n' +
+                '• Saved to config/discovered-groups.json\n\n' +
+                'Method 2 - Bot Logs (INDIVIDUALS):\n' +
+                '• Send ANY message to the bot\n' +
+                '• Bot logs your individual chat ID\n' +
+                '• Works for private chats automatically\n' +
+                '• Shows: 👤 Private Chat Message Detected\n\n' +
+                'Method 3 - WhatsApp Web:\n' +
+                '• Open WhatsApp Web in browser\n' +
+                '• Go to the chat/group\n' +
+                '• Look at URL for chat ID\n\n' +
+                '📋 Chat Types Supported:\n' +
+                '• Groups: @g.us (multiple participants)\n' +
+                '• Private chats: @s.whatsapp.net (single users)\n' +
+                '• Broadcast lists: @broadcast (broadcast messages)\n\n' +
+                '💡 For Individuals:\n' +
+                '• Just send a message to the bot\n' +
+                '• Bot will log your chat ID\n' +
+                '• Copy the ID and add to config\n\n' +
+                'Use /discover to trigger chat discovery\n' +
+                'Use /help for more commands.';
+            this.bot.sendMessage(chatId, groupsText);
+        });
+
+        // Discover groups command
+        this.bot.onText(/\/discover/, (msg) => {
+            const chatId = msg.chat.id;
+            const userId = msg.from.id;
+            console.log('📨 Received /discover from:', msg.from.username || msg.from.first_name);
+            
+            if (!this.authorization.isAuthorized(userId)) {
+                this.bot.sendMessage(chatId, '❌ You are not authorized to use this bot.');
+                return;
+            }
+            
+            this.bot.sendMessage(chatId, 
+                '🔍 Triggering chat discovery...\n\n' +
+                'Check the bot terminal for a complete list of all WhatsApp chats the bot can access.\n\n' +
+                'The bot will:\n' +
+                '• List all groups with names and IDs\n' +
+                '• Show participant counts\n' +
+                '• Indicate which chats are monitored\n' +
+                '• Save results to config/discovered-groups.json\n\n' +
+                'This happens automatically when the bot connects, but you can trigger it manually with this command.\n\n' +
+                '💡 The bot also logs private chat IDs when messages are received!'
+            );
         });
 
         // Approve user command
