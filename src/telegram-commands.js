@@ -82,6 +82,13 @@ class TelegramCommandHandler {
                     '/subscribe <group> - Subscribe to a group\n' +
                     '/unsubscribe <group> - Unsubscribe from a group\n' +
                     '/mygroups - Show your subscriptions\n\n' +
+                    '🔑 Keyword Management:\n' +
+                    '/keywords - Show global keywords\n' +
+                    '/addkeyword <word> - Add global keyword (Admin only)\n' +
+                    '/removekeyword <word> - Remove global keyword (Admin only)\n' +
+                    '/mykeywords - Show your personal keywords\n' +
+                    '/addmykeyword <word> - Add personal keyword\n' +
+                    '/removemykeyword <word> - Remove personal keyword\n\n' +
                     '🌍 Timezone Commands (SIMPLE!):\n' +
                     '/israel - Israeli time 🇮🇱\n' +
                     '/usa - US Eastern time 🇺🇸\n' +
@@ -91,7 +98,6 @@ class TelegramCommandHandler {
                     '/24h - Toggle 24/7 mode (ACTUALLY WORKS!)\n' +
                     '/admin - Admin panel\n' +
                     '/users - List users\n' +
-                    '/keywords - Show keywords\n' +
                     '/stats - Bot statistics\n\n' +
                     '👑 Admin Only:\n' +
                     '/approve <user_id> - Approve user\n' +
@@ -165,6 +171,7 @@ class TelegramCommandHandler {
         });
 
         // Keywords command
+        // Keywords command - Show current keywords
         this.bot.onText(/\/keywords/, (msg) => {
             const chatId = msg.chat.id;
             const userId = msg.from.id;
@@ -175,13 +182,30 @@ class TelegramCommandHandler {
                 return;
             }
             
-            console.log('📨 Received /keywords from:', msg.from.username || msg.from.first_name);
-            const keywordsText = '🔍 Monitored Keywords\n\n' +
-                'English: cake, napkins, list, urgent, emergency, important, deadline, meeting, event, help, asap, critical\n\n' +
-                'Hebrew: דחוף, חשוב, עזרה, מפגש, אירוע, רשימה, עוגה, מפיות, חירום, קריטי\n\n' +
-                'Russian: срочно, важно, помощь, встреча, событие, список, торт, салфетки, критично, экстренно\n\n' +
-                '📊 Total Keywords: 33';
-            this.bot.sendMessage(chatId, keywordsText);
+            if (!this.authorization.isAuthorized(userId)) {
+                this.bot.sendMessage(chatId, '❌ You are not authorized to use this bot.');
+                return;
+            }
+
+            const keywords = this.keywordDetector.getKeywords();
+            let keywordsText = '🔑 <b>Current Global Keywords:</b>\n\n';
+            
+            if (keywords.length === 0) {
+                keywordsText += 'No keywords configured.';
+            } else {
+                keywords.forEach((keyword, index) => {
+                    keywordsText += `${index + 1}. ${keyword}\n`;
+                });
+            }
+            
+            keywordsText += '\n💡 <b>Keyword Management:</b>\n';
+            keywordsText += '• /addkeyword <word> - Add global keyword (Admin only)\n';
+            keywordsText += '• /removekeyword <word> - Remove global keyword (Admin only)\n';
+            keywordsText += '• /mykeywords - Show your personal keywords\n';
+            keywordsText += '• /addmykeyword <word> - Add personal keyword\n';
+            keywordsText += '• /removemykeyword <word> - Remove personal keyword';
+
+            this.bot.sendMessage(chatId, keywordsText, { parse_mode: 'HTML' });
         });
 
         // Stats command
@@ -747,6 +771,164 @@ class TelegramCommandHandler {
             this.bot.sendMessage(chatId, pendingText);
         });
 
+        // Add keyword command - Admin only
+        this.bot.onText(/\/addkeyword (.+)/, (msg, match) => {
+            const chatId = msg.chat.id;
+            const userId = msg.from.id;
+            const keyword = match[1].trim();
+
+            // Prevent duplicate commands
+            if (this.isDuplicateCommand(userId, 'addkeyword')) {
+                console.log('🚫 Duplicate /addkeyword command ignored from:', msg.from.username || msg.from.first_name);
+                return;
+            }
+
+            if (!this.authorization.isAdmin(userId)) {
+                this.bot.sendMessage(chatId, '❌ Admin access required to add global keywords.');
+                return;
+            }
+
+            if (keyword.length < 2) {
+                this.bot.sendMessage(chatId, '❌ Keyword must be at least 2 characters long.');
+                return;
+            }
+
+            const keywords = this.keywordDetector.getKeywords();
+            if (keywords.includes(keyword)) {
+                this.bot.sendMessage(chatId, `❌ Keyword "${keyword}" already exists.`);
+                return;
+            }
+
+            this.keywordDetector.addKeyword(keyword);
+            this.bot.sendMessage(chatId, `✅ Added global keyword: "${keyword}"`);
+            console.log(`🔑 Admin ${userId} added keyword: ${keyword}`);
+        });
+
+        // Remove keyword command - Admin only
+        this.bot.onText(/\/removekeyword (.+)/, (msg, match) => {
+            const chatId = msg.chat.id;
+            const userId = msg.from.id;
+            const keyword = match[1].trim();
+
+            // Prevent duplicate commands
+            if (this.isDuplicateCommand(userId, 'removekeyword')) {
+                console.log('🚫 Duplicate /removekeyword command ignored from:', msg.from.username || msg.from.first_name);
+                return;
+            }
+
+            if (!this.authorization.isAdmin(userId)) {
+                this.bot.sendMessage(chatId, '❌ Admin access required to remove global keywords.');
+                return;
+            }
+
+            const keywords = this.keywordDetector.getKeywords();
+            if (!keywords.includes(keyword)) {
+                this.bot.sendMessage(chatId, `❌ Keyword "${keyword}" not found.`);
+                return;
+            }
+
+            this.keywordDetector.removeKeyword(keyword);
+            this.bot.sendMessage(chatId, `✅ Removed global keyword: "${keyword}"`);
+            console.log(`🔑 Admin ${userId} removed keyword: ${keyword}`);
+        });
+
+        // My keywords command - Show user's personal keywords
+        this.bot.onText(/\/mykeywords/, (msg) => {
+            const chatId = msg.chat.id;
+            const userId = msg.from.id;
+
+            // Prevent duplicate commands
+            if (this.isDuplicateCommand(userId, 'mykeywords')) {
+                console.log('🚫 Duplicate /mykeywords command ignored from:', msg.from.username || msg.from.first_name);
+                return;
+            }
+
+            if (!this.authorization.isAuthorized(userId)) {
+                this.bot.sendMessage(chatId, '❌ You are not authorized to use this bot.');
+                return;
+            }
+
+            const personalKeywords = this.getPersonalKeywords(userId);
+            let keywordsText = '🔑 <b>Your Personal Keywords:</b>\n\n';
+            
+            if (personalKeywords.length === 0) {
+                keywordsText += 'No personal keywords set.\n\n';
+            } else {
+                personalKeywords.forEach((keyword, index) => {
+                    keywordsText += `${index + 1}. ${keyword}\n`;
+                });
+                keywordsText += '\n';
+            }
+            
+            keywordsText += '💡 <b>Personal Keyword Management:</b>\n';
+            keywordsText += '• /addmykeyword <word> - Add personal keyword\n';
+            keywordsText += '• /removemykeyword <word> - Remove personal keyword\n\n';
+            keywordsText += 'ℹ️ Personal keywords work alongside global keywords.';
+
+            this.bot.sendMessage(chatId, keywordsText, { parse_mode: 'HTML' });
+        });
+
+        // Add personal keyword command
+        this.bot.onText(/\/addmykeyword (.+)/, (msg, match) => {
+            const chatId = msg.chat.id;
+            const userId = msg.from.id;
+            const keyword = match[1].trim();
+
+            // Prevent duplicate commands
+            if (this.isDuplicateCommand(userId, 'addmykeyword')) {
+                console.log('🚫 Duplicate /addmykeyword command ignored from:', msg.from.username || msg.from.first_name);
+                return;
+            }
+
+            if (!this.authorization.isAuthorized(userId)) {
+                this.bot.sendMessage(chatId, '❌ You are not authorized to use this bot.');
+                return;
+            }
+
+            if (keyword.length < 2) {
+                this.bot.sendMessage(chatId, '❌ Keyword must be at least 2 characters long.');
+                return;
+            }
+
+            const personalKeywords = this.getPersonalKeywords(userId);
+            if (personalKeywords.includes(keyword)) {
+                this.bot.sendMessage(chatId, `❌ Personal keyword "${keyword}" already exists.`);
+                return;
+            }
+
+            this.addPersonalKeyword(userId, keyword);
+            this.bot.sendMessage(chatId, `✅ Added personal keyword: "${keyword}"`);
+            console.log(`🔑 User ${userId} added personal keyword: ${keyword}`);
+        });
+
+        // Remove personal keyword command
+        this.bot.onText(/\/removemykeyword (.+)/, (msg, match) => {
+            const chatId = msg.chat.id;
+            const userId = msg.from.id;
+            const keyword = match[1].trim();
+
+            // Prevent duplicate commands
+            if (this.isDuplicateCommand(userId, 'removemykeyword')) {
+                console.log('🚫 Duplicate /removemykeyword command ignored from:', msg.from.username || msg.from.first_name);
+                return;
+            }
+
+            if (!this.authorization.isAuthorized(userId)) {
+                this.bot.sendMessage(chatId, '❌ You are not authorized to use this bot.');
+                return;
+            }
+
+            const personalKeywords = this.getPersonalKeywords(userId);
+            if (!personalKeywords.includes(keyword)) {
+                this.bot.sendMessage(chatId, `❌ Personal keyword "${keyword}" not found.`);
+                return;
+            }
+
+            this.removePersonalKeyword(userId, keyword);
+            this.bot.sendMessage(chatId, `✅ Removed personal keyword: "${keyword}"`);
+            console.log(`🔑 User ${userId} removed personal keyword: ${keyword}`);
+        });
+
         // Handle any other message - BROADCAST TO ALL AUTHORIZED USERS
         this.bot.on('message', (msg) => {
             if (!msg.text.startsWith('/')) {
@@ -937,6 +1119,72 @@ class TelegramCommandHandler {
     notifyAdmins(message) {
         // Simplified - just log for now
         console.log('📢 Admin notification:', message);
+    }
+
+    // Personal keyword management methods
+    getPersonalKeywords(userId) {
+        try {
+            const fs = require('fs');
+            const path = require('path');
+            const personalKeywordsPath = path.join(__dirname, '../config/personal-keywords.json');
+            
+            if (fs.existsSync(personalKeywordsPath)) {
+                const data = JSON.parse(fs.readFileSync(personalKeywordsPath, 'utf8'));
+                return data[userId] || [];
+            }
+            
+            return [];
+        } catch (error) {
+            console.error('Error loading personal keywords:', error.message);
+            return [];
+        }
+    }
+
+    addPersonalKeyword(userId, keyword) {
+        try {
+            const fs = require('fs');
+            const path = require('path');
+            const personalKeywordsPath = path.join(__dirname, '../config/personal-keywords.json');
+            
+            let data = {};
+            if (fs.existsSync(personalKeywordsPath)) {
+                data = JSON.parse(fs.readFileSync(personalKeywordsPath, 'utf8'));
+            }
+            
+            if (!data[userId]) {
+                data[userId] = [];
+            }
+            
+            if (!data[userId].includes(keyword)) {
+                data[userId].push(keyword);
+                fs.writeFileSync(personalKeywordsPath, JSON.stringify(data, null, 2));
+            }
+        } catch (error) {
+            console.error('Error adding personal keyword:', error.message);
+        }
+    }
+
+    removePersonalKeyword(userId, keyword) {
+        try {
+            const fs = require('fs');
+            const path = require('path');
+            const personalKeywordsPath = path.join(__dirname, '../config/personal-keywords.json');
+            
+            let data = {};
+            if (fs.existsSync(personalKeywordsPath)) {
+                data = JSON.parse(fs.readFileSync(personalKeywordsPath, 'utf8'));
+            }
+            
+            if (data[userId]) {
+                const index = data[userId].indexOf(keyword);
+                if (index > -1) {
+                    data[userId].splice(index, 1);
+                    fs.writeFileSync(personalKeywordsPath, JSON.stringify(data, null, 2));
+                }
+            }
+        } catch (error) {
+            console.error('Error removing personal keyword:', error.message);
+        }
     }
 
     stop() {
