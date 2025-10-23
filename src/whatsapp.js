@@ -34,25 +34,14 @@ class WhatsAppConnection {
             
             this.sock = makeWASocket({
                 auth: state,
-                printQRInTerminal: false, // We'll handle QR display ourselves
+                printQRInTerminal: true, // Let Baileys handle QR display
                 logger: {
-                    level: 'silent',
-                    child: () => ({ 
-                        level: 'silent',
-                        error: () => {},
-                        warn: () => {},
-                        info: () => {},
-                        debug: () => {},
-                        trace: () => {},
-                        fatal: () => {}
-                    }),
-                    error: () => {},
-                    warn: () => {},
-                    info: () => {},
-                    debug: () => {},
-                    trace: () => {},
-                    fatal: () => {}
-                }
+                    level: 'silent'
+                },
+                browser: ['WhatsApp Keyword Bot', 'Chrome', '1.0.0'],
+                connectTimeoutMs: 60000,
+                keepAliveIntervalMs: 30000,
+                retryRequestDelayMs: 250
             });
 
             this.setupEventHandlers(saveCreds);
