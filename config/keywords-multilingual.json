@@ -1,0 +1,59 @@
+{
+  "keywords": [
+    "cake",
+    "napkins", 
+    "list",
+    "urgent",
+    "emergency",
+    "important",
+    "deadline",
+    "meeting",
+    "event",
+    "help",
+    "asap",
+    "critical",
+    "דחוף",
+    "חשוב",
+    "עזרה",
+    "מפגש",
+    "אירוע",
+    "רשימה",
+    "עוגה",
+    "מפיות",
+    "חירום",
+    "קריטי",
+    "срочно",
+    "важно",
+    "помощь",
+    "встреча",
+    "событие",
+    "список",
+    "торт",
+    "салфетки",
+    "критично",
+    "экстренно"
+  ],
+  "caseSensitive": false,
+  "exactMatch": true,
+  "enabled": true,
+  "multilingual": {
+    "enabled": true,
+    "languages": [
+      {
+        "name": "English",
+        "code": "en",
+        "keywords": ["urgent", "emergency", "important", "help", "asap", "critical", "cake", "napkins", "list", "deadline", "meeting", "event"]
+      },
+      {
+        "name": "Hebrew",
+        "code": "he", 
+        "keywords": ["דחוף", "חשוב", "עזרה", "מפגש", "אירוע", "רשימה", "עוגה", "מפיות", "חירום", "קריטי"]
+      },
+      {
+        "name": "Russian",
+        "code": "ru",
+        "keywords": ["срочно", "важно", "помощь", "встреча", "событие", "список", "торт", "салфетки", "критично", "экстренно"]
+      }
+    ]
+  }
+}

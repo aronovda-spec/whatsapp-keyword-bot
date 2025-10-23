@@ -44,10 +44,19 @@ class KeywordDetector {
             const searchKeyword = this.caseSensitive ? keyword : keyword.toLowerCase();
             
             if (this.exactMatch) {
-                // Exact word matching (word boundaries)
-                const regex = new RegExp(`\\b${this.escapeRegex(searchKeyword)}\\b`, this.caseSensitive ? 'g' : 'gi');
-                if (regex.test(searchText)) {
-                    detectedKeywords.push(keyword);
+                // Enhanced exact word matching for multilingual support
+                if (this.isLatinScript(searchKeyword)) {
+                    // Use word boundaries for Latin scripts (English, etc.)
+                    const regex = new RegExp(`\\b${this.escapeRegex(searchKeyword)}\\b`, this.caseSensitive ? 'g' : 'gi');
+                    if (regex.test(searchText)) {
+                        detectedKeywords.push(keyword);
+                    }
+                } else {
+                    // For non-Latin scripts (Hebrew, Russian, Arabic, etc.), use space/punctuation boundaries
+                    const regex = new RegExp(`(^|[\\s\\p{P}])${this.escapeRegex(searchKeyword)}([\\s\\p{P}]|$)`, this.caseSensitive ? 'gu' : 'giu');
+                    if (regex.test(searchText)) {
+                        detectedKeywords.push(keyword);
+                    }
                 }
             } else {
                 // Simple substring matching
@@ -58,6 +67,11 @@ class KeywordDetector {
         }
 
         return detectedKeywords;
+    }
+
+    isLatinScript(text) {
+        // Check if text contains only Latin characters
+        return /^[a-zA-Z\s]*$/.test(text);
     }
 
     escapeRegex(string) {
