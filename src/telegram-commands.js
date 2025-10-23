@@ -786,7 +786,20 @@ class TelegramCommandHandler {
             const discoveredPath = path.join(__dirname, '../config/discovered-groups.json');
             
             if (fs.existsSync(discoveredPath)) {
-                return JSON.parse(fs.readFileSync(discoveredPath, 'utf8'));
+                const data = JSON.parse(fs.readFileSync(discoveredPath, 'utf8'));
+                // Convert the groups array to the expected format
+                const groups = {};
+                if (data.groups && Array.isArray(data.groups)) {
+                    data.groups.forEach(group => {
+                        groups[group.id] = {
+                            name: group.name,
+                            participants: group.participants,
+                            description: group.description,
+                            creation: group.creation
+                        };
+                    });
+                }
+                return groups;
             }
             
             return {};
