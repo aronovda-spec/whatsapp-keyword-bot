@@ -7,6 +7,7 @@ const fs = require('fs');
 const WhatsAppConnection = require('./whatsapp');
 const KeywordDetector = require('./keywordDetector');
 const Notifier = require('./notifier');
+const KeepAliveService = require('./keep-alive');
 const { logger, logKeywordDetection, logBotEvent, logError } = require('./logger');
 
 class WhatsAppKeywordBot {
@@ -20,6 +21,7 @@ class WhatsAppKeywordBot {
         this.keywordDetector = new KeywordDetector();
         this.notifier = new Notifier();
         this.connections = new Map(); // Store multiple WhatsApp connections
+        this.keepAlive = new KeepAliveService(); // Anti-sleep mechanism
         this.stats = {
             startTime: new Date(),
             messagesProcessed: 0,
@@ -315,18 +317,24 @@ class WhatsAppKeywordBot {
             console.log('💡 Make sure to set up your Telegram bot credentials in .env file');
             console.log('');
 
+            // Start anti-sleep mechanism for Render free tier
+            this.keepAlive.start();
+            console.log('🔄 Anti-sleep mechanism activated');
+
             logBotEvent('server_started', { port: this.port });
         });
 
         // Graceful shutdown
         process.on('SIGINT', () => {
             console.log('\n🛑 Shutting down bot...');
+            this.keepAlive.stop();
             this.notifier.sendBotStatus('Shutting Down', 'Bot is being stopped');
             process.exit(0);
         });
 
         process.on('SIGTERM', () => {
             console.log('\n🛑 Received SIGTERM, shutting down...');
+            this.keepAlive.stop();
             this.notifier.sendBotStatus('Shutting Down', 'Bot received termination signal');
             process.exit(0);
         });

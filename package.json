@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node src/bot.js",
     "dev": "nodemon src/bot.js",
+    "keep-alive": "node keep-alive-standalone.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
