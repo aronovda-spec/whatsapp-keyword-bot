@@ -12,6 +12,10 @@ class WhatsAppKeywordBot {
     constructor() {
         this.app = express();
         this.port = process.env.PORT || 3000;
+        
+        // Validate environment variables
+        this.validateEnvironment();
+        
         this.keywordDetector = new KeywordDetector();
         this.notifier = new Notifier();
         this.whatsapp = new WhatsAppConnection();
@@ -29,10 +33,47 @@ class WhatsAppKeywordBot {
         this.start();
     }
 
+    validateEnvironment() {
+        const requiredVars = ['TELEGRAM_BOT_TOKEN', 'TELEGRAM_CHAT_ID'];
+        const missing = requiredVars.filter(varName => !process.env[varName]);
+        
+        if (missing.length > 0) {
+            console.warn(`⚠️  Missing environment variables: ${missing.join(', ')}`);
+            console.warn('📝 Please check your .env file configuration');
+        }
+    }
+
     setupExpress() {
         // Middleware
-        this.app.use(express.json());
+        this.app.use(express.json({ limit: '10mb' }));
         this.app.use(express.static('public'));
+        
+        // Simple rate limiting
+        this.app.use((req, res, next) => {
+            const now = Date.now();
+            const windowMs = 60000; // 1 minute
+            const maxRequests = 100; // 100 requests per minute
+            
+            if (!this.requestCounts) {
+                this.requestCounts = new Map();
+            }
+            
+            const clientIp = req.ip || req.connection.remoteAddress;
+            const clientData = this.requestCounts.get(clientIp) || { count: 0, resetTime: now + windowMs };
+            
+            if (now > clientData.resetTime) {
+                clientData.count = 0;
+                clientData.resetTime = now + windowMs;
+            }
+            
+            if (clientData.count >= maxRequests) {
+                return res.status(429).json({ error: 'Too many requests' });
+            }
+            
+            clientData.count++;
+            this.requestCounts.set(clientIp, clientData);
+            next();
+        });
 
         // Health check endpoint
         this.app.get('/health', (req, res) => {
@@ -115,6 +156,11 @@ class WhatsAppKeywordBot {
 
     async handleMessage(messageData) {
         try {
+            // Validate message data
+            if (!messageData || !messageData.text || typeof messageData.text !== 'string') {
+                return;
+            }
+
             this.stats.messagesProcessed++;
 
             // Detect keywords in the message
@@ -133,16 +179,24 @@ class WhatsAppKeywordBot {
 
                 // Send notifications for each detected keyword
                 for (const keyword of detectedKeywords) {
-                    const success = await this.notifier.sendKeywordAlert(
-                        keyword,
-                        messageData.text,
-                        messageData.sender,
-                        messageData.group,
-                        messageData.id
-                    );
+                    try {
+                        const success = await this.notifier.sendKeywordAlert(
+                            keyword,
+                            messageData.text,
+                            messageData.sender,
+                            messageData.group,
+                            messageData.id
+                        );
 
-                    if (success) {
-                        this.stats.notificationsSent++;
+                        if (success) {
+                            this.stats.notificationsSent++;
+                        }
+                    } catch (notificationError) {
+                        logError(notificationError, {
+                            context: 'notification_error',
+                            keyword,
+                            messageId: messageData.id
+                        });
                     }
                 }
 
@@ -153,8 +207,8 @@ class WhatsAppKeywordBot {
             this.stats.errors++;
             logError(error, {
                 context: 'handle_message',
-                messageId: messageData.id,
-                sender: messageData.sender
+                messageId: messageData?.id,
+                sender: messageData?.sender
             });
         }
     }

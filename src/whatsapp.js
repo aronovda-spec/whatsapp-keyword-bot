@@ -98,6 +98,9 @@ class WhatsAppConnection {
         logBotEvent('whatsapp_connected');
         console.log('✅ WhatsApp connected successfully!');
         console.log('🤖 Bot is now monitoring for keywords...');
+        
+        // Emit connected event for bot to handle
+        this.emit('connected');
     }
 
     handleDisconnection(lastDisconnect) {
@@ -116,6 +119,9 @@ class WhatsAppConnection {
             logBotEvent('whatsapp_logged_out');
             console.log('❌ WhatsApp logged out. Please scan QR code again.');
         }
+        
+        // Emit disconnected event for bot to handle
+        this.emit('disconnected');
     }
 
     scheduleReconnect() {
