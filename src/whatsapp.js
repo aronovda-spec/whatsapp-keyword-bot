@@ -37,7 +37,13 @@ class WhatsAppConnection {
                 printQRInTerminal: false, // We'll handle QR display ourselves
                 logger: {
                     level: 'silent', // Reduce noise in logs
-                    child: () => ({ level: 'silent' })
+                    child: () => ({ 
+                        level: 'silent',
+                        error: () => {},
+                        warn: () => {},
+                        info: () => {},
+                        debug: () => {}
+                    })
                 }
             });
 
