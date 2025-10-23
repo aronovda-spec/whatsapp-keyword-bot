@@ -27,6 +27,8 @@ A cloud-based bot that monitors WhatsApp group messages for specific keywords an
 - ✅ **Duplicate Prevention**: Prevents command spam
 - ✅ **24/7 Mode**: Optional continuous operation
 - ✅ **Multi-Phone Support**: Monitor multiple WhatsApp accounts
+- ✅ **Enhanced User Management**: Clear admin identification and role display
+- ✅ **Personal Keywords**: Users can manage their own keyword lists
 
 ## 🚀 Quick Start
 
@@ -77,7 +79,8 @@ A cloud-based bot that monitors WhatsApp group messages for specific keywords an
 ### ⚙️ Control Commands
 - `/24h` - Toggle 24/7 mode
 - `/admin` - Admin panel
-- `/users` - List users
+- `/users` - List all users with admin badges
+- `/admins` - Show admin users only
 - `/keywords` - Show keywords
 - `/stats` - Bot statistics
 
@@ -85,6 +88,17 @@ A cloud-based bot that monitors WhatsApp group messages for specific keywords an
 - `/approve <user_id>` - Approve user
 - `/reject <user_id>` - Reject user
 - `/pending` - Show pending requests
+- `/addkeyword <word>` - Add global keyword
+- `/removekeyword <word>` - Remove global keyword
+- `/restart` - Restart bot (preserves all data)
+
+### 🔑 Keyword Management
+- `/keywords` - Show global keywords
+- `/mykeywords` - Show your personal keywords
+- `/addmykeyword <word>` - Add personal keyword
+- `/removemykeyword <word>` - Remove personal keyword
+
+**🌍 Multilingual Support**: Keywords can be added in any language including Hebrew, Russian, Arabic, Chinese, Japanese, and any Unicode-based script.
 
 ## ⚙️ Configuration
 
@@ -155,6 +169,8 @@ config/
 ├── telegram-auth.json       # User authorization data
 ├── user-preferences.json    # Per-user timezone preferences
 ├── group-subscriptions.json # Group subscription data
+├── personal-keywords.json  # Personal keyword management
+├── non-active-hours.json   # Sleep schedule configuration
 └── discovered-groups.json   # Auto-discovered groups
 
 sessions/                    # WhatsApp session storage
@@ -190,6 +206,8 @@ services:
 - **Anti-Ban Protection**: Rate limiting and human-like behavior
 - **Secure Storage**: Sensitive data stored in environment variables
 - **Duplicate Prevention**: Prevents command spam and abuse
+- **Admin Role Management**: Clear distinction between admins and regular users
+- **Personal Keyword Privacy**: Users' personal keywords are private to them
 
 ## 📊 Monitoring
 
@@ -197,6 +215,25 @@ services:
 - **Statistics**: `http://your-domain.com/stats`
 - **Logs**: Comprehensive logging with Winston
 - **Anti-Sleep**: Automatic keep-alive mechanism
+
+## 🆕 Recent Enhancements
+
+### Enhanced User Management
+- **`/users` Command**: Now shows all users with clear admin badges (👑 for admins, 👤 for users)
+- **`/admins` Command**: New command to show only admin users with their privileges
+- **Role Visibility**: Easy identification of who has admin privileges
+- **User Statistics**: Summary counts of total users, admins, and regular users
+
+### Keyword Management System
+- **Global Keywords**: Admin-managed keywords that notify all users
+- **Personal Keywords**: User-managed keywords that notify only the specific user
+- **Multilingual Support**: Full Unicode support for any language (Hebrew, Russian, Arabic, etc.)
+- **Easy Management**: Simple commands to add/remove keywords
+
+### Project Optimization
+- **File Cleanup**: Removed unused files for cleaner project structure
+- **Code Integration**: Multi-phone, anti-ban, and multilingual features fully integrated
+- **Performance**: Optimized codebase with no redundant implementations
 
 ## 🚀 Usage Examples
 

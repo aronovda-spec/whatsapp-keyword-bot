@@ -97,7 +97,8 @@ class TelegramCommandHandler {
                     '⚙️ Control Commands:\n' +
                     '/24h - Toggle 24/7 mode (ACTUALLY WORKS!)\n' +
                     '/admin - Admin panel\n' +
-                    '/users - List users\n' +
+                    '/users - List all users with roles\n' +
+                    '/admins - Show admin users only\n' +
                     '/stats - Bot statistics\n\n' +
                     '👑 Admin Only:\n' +
                     '/approve <user_id> - Approve user\n' +
@@ -141,7 +142,8 @@ class TelegramCommandHandler {
             console.log('📨 Received /admin from:', msg.from.username || msg.from.first_name);
             const adminText = '👑 Admin Panel\n\n' +
                 'Available admin commands:\n' +
-                '/users - List all users\n' +
+                '/users - List all users with roles\n' +
+                '/admins - Show admin users only\n' +
                 '/keywords - Show keywords\n' +
                 '/stats - Bot statistics\n' +
                 '/restart - Restart bot (preserves all data)\n' +
@@ -165,13 +167,74 @@ class TelegramCommandHandler {
             }
             
             console.log('📨 Received /users from:', msg.from.username || msg.from.first_name);
-            const usersText = '👥 Bot Users\n\n' +
-                '📱 Telegram Chat ID: 1022850808\n' +
-                '👤 User: Dani\n' +
-                '✅ Status: Active\n' +
-                '🔔 Notifications: Enabled\n' +
-                '📊 Total Users: 1';
-            this.bot.sendMessage(chatId, usersText);
+            
+            // Get all authorized users and admins
+            const authorizedUsers = this.authorization.getAuthorizedUsers();
+            const adminUsers = this.authorization.getAdminUsers();
+            
+            let usersText = '👥 <b>Bot Users</b>\n\n';
+            
+            if (authorizedUsers.length === 0) {
+                usersText += '❌ No authorized users found.';
+            } else {
+                authorizedUsers.forEach((user, index) => {
+                    const isAdmin = adminUsers.includes(user);
+                    const adminBadge = isAdmin ? '👑' : '👤';
+                    const adminStatus = isAdmin ? 'Admin' : 'User';
+                    const adminEmoji = isAdmin ? '✅' : '👤';
+                    
+                    usersText += `${adminBadge} <b>User ${index + 1}</b>\n`;
+                    usersText += `   📱 ID: ${user}\n`;
+                    usersText += `   ${adminEmoji} Role: ${adminStatus}\n`;
+                    usersText += `   ✅ Status: Active\n`;
+                    usersText += `   🔔 Notifications: Enabled\n\n`;
+                });
+                
+                usersText += `📊 <b>Summary:</b>\n`;
+                usersText += `   👥 Total Users: ${authorizedUsers.length}\n`;
+                usersText += `   👑 Admins: ${adminUsers.length}\n`;
+                usersText += `   👤 Regular Users: ${authorizedUsers.length - adminUsers.length}\n`;
+            }
+            
+            this.bot.sendMessage(chatId, usersText, { parse_mode: 'HTML' });
+        });
+
+        // Admins command - Show only admin users
+        this.bot.onText(/\/admins/, (msg) => {
+            const chatId = msg.chat.id;
+            const userId = msg.from.id;
+            
+            // Prevent duplicate commands
+            if (this.isDuplicateCommand(userId, 'admins')) {
+                console.log('🚫 Duplicate /admins command ignored from:', msg.from.username || msg.from.first_name);
+                return;
+            }
+            
+            console.log('📨 Received /admins from:', msg.from.username || msg.from.first_name);
+            
+            // Get admin users
+            const adminUsers = this.authorization.getAdminUsers();
+            
+            let adminsText = '👑 <b>Admin Users</b>\n\n';
+            
+            if (adminUsers.length === 0) {
+                adminsText += '❌ No admin users found.';
+            } else {
+                adminUsers.forEach((adminId, index) => {
+                    adminsText += `👑 <b>Admin ${index + 1}</b>\n`;
+                    adminsText += `   📱 ID: ${adminId}\n`;
+                    adminsText += `   ✅ Role: Admin\n`;
+                    adminsText += `   ✅ Status: Active\n`;
+                    adminsText += `   🔔 Notifications: Enabled\n`;
+                    adminsText += `   🛠️ Admin Commands: Available\n\n`;
+                });
+                
+                adminsText += `📊 <b>Summary:</b>\n`;
+                adminsText += `   👑 Total Admins: ${adminUsers.length}\n`;
+                adminsText += `   🛠️ Admin Commands: /approve, /reject, /pending, /addkeyword, /removekeyword, /restart\n`;
+            }
+            
+            this.bot.sendMessage(chatId, adminsText, { parse_mode: 'HTML' });
         });
 
         // Keywords command
@@ -933,7 +996,7 @@ class TelegramCommandHandler {
             console.log(`🔑 User ${userId} removed personal keyword: ${keyword}`);
         });
 
-        // Restart command - Admin only
+        // Restart command - Admin only with confirmation
         this.bot.onText(/\/restart/, (msg) => {
             const chatId = msg.chat.id;
             const userId = msg.from.id;
@@ -951,30 +1014,91 @@ class TelegramCommandHandler {
             
             console.log('📨 Received /restart from:', msg.from.username || msg.from.first_name);
             
+            // First confirmation prompt
             this.bot.sendMessage(chatId, 
-                '🔄 <b>Restarting Bot...</b>\n\n' +
-                '⚠️ <b>Important:</b>\n' +
-                '• Bot will restart in 3 seconds\n' +
-                '• All authorization data will be preserved\n' +
-                '• WhatsApp QR code will need to be scanned again\n' +
-                '• All keywords and subscriptions remain intact\n\n' +
-                '✅ <b>What persists:</b>\n' +
-                '• User authorizations\n' +
+                '⚠️ <b>RESTART CONFIRMATION REQUIRED</b>\n\n' +
+                '🔄 <b>Are you sure you want to restart the bot?</b>\n\n' +
+                '⚠️ <b>This will:</b>\n' +
+                '• Restart the bot process\n' +
+                '• Require WhatsApp QR code to be scanned again\n' +
+                '• Temporarily stop all monitoring\n' +
+                '• Take 10-30 seconds to reconnect\n\n' +
+                '✅ <b>What will be preserved:</b>\n' +
+                '• All user authorizations\n' +
                 '• Group subscriptions\n' +
                 '• Global keywords\n' +
                 '• Personal keywords\n' +
                 '• Bot configurations\n\n' +
-                '🔄 <b>Restarting now...</b>',
+                '🔴 <b>Type "CONFIRM RESTART" to proceed</b>\n' +
+                '❌ <b>Type anything else to cancel</b>',
                 { parse_mode: 'HTML' }
             );
             
-            console.log(`🔄 Admin ${userId} initiated bot restart`);
+            // Store pending restart confirmation
+            this.pendingRestartConfirmations = this.pendingRestartConfirmations || new Map();
+            this.pendingRestartConfirmations.set(userId, {
+                chatId: chatId,
+                timestamp: Date.now()
+            });
             
-            // Give time for message to be sent, then restart
-            setTimeout(() => {
-                console.log('🔄 Bot restart initiated by admin');
-                process.exit(0);
-            }, 3000);
+            console.log(`🔄 Admin ${userId} requested restart confirmation`);
+        });
+
+        // Restart confirmation handler
+        this.bot.on('message', (msg) => {
+            const userId = msg.from.id;
+            const messageText = msg.text;
+            
+            // Check if this is a restart confirmation
+            if (this.pendingRestartConfirmations && this.pendingRestartConfirmations.has(userId)) {
+                const confirmation = this.pendingRestartConfirmations.get(userId);
+                
+                // Clean up expired confirmations (5 minutes)
+                if (Date.now() - confirmation.timestamp > 300000) {
+                    this.pendingRestartConfirmations.delete(userId);
+                    return;
+                }
+                
+                if (messageText === 'CONFIRM RESTART') {
+                    // Confirmed restart
+                    this.pendingRestartConfirmations.delete(userId);
+                    
+                    this.bot.sendMessage(confirmation.chatId, 
+                        '✅ <b>Restart Confirmed!</b>\n\n' +
+                        '🔄 <b>Restarting Bot...</b>\n\n' +
+                        '⚠️ <b>Important:</b>\n' +
+                        '• Bot will restart in 3 seconds\n' +
+                        '• WhatsApp QR code will need to be scanned again\n' +
+                        '• All data will be preserved\n\n' +
+                        '🔄 <b>Restarting now...</b>',
+                        { parse_mode: 'HTML' }
+                    );
+                    
+                    console.log(`🔄 Admin ${userId} confirmed bot restart`);
+                    
+                    // Give time for message to be sent, then restart
+                    setTimeout(() => {
+                        console.log('🔄 Bot restart initiated by admin');
+                        process.exit(0);
+                    }, 3000);
+                    
+                } else {
+                    // Cancelled restart
+                    this.pendingRestartConfirmations.delete(userId);
+                    
+                    this.bot.sendMessage(confirmation.chatId, 
+                        '❌ <b>Restart Cancelled</b>\n\n' +
+                        '✅ Bot will continue running normally.\n' +
+                        '🔄 Use /restart again if you need to restart later.',
+                        { parse_mode: 'HTML' }
+                    );
+                    
+                    console.log(`🔄 Admin ${userId} cancelled bot restart`);
+                }
+                
+                // Return early to prevent other message handlers
+                return;
+            }
         });
 
         // Handle any other message - BROADCAST TO ALL AUTHORIZED USERS
