@@ -3,6 +3,7 @@ const qrcode = require('qrcode-terminal');
 const fs = require('fs');
 const path = require('path');
 const { logError, logBotEvent } = require('./logger');
+const WhatsAppAntiBan = require('./anti-ban');
 
 class WhatsAppConnection {
     constructor() {
@@ -11,6 +12,7 @@ class WhatsAppConnection {
         this.sessionPath = process.env.WHATSAPP_SESSION_PATH || './sessions';
         this.reconnectDelay = 5000;
         this.qrTimeout = 60000;
+        this.antiBan = new WhatsAppAntiBan(); // Anti-ban protection
         this.init();
     }
 
@@ -32,6 +34,9 @@ class WhatsAppConnection {
         try {
             const { state, saveCreds } = await useMultiFileAuthState(this.sessionPath);
             
+            // Get anti-ban optimized configuration
+            const sessionConfig = this.antiBan.getSessionConfig();
+            
             this.sock = makeWASocket({
                 auth: state,
                 logger: {
@@ -52,10 +57,7 @@ class WhatsAppConnection {
                     trace: () => {},
                     fatal: () => {}
                 },
-                browser: ['WhatsApp Keyword Bot', 'Chrome', '1.0.0'],
-                connectTimeoutMs: 60000,
-                keepAliveIntervalMs: 30000,
-                retryRequestDelayMs: 250
+                ...sessionConfig
             });
 
             this.setupEventHandlers(saveCreds);

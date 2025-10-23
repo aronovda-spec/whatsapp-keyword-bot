@@ -1,0 +1,45 @@
+{
+  "bot": {
+    "name": "WhatsApp Keyword Bot",
+    "version": "1.0.0",
+    "debug": false
+  },
+  "whatsapp": {
+    "sessionPath": "./sessions",
+    "qrTimeout": 60000,
+    "reconnectDelay": 5000
+  },
+  "telegram": {
+    "enabled": true,
+    "retryAttempts": 3,
+    "retryDelay": 1000
+  },
+  "monitoring": {
+    "healthCheckInterval": 30000,
+    "maxLogSize": "10MB",
+    "maxLogFiles": 5
+  },
+  "antiBan": {
+    "enabled": true,
+    "maxMessagesPerMinute": 5,
+    "maxMessagesPerHour": 20,
+    "maxMessagesPerDay": 100,
+    "humanLikeBehavior": true,
+    "randomDelayMin": 2000,
+    "randomDelayMax": 8000,
+    "connectionDelay": 5000,
+    "reconnectDelay": 30000,
+    "maxReconnectAttempts": 5,
+    "sessionTimeout": 86400000,
+    "enableReadReceipts": false,
+    "enableTypingIndicator": false,
+    "enablePresenceUpdates": false,
+    "maxGroupsPerAccount": 20,
+    "maxContactsPerAccount": 100,
+    "readOnlyMode": true,
+    "noMessageSending": true,
+    "noGroupCreation": true,
+    "noContactAddition": true,
+    "noStatusUpdates": true
+  }
+}
