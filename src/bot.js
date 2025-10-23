@@ -63,7 +63,7 @@ class WhatsAppKeywordBot {
         } catch (error) {
             console.error('❌ Failed to load multi-phone config:', error.message);
             console.log('🔄 Falling back to single phone mode...');
-            this.addPhone('+972523784909', './sessions', 'Default phone');
+            this.addPhone('YOUR_PHONE_NUMBER_HERE', './sessions', 'Default phone');
         }
     }
 
