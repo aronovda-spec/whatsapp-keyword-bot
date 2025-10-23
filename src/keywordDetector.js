@@ -40,6 +40,7 @@ class KeywordDetector {
         const detectedKeywords = [];
         const searchText = this.caseSensitive ? messageText : messageText.toLowerCase();
 
+        // Check global keywords (for all users)
         for (const keyword of this.keywords) {
             const searchKeyword = this.caseSensitive ? keyword : keyword.toLowerCase();
             
@@ -49,19 +50,46 @@ class KeywordDetector {
                     // Use word boundaries for Latin scripts (English, etc.)
                     const regex = new RegExp(`\\b${this.escapeRegex(searchKeyword)}\\b`, this.caseSensitive ? 'g' : 'gi');
                     if (regex.test(searchText)) {
-                        detectedKeywords.push(keyword);
+                        detectedKeywords.push({ keyword, type: 'global' });
                     }
                 } else {
                     // For non-Latin scripts (Hebrew, Russian, Arabic, etc.), use space/punctuation boundaries
                     const regex = new RegExp(`(^|[\\s\\p{P}])${this.escapeRegex(searchKeyword)}([\\s\\p{P}]|$)`, this.caseSensitive ? 'gu' : 'giu');
                     if (regex.test(searchText)) {
-                        detectedKeywords.push(keyword);
+                        detectedKeywords.push({ keyword, type: 'global' });
                     }
                 }
             } else {
                 // Simple substring matching
                 if (searchText.includes(searchKeyword)) {
-                    detectedKeywords.push(keyword);
+                    detectedKeywords.push({ keyword, type: 'global' });
+                }
+            }
+        }
+
+        // Check personal keywords for ALL authorized users
+        const authorizedUsers = this.getAuthorizedUsers();
+        for (const userId of authorizedUsers) {
+            const personalKeywords = this.getPersonalKeywords(userId);
+            for (const keyword of personalKeywords) {
+                const searchKeyword = this.caseSensitive ? keyword : keyword.toLowerCase();
+                
+                if (this.exactMatch) {
+                    if (this.isLatinScript(searchKeyword)) {
+                        const regex = new RegExp(`\\b${this.escapeRegex(searchKeyword)}\\b`, this.caseSensitive ? 'g' : 'gi');
+                        if (regex.test(searchText)) {
+                            detectedKeywords.push({ keyword, type: 'personal', userId });
+                        }
+                    } else {
+                        const regex = new RegExp(`(^|[\\s\\p{P}])${this.escapeRegex(searchKeyword)}([\\s\\p{P}]|$)`, this.caseSensitive ? 'gu' : 'giu');
+                        if (regex.test(searchText)) {
+                            detectedKeywords.push({ keyword, type: 'personal', userId });
+                        }
+                    }
+                } else {
+                    if (searchText.includes(searchKeyword)) {
+                        detectedKeywords.push({ keyword, type: 'personal', userId });
+                    }
                 }
             }
         }
@@ -115,6 +143,42 @@ class KeywordDetector {
 
     isEnabled() {
         return this.enabled;
+    }
+
+    getAuthorizedUsers() {
+        try {
+            const fs = require('fs');
+            const path = require('path');
+            const authPath = path.join(__dirname, '../config/telegram-auth.json');
+            
+            if (fs.existsSync(authPath)) {
+                const data = JSON.parse(fs.readFileSync(authPath, 'utf8'));
+                return data.authorizedUsers || [];
+            }
+            
+            return [];
+        } catch (error) {
+            console.error('Error loading authorized users:', error.message);
+            return [];
+        }
+    }
+
+    getPersonalKeywords(userId) {
+        try {
+            const fs = require('fs');
+            const path = require('path');
+            const personalKeywordsPath = path.join(__dirname, '../config/personal-keywords.json');
+            
+            if (fs.existsSync(personalKeywordsPath)) {
+                const data = JSON.parse(fs.readFileSync(personalKeywordsPath, 'utf8'));
+                return data[userId] || [];
+            }
+            
+            return [];
+        } catch (error) {
+            console.error('Error loading personal keywords:', error.message);
+            return [];
+        }
     }
 
     setEnabled(enabled) {

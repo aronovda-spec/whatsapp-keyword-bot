@@ -275,26 +275,21 @@ class WhatsAppKeywordBot {
             connection.antiBan.trackMessageProcessing();
             this.stats.messagesProcessed++;
 
-            // Detect keywords in the message
+            // Detect keywords in the message (global + personal for all users)
             const detectedKeywords = this.keywordDetector.detectKeywords(messageData.text);
 
             if (detectedKeywords.length > 0) {
                 this.stats.keywordsDetected += detectedKeywords.length;
 
-                // Log the detection
-                logKeywordDetection(
-                    detectedKeywords.join(', '),
-                    messageData.text,
-                    messageData.sender,
-                    messageData.group,
-                    phoneNumber
-                );
+                // Separate global and personal keywords
+                const globalKeywords = detectedKeywords.filter(k => k.type === 'global');
+                const personalKeywords = detectedKeywords.filter(k => k.type === 'personal');
 
-                // Send notifications for each detected keyword
-                for (const keyword of detectedKeywords) {
+                // Send notifications for global keywords to ALL authorized users
+                for (const keywordData of globalKeywords) {
                     try {
                         const success = await this.notifier.sendKeywordAlert(
-                            keyword,
+                            keywordData.keyword,
                             messageData.text,
                             messageData.sender,
                             messageData.group,
@@ -307,15 +302,42 @@ class WhatsAppKeywordBot {
                         }
                     } catch (notificationError) {
                         logError(notificationError, {
-                            context: 'notification_error',
-                            keyword,
+                            context: 'global_keyword_notification_error',
+                            keyword: keywordData.keyword,
                             messageId: messageData.id,
                             phoneNumber
                         });
                     }
                 }
 
-                console.log(`🚨 Keyword detected: "${detectedKeywords.join(', ')}" from ${messageData.sender} in ${messageData.group} (via ${phoneNumber})`);
+                // Send notifications for personal keywords to SPECIFIC users
+                for (const keywordData of personalKeywords) {
+                    try {
+                        const success = await this.notifier.sendPersonalKeywordAlert(
+                            keywordData.keyword,
+                            messageData.text,
+                            messageData.sender,
+                            messageData.group,
+                            messageData.id,
+                            phoneNumber,
+                            keywordData.userId
+                        );
+
+                        if (success) {
+                            this.stats.notificationsSent++;
+                        }
+                    } catch (notificationError) {
+                        logError(notificationError, {
+                            context: 'personal_keyword_notification_error',
+                            keyword: keywordData.keyword,
+                            userId: keywordData.userId,
+                            messageId: messageData.id,
+                            phoneNumber
+                        });
+                    }
+                }
+
+                console.log(`🚨 Keywords detected: Global: ${globalKeywords.length}, Personal: ${personalKeywords.length} from ${messageData.sender} in ${messageData.group} (via ${phoneNumber})`);
             }
 
         } catch (error) {
