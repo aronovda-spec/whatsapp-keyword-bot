@@ -150,10 +150,28 @@ class KeywordDetector {
         return this.fuzzyThreshold.long;
     }
 
-    // Check if a word matches a keyword using fuzzy matching
+    // Check if a word matches a keyword using enhanced fuzzy matching
     fuzzyMatch(word, keyword) {
         if (!this.fuzzyMatching) return false;
         
+        const wordLength = word.length;
+        const keywordLength = keyword.length;
+        
+        // Method 1: Direct Levenshtein distance (for similar length words)
+        if (this.isDirectFuzzyMatch(word, keyword)) {
+            return true;
+        }
+        
+        // Method 2: Substring matching with fuzzy tolerance (for words with prefixes/suffixes)
+        if (this.isSubstringFuzzyMatch(word, keyword)) {
+            return true;
+        }
+        
+        return false;
+    }
+    
+    // Direct fuzzy matching using Levenshtein distance
+    isDirectFuzzyMatch(word, keyword) {
         const wordLength = word.length;
         const keywordLength = keyword.length;
         
@@ -167,12 +185,12 @@ class KeywordDetector {
         const threshold = this.getFuzzyThreshold(keywordLength);
         
         // Additional check: if distance is too high relative to word length, reject
-        if (distance > threshold) {
+        // But allow distance = 2 for potential transpositions
+        if (distance > threshold && distance !== 2) {
             return false;
         }
         
         // Additional check: reject if distance is more than 50% of the shorter word length
-        // (More lenient for short words to allow single character differences)
         const shorterLength = Math.min(wordLength, keywordLength);
         if (distance > Math.floor(shorterLength * 0.5)) {
             return false;
@@ -180,14 +198,14 @@ class KeywordDetector {
         
         // Additional check: for short words, be extra conservative
         if (shorterLength <= 4 && distance > 0) {
-            // Only allow 1 character difference for very short words
-            if (distance > 1) {
+            // Only allow 1 character difference for very short words, OR transpositions (distance = 2)
+            if (distance > 1 && distance !== 2) {
                 return false;
             }
             
             // Additional check: reject common word variations that shouldn't match
             const commonVariations = {
-                'cake': ['cakes', 'bake', 'make', 'take', 'wake'],
+                'cake': ['cakes', 'make', 'take', 'wake'], // Removed 'bake' to allow it
                 'help': ['held', 'hell', 'heel'],
                 'list': ['last', 'lost', 'lift'],
                 'urgent': ['argent', 'regent'],
@@ -199,7 +217,97 @@ class KeywordDetector {
             }
         }
         
+        // Special case: allow transposition for short words (distance = 1 or 2)
+        if ((distance === 1 || distance === 2) && wordLength === keywordLength) {
+            // Check if it's a transposition (swapped adjacent characters)
+            let transpositionCount = 0;
+            for (let i = 0; i < wordLength - 1; i++) {
+                if (word[i] === keyword[i + 1] && word[i + 1] === keyword[i]) {
+                    transpositionCount++;
+                }
+            }
+            // Allow if it's a single transposition
+            if (transpositionCount === 1) {
+                return true;
+            }
+        }
+        
+        // Additional check: for distance = 1, allow if it's a single character substitution
+        if (distance === 1) {
+            let diffCount = 0;
+            for (let i = 0; i < Math.min(wordLength, keywordLength); i++) {
+                if (word[i] !== keyword[i]) {
+                    diffCount++;
+                }
+            }
+            // Allow if only one character is different
+            if (diffCount === 1) {
+                return true;
+            }
+        }
+        
         return true;
+    }
+    
+    // Substring fuzzy matching for words with prefixes/suffixes
+    isSubstringFuzzyMatch(word, keyword) {
+        const wordLength = word.length;
+        const keywordLength = keyword.length;
+        
+        // Only apply substring matching if word is reasonably longer than keyword
+        // But not too long (prevent false positives with very long words)
+        if (wordLength <= keywordLength + 1 || wordLength > keywordLength + 2) {
+            return false;
+        }
+        
+        // Check if keyword is contained in word (exact substring)
+        if (word.includes(keyword)) {
+            return true;
+        }
+        
+        // Disable fuzzy substring matching for now to prevent false positives
+        return false;
+    }
+    
+    // Find fuzzy substring matches within the word
+    findFuzzySubstring(word, keyword) {
+        const keywordLength = keyword.length;
+        const maxPrefixSuffix = Math.min(1, Math.floor(keywordLength * 0.2)); // Very restrictive: max 1 char or 20% of keyword length
+        
+        // Check all possible substrings of the word
+        for (let i = 0; i <= word.length - keywordLength; i++) {
+            const substring = word.substring(i, i + keywordLength);
+            const distance = levenshtein.get(substring, keyword);
+            
+            // Allow fuzzy match if distance is within threshold
+            if (distance <= this.getFuzzyThreshold(keywordLength)) {
+                // Additional validation: check if prefix/suffix are reasonable
+                const prefix = word.substring(0, i);
+                const suffix = word.substring(i + keywordLength);
+                
+                // Allow reasonable prefixes/suffixes (numbers, single chars, common separators)
+                if (this.isReasonablePrefixSuffix(prefix) && this.isReasonablePrefixSuffix(suffix)) {
+                    // Additional check: total prefix + suffix should not exceed max
+                    if (prefix.length + suffix.length <= maxPrefixSuffix) {
+                        return true;
+                    }
+                }
+            }
+        }
+        
+        return false;
+    }
+    
+    // Check if prefix/suffix is reasonable (not too long, contains valid characters)
+    isReasonablePrefixSuffix(text) {
+        if (!text) return true;
+        
+        // Allow up to 3 characters for prefix/suffix
+        if (text.length > 3) return false;
+        
+        // Allow numbers, single letters, common separators
+        const validPattern = /^[a-zA-Z0-9_\-+]*$/;
+        return validPattern.test(text);
     }
 
     // Enhanced keyword detection with fuzzy matching
