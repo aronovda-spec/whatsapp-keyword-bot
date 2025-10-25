@@ -38,9 +38,10 @@
   "exactMatch": true,
   "enabled": true,
   "fuzzyMatching": true,
-  "fuzzyThreshold": {
-    "short": 1,
-    "medium": 1,
-    "long": 2
-  }
+      "fuzzyThreshold": {
+        "short": 1,
+        "medium": 1,
+        "long": 2
+      },
+      "expandAbbreviations": true
 }
