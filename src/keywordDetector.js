@@ -1,6 +1,8 @@
 const fs = require('fs');
 const path = require('path');
 const levenshtein = require('fast-levenshtein');
+const damerauLevenshtein = require('damerau-levenshtein');
+const natural = require('natural');
 
 class KeywordDetector {
     constructor() {
@@ -14,6 +16,115 @@ class KeywordDetector {
             medium: 2,  // Words 5-8 characters
             long: 3      // Words > 8 characters
         };
+        
+        // Enhanced processing options
+        this.normalizeDiacritics = true;
+        this.removeStopWords = true;
+        this.handlePlurals = true;
+            this.handleLeetspeak = true;
+            this.removeEmojis = true;
+            this.multiWordKeywords = true;
+            this.expandAbbreviations = true;
+        
+        // Stop words for filtering
+        this.stopWords = new Set([
+            'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by',
+            'is', 'are', 'was', 'were', 'be', 'been', 'have', 'has', 'had', 'do', 'does', 'did',
+            'will', 'would', 'could', 'should', 'may', 'might', 'can', 'this', 'that', 'these', 'those'
+        ]);
+        
+            // Leetspeak substitutions (but preserve numbers for emergency codes and word boundaries)
+            this.leetspeakMap = {
+                '@': 'a', '4': 'a', '0': 'o', '5': 's', '7': 't', '8': 'b',
+                '$': 's', '#': 'h'
+                // Note: '1', '2', '3', '6', '9' removed to preserve numbers and emergency codes
+            };
+            
+            // Common abbreviations/synonyms mapping
+            this.abbreviationMap = {
+                // Birthday related
+                'bday': 'birthday',
+                'b-day': 'birthday',
+                'bd': 'birthday',
+                
+                // Message related
+                'msg': 'message',
+                'msgs': 'messages',
+                
+                // Meeting related
+                'mtg': 'meeting',
+                'mtgs': 'meetings',
+                'meet': 'meeting',
+                
+                // Event related
+                'evt': 'event',
+                'evts': 'events',
+                
+                // Help related
+                'hlp': 'help',
+                'supp': 'support',
+                
+                // Urgent related
+                'urg': 'urgent',
+                'asap': 'as soon as possible',
+                'stat': 'immediately',
+                
+                // List related
+                'lst': 'list',
+                'chklst': 'checklist',
+                
+                // Emergency related
+                'emrg': 'emergency',
+                'emrgncy': 'emergency',
+                '911': 'emergency',
+                
+                // Important related
+                'imp': 'important',
+                'impnt': 'important',
+                
+                // Deadline related
+                'ddl': 'deadline',
+                'due': 'deadline',
+                
+                // Party related
+                'pty': 'party',
+                'celeb': 'celebration',
+                
+                // Food related
+                'snax': 'snacks',
+                'app': 'appetizer',
+                'apps': 'appetizers',
+                
+                // Time related
+                'tmrw': 'tomorrow',
+                'tmw': 'tomorrow',
+                'wknd': 'weekend',
+                'wk': 'week',
+                'hr': 'hour',
+                'min': 'minute',
+                'sec': 'second',
+                
+                // Location related
+                'loc': 'location',
+                'addr': 'address',
+                'dir': 'directions',
+                
+                // Common internet slang
+                'lol': 'laugh out loud',
+                'omg': 'oh my god',
+                'wtf': 'what the f',
+                'btw': 'by the way',
+                'fyi': 'for your information',
+                'tbh': 'to be honest',
+                'imo': 'in my opinion',
+                'imho': 'in my humble opinion',
+                'idk': 'i do not know',
+                'idc': 'i do not care',
+                'irl': 'in real life',
+                'f2f': 'face to face',
+                'irl': 'in real life'
+            };
+        
         this.loadConfig();
     }
 
@@ -30,6 +141,15 @@ class KeywordDetector {
             if (config.fuzzyThreshold) {
                 this.fuzzyThreshold = { ...this.fuzzyThreshold, ...config.fuzzyThreshold };
             }
+            
+            // Load enhanced processing options
+            this.normalizeDiacritics = config.normalizeDiacritics !== undefined ? config.normalizeDiacritics : true;
+            this.removeStopWords = config.removeStopWords !== undefined ? config.removeStopWords : true;
+            this.handlePlurals = config.handlePlurals !== undefined ? config.handlePlurals : true;
+            this.handleLeetspeak = config.handleLeetspeak !== undefined ? config.handleLeetspeak : true;
+            this.removeEmojis = config.removeEmojis !== undefined ? config.removeEmojis : true;
+            this.multiWordKeywords = config.multiWordKeywords !== undefined ? config.multiWordKeywords : true;
+            this.expandAbbreviations = config.expandAbbreviations !== undefined ? config.expandAbbreviations : true;
             
             console.log(`Loaded ${this.keywords.length} keywords:`, this.keywords);
         } catch (error) {
@@ -125,22 +245,97 @@ class KeywordDetector {
         return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     }
 
-    // Text normalization for fuzzy matching
+    // Enhanced text normalization for fuzzy matching
     normalizeText(text) {
         if (!text || typeof text !== 'string') return '';
         
-        return text
-            .toLowerCase()                    // Convert to lowercase
-            .replace(/[^\w\s\u0590-\u05FF\u0400-\u04FF]/g, '')  // Remove punctuation, keep Hebrew/Russian letters
-            .replace(/[_\-\+]/g, '')          // Remove underscores, hyphens, plus
-            .replace(/\s+/g, ' ')              // Normalize whitespace
-            .trim();                          // Remove leading/trailing spaces
+        let normalized = text;
+        
+        // 1. Remove emojis and symbols
+        if (this.removeEmojis) {
+            normalized = normalized.replace(/[\u{1F600}-\u{1F64F}]|[\u{1F300}-\u{1F5FF}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/gu, '');
+        }
+        
+        // 2. Normalize diacritics/accents
+        if (this.normalizeDiacritics) {
+            normalized = normalized.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        }
+        
+        // 3. Convert to lowercase
+        normalized = normalized.toLowerCase();
+        
+        // 4. Handle separators - convert them to spaces to preserve word boundaries
+        normalized = normalized.replace(/[_\-\+]/g, ' ');
+        
+        // 5. Handle leetspeak substitutions (after separator handling)
+        if (this.handleLeetspeak) {
+            for (const [leet, normal] of Object.entries(this.leetspeakMap)) {
+                // Escape special regex characters
+                const escapedLeet = leet.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                normalized = normalized.replace(new RegExp(escapedLeet, 'g'), normal);
+            }
+        }
+        
+        // 6. Remove punctuation, keep letters, numbers, and Unicode letters
+        normalized = normalized.replace(/[^\w\s\u0590-\u05FF\u0400-\u04FF\u0600-\u06FF]/g, '');
+        
+        // 7. Expand abbreviations/synonyms
+        if (this.expandAbbreviations && this.abbreviationMap) {
+            const words = normalized.split(/\s+/);
+            const expandedWords = words.map(word => {
+                const lowerWord = word.toLowerCase();
+                const expansion = this.abbreviationMap[lowerWord];
+                if (expansion) {
+                    // For multi-word expansions, we need to handle them specially
+                    // to avoid stop word filtering issues
+                    return expansion;
+                }
+                return word;
+            });
+            normalized = expandedWords.join(' ');
+        }
+        
+        // 8. Normalize whitespace
+        normalized = normalized.replace(/\s+/g, ' ').trim();
+        
+        return normalized;
     }
 
-    // Tokenize text into words
+    // Enhanced tokenization with stop word filtering and plural handling
     tokenizeText(text) {
         const normalized = this.normalizeText(text);
-        return normalized.split(/\s+/).filter(token => token.length > 0);
+        let tokens = normalized.split(/\s+/).filter(token => token.length > 0);
+        
+        // Remove stop words if enabled
+        if (this.removeStopWords) {
+            tokens = tokens.filter(token => !this.stopWords.has(token));
+        }
+        
+        // Handle plurals if enabled (but don't modify tokens for fuzzy matching)
+        // Plurals are handled during keyword comparison, not tokenization
+        
+        return tokens;
+    }
+    
+    // Handle plural/singular forms
+    handlePlural(word) {
+        if (word.length <= 3) return word; // Don't modify very short words
+        
+        // Simple English plural handling
+        if (word.endsWith('ies') && word.length > 4) {
+            return word.slice(0, -3) + 'y'; // parties -> party
+        }
+        if (word.endsWith('es') && word.length > 3) {
+            const base = word.slice(0, -2);
+            if (base.endsWith('s') || base.endsWith('sh') || base.endsWith('ch') || base.endsWith('x') || base.endsWith('z')) {
+                return base; // boxes -> box, dishes -> dish
+            }
+        }
+        if (word.endsWith('s') && word.length > 2) {
+            return word.slice(0, -1); // cakes -> cake
+        }
+        
+        return word;
     }
 
     // Get fuzzy matching threshold based on word length
@@ -157,6 +352,28 @@ class KeywordDetector {
         const wordLength = word.length;
         const keywordLength = keyword.length;
         
+        // Handle plurals if enabled
+        if (this.handlePlurals) {
+            const singularWord = this.handlePlural(word);
+            const singularKeyword = this.handlePlural(keyword);
+            
+            // Check if singular forms match exactly
+            if (singularWord === singularKeyword) {
+                return true;
+            }
+            
+            // Use singular forms for fuzzy matching
+            return this.performFuzzyMatch(singularWord, singularKeyword);
+        }
+        
+        return this.performFuzzyMatch(word, keyword);
+    }
+    
+    // Perform the actual fuzzy matching logic
+    performFuzzyMatch(word, keyword) {
+        const wordLength = word.length;
+        const keywordLength = keyword.length;
+        
         // Method 1: Direct Levenshtein distance (for similar length words)
         if (this.isDirectFuzzyMatch(word, keyword)) {
             return true;
@@ -164,6 +381,28 @@ class KeywordDetector {
         
         // Method 2: Substring matching with fuzzy tolerance (for words with prefixes/suffixes)
         if (this.isSubstringFuzzyMatch(word, keyword)) {
+            return true;
+        }
+        
+        // Method 3: Handle numbers appended to words (e.g., "urgent123" → "urgent")
+        if (this.isNumberAppendedMatch(word, keyword)) {
+            return true;
+        }
+        
+        return false;
+    }
+    
+    // Check if word has numbers appended to keyword
+    isNumberAppendedMatch(word, keyword) {
+        // Check if word starts with keyword followed by numbers
+        const numberAppendedRegex = new RegExp(`^${keyword}\\d+$`);
+        if (numberAppendedRegex.test(word)) {
+            return true;
+        }
+        
+        // Check if word starts with keyword followed by numbers and other characters
+        const numberAndMoreRegex = new RegExp(`^${keyword}\\d+.*$`);
+        if (numberAndMoreRegex.test(word)) {
             return true;
         }
         
@@ -182,24 +421,28 @@ class KeywordDetector {
         }
         
         const distance = levenshtein.get(word, keyword);
+        const damerauDistance = damerauLevenshtein(word, keyword).steps;
         const threshold = this.getFuzzyThreshold(keywordLength);
+        
+        // Use the better (lower) distance for matching
+        const bestDistance = Math.min(distance, damerauDistance);
         
         // Additional check: if distance is too high relative to word length, reject
         // But allow distance = 2 for potential transpositions
-        if (distance > threshold && distance !== 2) {
+        if (bestDistance > threshold && bestDistance !== 2) {
             return false;
         }
         
         // Additional check: reject if distance is more than 50% of the shorter word length
         const shorterLength = Math.min(wordLength, keywordLength);
-        if (distance > Math.floor(shorterLength * 0.5)) {
+        if (bestDistance > Math.floor(shorterLength * 0.5)) {
             return false;
         }
         
         // Additional check: for short words, be extra conservative
-        if (shorterLength <= 4 && distance > 0) {
+        if (shorterLength <= 4 && bestDistance > 0) {
             // Only allow 1 character difference for very short words, OR transpositions (distance = 2)
-            if (distance > 1 && distance !== 2) {
+            if (bestDistance > 1 && bestDistance !== 2) {
                 return false;
             }
             
@@ -218,7 +461,7 @@ class KeywordDetector {
         }
         
         // Special case: allow transposition for short words (distance = 1 or 2)
-        if ((distance === 1 || distance === 2) && wordLength === keywordLength) {
+        if ((bestDistance === 1 || bestDistance === 2) && wordLength === keywordLength) {
             // Check if it's a transposition (swapped adjacent characters)
             let transpositionCount = 0;
             for (let i = 0; i < wordLength - 1; i++) {
@@ -233,7 +476,7 @@ class KeywordDetector {
         }
         
         // Additional check: for distance = 1, allow if it's a single character substitution
-        if (distance === 1) {
+        if (bestDistance === 1) {
             let diffCount = 0;
             for (let i = 0; i < Math.min(wordLength, keywordLength); i++) {
                 if (word[i] !== keyword[i]) {
@@ -323,17 +566,89 @@ class KeywordDetector {
         for (const keyword of this.keywords) {
             const normalizedKeyword = this.normalizeText(keyword);
             
-            for (const token of tokens) {
-                // Exact match first
-                if (token === normalizedKeyword) {
-                    detectedKeywords.push({ keyword, type: 'global', matchType: 'exact' });
-                    break;
+            // Check if it's a multi-word keyword
+            if (this.multiWordKeywords && normalizedKeyword.includes(' ')) {
+                const keywordTokens = normalizedKeyword.split(/\s+/);
+                
+                // Check for phrase matches
+                for (let i = 0; i <= tokens.length - keywordTokens.length; i++) {
+                    const phraseTokens = tokens.slice(i, i + keywordTokens.length);
+                    
+                    // Check if all tokens in phrase match (exact or fuzzy)
+                    let phraseMatch = true;
+                    let matchType = 'exact';
+                    let matchedTokens = [];
+                    
+                    for (let j = 0; j < keywordTokens.length; j++) {
+                        if (phraseTokens[j] === keywordTokens[j]) {
+                            matchedTokens.push(phraseTokens[j]);
+                        } else if (this.fuzzyMatch(phraseTokens[j], keywordTokens[j])) {
+                            matchType = 'fuzzy';
+                            matchedTokens.push(phraseTokens[j]);
+                        } else {
+                            phraseMatch = false;
+                            break;
+                        }
+                    }
+                    
+                    if (phraseMatch) {
+                        detectedKeywords.push({ 
+                            keyword, 
+                            type: 'global', 
+                            matchType, 
+                            token: matchedTokens.join(' '),
+                            phraseMatch: true
+                        });
+                        break;
+                    }
                 }
                 
-                // Fuzzy match
-                if (this.fuzzyMatch(token, normalizedKeyword)) {
-                    detectedKeywords.push({ keyword, type: 'global', matchType: 'fuzzy', token });
-                    break;
+                // Also check for phrase matches with separators (e.g., "birthday-party")
+                // This handles cases where separators weren't properly normalized
+                const phraseWithSeparators = normalizedKeyword.replace(/\s+/g, '[\\s\\-_\\+]');
+                const separatorRegex = new RegExp(phraseWithSeparators, 'i');
+                
+                if (separatorRegex.test(messageText)) {
+                    detectedKeywords.push({ 
+                        keyword, 
+                        type: 'global', 
+                        matchType: 'exact',
+                        token: normalizedKeyword,
+                        phraseMatch: true,
+                        separatorMatch: true
+                    });
+                }
+                
+                // Special handling for multi-word expansions (e.g., "btw" → "by the way")
+                // Check if the original message contains the abbreviation that expands to this keyword
+                const originalMessageLower = messageText.toLowerCase();
+                for (const [abbrev, expansion] of Object.entries(this.abbreviationMap)) {
+                    if (expansion === normalizedKeyword && originalMessageLower.includes(abbrev)) {
+                        detectedKeywords.push({ 
+                            keyword, 
+                            type: 'global', 
+                            matchType: 'abbreviation',
+                            token: abbrev,
+                            phraseMatch: true,
+                            abbreviationMatch: true
+                        });
+                        break;
+                    }
+                }
+            } else {
+                // Single word keyword matching
+                for (const token of tokens) {
+                    // Exact match first
+                    if (token === normalizedKeyword) {
+                        detectedKeywords.push({ keyword, type: 'global', matchType: 'exact' });
+                        break;
+                    }
+                    
+                    // Fuzzy match
+                    if (this.fuzzyMatch(token, normalizedKeyword)) {
+                        detectedKeywords.push({ keyword, type: 'global', matchType: 'fuzzy', token });
+                        break;
+                    }
                 }
             }
         }
