@@ -43,5 +43,12 @@
         "medium": 1,
         "long": 2
       },
-      "expandAbbreviations": true
+      "expandAbbreviations": true,
+      "handleHebrew": true,
+      "removeHebrewNiqqud": true,
+      "normalizeHebrewFinalForms": true,
+      "stripHebrewPrefixes": true,
+      "handleHebrewTypos": true,
+      "hebrewStemming": true,
+      "hebrewStopWords": true
 }
