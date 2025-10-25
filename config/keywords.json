@@ -11,16 +11,23 @@
     "event",
     "help",
     "asap",
+    "message",
     "critical",
+    "birthday",
+    "party",
+    "cafe",
+    "naive",
+    "resume",
     "דחוף",
     "חשוב",
     "עזרה",
     "מפגש",
+    "שלום",
     "אירוע",
     "רשימה",
     "עוגה",
     "מפיות",
-    "דחוף",
+    "חגיגה",
     "חירום",
     "קריטי",
     "срочно",
@@ -39,9 +46,9 @@
   "enabled": true,
   "fuzzyMatching": true,
       "fuzzyThreshold": {
-        "short": 1,
-        "medium": 1,
-        "long": 2
+        "short": 0,
+        "medium": 0,
+        "long": 1
       },
       "expandAbbreviations": true,
       "handleHebrew": true,
@@ -50,5 +57,13 @@
       "stripHebrewPrefixes": true,
       "handleHebrewTypos": true,
       "hebrewStemming": true,
-      "hebrewStopWords": true
+      "hebrewStopWords": true,
+      "handleMixedLanguages": true,
+      "detectLanguagePerToken": true,
+      "diacriticInsensitiveSubstring": true,
+      "fuzzySubstringThreshold": {
+        "short": 1,
+        "medium": 2,
+        "long": 3
+      }
 }
