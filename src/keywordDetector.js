@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const levenshtein = require('fast-levenshtein');
 
 class KeywordDetector {
     constructor() {
@@ -7,6 +8,12 @@ class KeywordDetector {
         this.caseSensitive = false;
         this.exactMatch = true;
         this.enabled = true;
+        this.fuzzyMatching = true;
+        this.fuzzyThreshold = {
+            short: 1,    // Words < 5 characters
+            medium: 2,  // Words 5-8 characters
+            long: 3      // Words > 8 characters
+        };
         this.loadConfig();
     }
 
@@ -19,6 +26,10 @@ class KeywordDetector {
             this.caseSensitive = config.caseSensitive || false;
             this.exactMatch = config.exactMatch !== false; // Default to true
             this.enabled = config.enabled !== false; // Default to true
+            this.fuzzyMatching = config.fuzzyMatching !== false; // Default to true
+            if (config.fuzzyThreshold) {
+                this.fuzzyThreshold = { ...this.fuzzyThreshold, ...config.fuzzyThreshold };
+            }
             
             console.log(`Loaded ${this.keywords.length} keywords:`, this.keywords);
         } catch (error) {
@@ -37,6 +48,12 @@ class KeywordDetector {
             return [];
         }
 
+        // Use fuzzy matching if enabled, otherwise fall back to exact matching
+        if (this.fuzzyMatching) {
+            return this.detectKeywordsWithFuzzy(messageText, groupName);
+        }
+
+        // Fallback to original exact matching logic
         const detectedKeywords = [];
         const searchText = this.caseSensitive ? messageText : messageText.toLowerCase();
 
@@ -50,19 +67,19 @@ class KeywordDetector {
                     // Use word boundaries for Latin scripts (English, etc.)
                     const regex = new RegExp(`\\b${this.escapeRegex(searchKeyword)}\\b`, this.caseSensitive ? 'g' : 'gi');
                     if (regex.test(searchText)) {
-                        detectedKeywords.push({ keyword, type: 'global' });
+                        detectedKeywords.push({ keyword, type: 'global', matchType: 'exact' });
                     }
                 } else {
                     // For non-Latin scripts (Hebrew, Russian, Arabic, etc.), use space/punctuation boundaries
                     const regex = new RegExp(`(^|[\\s\\p{P}])${this.escapeRegex(searchKeyword)}([\\s\\p{P}]|$)`, this.caseSensitive ? 'gu' : 'giu');
                     if (regex.test(searchText)) {
-                        detectedKeywords.push({ keyword, type: 'global' });
+                        detectedKeywords.push({ keyword, type: 'global', matchType: 'exact' });
                     }
                 }
             } else {
                 // Simple substring matching
                 if (searchText.includes(searchKeyword)) {
-                    detectedKeywords.push({ keyword, type: 'global' });
+                    detectedKeywords.push({ keyword, type: 'global', matchType: 'exact' });
                 }
             }
         }
@@ -79,17 +96,17 @@ class KeywordDetector {
                         if (this.isLatinScript(searchKeyword)) {
                             const regex = new RegExp(`\\b${this.escapeRegex(searchKeyword)}\\b`, this.caseSensitive ? 'g' : 'gi');
                             if (regex.test(searchText)) {
-                                detectedKeywords.push({ keyword, type: 'personal', userId });
+                                detectedKeywords.push({ keyword, type: 'personal', userId, matchType: 'exact' });
                             }
                         } else {
                             const regex = new RegExp(`(^|[\\s\\p{P}])${this.escapeRegex(searchKeyword)}([\\s\\p{P}]|$)`, this.caseSensitive ? 'gu' : 'giu');
                             if (regex.test(searchText)) {
-                                detectedKeywords.push({ keyword, type: 'personal', userId });
+                                detectedKeywords.push({ keyword, type: 'personal', userId, matchType: 'exact' });
                             }
                         }
                     } else {
                         if (searchText.includes(searchKeyword)) {
-                            detectedKeywords.push({ keyword, type: 'personal', userId });
+                            detectedKeywords.push({ keyword, type: 'personal', userId, matchType: 'exact' });
                         }
                     }
                 }
@@ -106,6 +123,139 @@ class KeywordDetector {
 
     escapeRegex(string) {
         return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    // Text normalization for fuzzy matching
+    normalizeText(text) {
+        if (!text || typeof text !== 'string') return '';
+        
+        return text
+            .toLowerCase()                    // Convert to lowercase
+            .replace(/[^\w\s\u0590-\u05FF\u0400-\u04FF]/g, '')  // Remove punctuation, keep Hebrew/Russian letters
+            .replace(/[_\-\+]/g, '')          // Remove underscores, hyphens, plus
+            .replace(/\s+/g, ' ')              // Normalize whitespace
+            .trim();                          // Remove leading/trailing spaces
+    }
+
+    // Tokenize text into words
+    tokenizeText(text) {
+        const normalized = this.normalizeText(text);
+        return normalized.split(/\s+/).filter(token => token.length > 0);
+    }
+
+    // Get fuzzy matching threshold based on word length
+    getFuzzyThreshold(wordLength) {
+        if (wordLength < 5) return this.fuzzyThreshold.short;
+        if (wordLength <= 8) return this.fuzzyThreshold.medium;
+        return this.fuzzyThreshold.long;
+    }
+
+    // Check if a word matches a keyword using fuzzy matching
+    fuzzyMatch(word, keyword) {
+        if (!this.fuzzyMatching) return false;
+        
+        const wordLength = word.length;
+        const keywordLength = keyword.length;
+        
+        // Skip if lengths are too different (more than threshold)
+        const maxLengthDiff = this.getFuzzyThreshold(keywordLength);
+        if (Math.abs(wordLength - keywordLength) > maxLengthDiff) {
+            return false;
+        }
+        
+        const distance = levenshtein.get(word, keyword);
+        const threshold = this.getFuzzyThreshold(keywordLength);
+        
+        // Additional check: if distance is too high relative to word length, reject
+        if (distance > threshold) {
+            return false;
+        }
+        
+        // Additional check: reject if distance is more than 50% of the shorter word length
+        // (More lenient for short words to allow single character differences)
+        const shorterLength = Math.min(wordLength, keywordLength);
+        if (distance > Math.floor(shorterLength * 0.5)) {
+            return false;
+        }
+        
+        // Additional check: for short words, be extra conservative
+        if (shorterLength <= 4 && distance > 0) {
+            // Only allow 1 character difference for very short words
+            if (distance > 1) {
+                return false;
+            }
+            
+            // Additional check: reject common word variations that shouldn't match
+            const commonVariations = {
+                'cake': ['cakes', 'bake', 'make', 'take', 'wake'],
+                'help': ['held', 'hell', 'heel'],
+                'list': ['last', 'lost', 'lift'],
+                'urgent': ['argent', 'regent'],
+                'asap': ['asap', 'asap!', 'asap?']
+            };
+            
+            if (commonVariations[keyword] && commonVariations[keyword].includes(word)) {
+                return false;
+            }
+        }
+        
+        return true;
+    }
+
+    // Enhanced keyword detection with fuzzy matching
+    detectKeywordsWithFuzzy(messageText, groupName = null) {
+        if (!this.enabled || !messageText || typeof messageText !== 'string') {
+            return [];
+        }
+
+        const detectedKeywords = [];
+        const tokens = this.tokenizeText(messageText);
+        
+        // Check global keywords
+        for (const keyword of this.keywords) {
+            const normalizedKeyword = this.normalizeText(keyword);
+            
+            for (const token of tokens) {
+                // Exact match first
+                if (token === normalizedKeyword) {
+                    detectedKeywords.push({ keyword, type: 'global', matchType: 'exact' });
+                    break;
+                }
+                
+                // Fuzzy match
+                if (this.fuzzyMatch(token, normalizedKeyword)) {
+                    detectedKeywords.push({ keyword, type: 'global', matchType: 'fuzzy', token });
+                    break;
+                }
+            }
+        }
+
+        // Check personal keywords ONLY for users subscribed to this specific group
+        if (groupName) {
+            const groupSubscribers = this.getGroupSubscribers(groupName);
+            for (const userId of groupSubscribers) {
+                const personalKeywords = this.getPersonalKeywords(userId);
+                for (const keyword of personalKeywords) {
+                    const normalizedKeyword = this.normalizeText(keyword);
+                    
+                    for (const token of tokens) {
+                        // Exact match first
+                        if (token === normalizedKeyword) {
+                            detectedKeywords.push({ keyword, type: 'personal', userId, matchType: 'exact' });
+                            break;
+                        }
+                        
+                        // Fuzzy match
+                        if (this.fuzzyMatch(token, normalizedKeyword)) {
+                            detectedKeywords.push({ keyword, type: 'personal', userId, matchType: 'fuzzy', token });
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        return detectedKeywords;
     }
 
     addKeyword(keyword) {
@@ -129,7 +279,9 @@ class KeywordDetector {
                 keywords: this.keywords,
                 caseSensitive: this.caseSensitive,
                 exactMatch: this.exactMatch,
-                enabled: this.enabled
+                enabled: this.enabled,
+                fuzzyMatching: this.fuzzyMatching,
+                fuzzyThreshold: this.fuzzyThreshold
             };
             
             const configPath = path.join(__dirname, '../config/keywords.json');

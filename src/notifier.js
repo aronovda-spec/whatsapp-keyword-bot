@@ -50,14 +50,14 @@ class Notifier {
         }
     }
 
-    async sendKeywordAlert(keyword, message, sender, group, messageId, phoneNumber = null) {
+    async sendKeywordAlert(keyword, message, sender, group, messageId, phoneNumber = null, matchType = 'exact', matchedToken = null) {
         if (!this.enabled) {
             console.log('📱 Telegram notifications disabled');
             return false;
         }
 
         try {
-            const alertMessage = this.formatAlertMessage(keyword, message, sender, group, messageId, phoneNumber);
+            const alertMessage = this.formatAlertMessage(keyword, message, sender, group, messageId, phoneNumber, matchType, matchedToken);
             
             // Send to all authorized chat IDs only
             const authorizedChatIds = this.chatIds.filter(chatId => 
@@ -105,7 +105,7 @@ class Notifier {
         }
     }
 
-    async sendPersonalKeywordAlert(keyword, message, sender, group, messageId, phoneNumber = null, targetUserId = null) {
+    async sendPersonalKeywordAlert(keyword, message, sender, group, messageId, phoneNumber = null, targetUserId = null, matchType = 'exact', matchedToken = null) {
         if (!this.enabled) {
             console.log('📱 Telegram notifications disabled');
             return false;
@@ -117,7 +117,7 @@ class Notifier {
         }
 
         try {
-            const alertMessage = this.formatPersonalAlertMessage(keyword, message, sender, group, messageId, phoneNumber);
+            const alertMessage = this.formatPersonalAlertMessage(keyword, message, sender, group, messageId, phoneNumber, matchType, matchedToken);
             
             // Send only to the specific user
             const success = await this.sendWithRetry(alertMessage, targetUserId);
@@ -147,13 +147,20 @@ class Notifier {
         }
     }
 
-    formatPersonalAlertMessage(keyword, message, sender, group, messageId, phoneNumber = null) {
+    formatPersonalAlertMessage(keyword, message, sender, group, messageId, phoneNumber = null, matchType = 'exact', matchedToken = null) {
         const timestamp = new Date().toLocaleString();
         const phoneInfo = phoneNumber ? ` (via ${phoneNumber})` : '';
         
+        let matchInfo = '';
+        if (matchType === 'fuzzy' && matchedToken) {
+            matchInfo = `\n🔍 <b>Fuzzy Match:</b> "${matchedToken}" → "${keyword}"`;
+        } else if (matchType === 'exact') {
+            matchInfo = `\n✅ <b>Exact Match</b>`;
+        }
+        
         return `🔑 <b>Personal Keyword Alert</b>
 
-🚨 <b>Keyword:</b> ${this.escapeHtml(keyword)}
+🚨 <b>Keyword:</b> ${this.escapeHtml(keyword)}${matchInfo}
 👤 <b>From:</b> ${this.escapeHtml(sender)}
 📱 <b>Group:</b> ${this.escapeHtml(group)}${phoneInfo}
 🕐 <b>Time:</b> ${timestamp}
@@ -188,13 +195,20 @@ class Notifier {
         throw lastError;
     }
 
-    formatAlertMessage(keyword, message, sender, group, messageId, phoneNumber = null) {
+    formatAlertMessage(keyword, message, sender, group, messageId, phoneNumber = null, matchType = 'exact', matchedToken = null) {
         const timestamp = new Date().toLocaleString();
         const truncatedMessage = message.length > 200 ? message.substring(0, 200) + '...' : message;
         
+        let matchInfo = '';
+        if (matchType === 'fuzzy' && matchedToken) {
+            matchInfo = `\n🔍 <b>Fuzzy Match:</b> "${matchedToken}" → "${keyword}"`;
+        } else if (matchType === 'exact') {
+            matchInfo = `\n✅ <b>Exact Match</b>`;
+        }
+        
         return `🚨 <b>Keyword Alert!</b>
 
-🔍 <b>Keyword:</b> ${keyword}
+🔍 <b>Keyword:</b> ${keyword}${matchInfo}
 👤 <b>Sender:</b> ${sender || 'Unknown'}
 👥 <b>Group:</b> ${group || 'Unknown'}
 📱 <b>Detected by:</b> ${phoneNumber || 'Unknown Phone'}

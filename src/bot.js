@@ -294,7 +294,9 @@ class WhatsAppKeywordBot {
                             messageData.sender,
                             messageData.group,
                             messageData.id,
-                            phoneNumber
+                            phoneNumber,
+                            keywordData.matchType,
+                            keywordData.token
                         );
 
                         if (success) {
@@ -320,7 +322,9 @@ class WhatsAppKeywordBot {
                             messageData.group,
                             messageData.id,
                             phoneNumber,
-                            keywordData.userId
+                            keywordData.userId,
+                            keywordData.matchType,
+                            keywordData.token
                         );
 
                         if (success) {
