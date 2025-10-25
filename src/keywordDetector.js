@@ -35,6 +35,16 @@ class KeywordDetector {
             this.hebrewStemming = true;
             // this.hebrewStopWords is already initialized as a Set above
             
+            // Russian-specific processing options
+            this.handleRussian = true;
+            this.normalizeRussianStress = true;
+            this.normalizeRussianSoftSigns = true;
+            this.stripRussianPrefixes = true;
+            this.handleRussianTypos = true;
+            this.russianStemming = true;
+            this.handleRussianElongation = true;
+            this.detectRussianKeyboardLayout = true;
+            
             // Mixed Hebrew-English processing options
             this.handleMixedLanguages = true;
             this.detectLanguagePerToken = true;
@@ -62,11 +72,72 @@ class KeywordDetector {
             'מה', 'מי', 'איפה', 'מתי', 'למה', 'איזה', 'איזו', 'איזה', 'איזו', 'איזה', 'איזו'
         ]);
         
+        // Russian stop words
+        this.russianStopWords = new Set([
+            'и', 'в', 'во', 'не', 'что', 'он', 'на', 'я', 'с', 'со', 'как', 'а', 'то', 'все', 'она', 'так', 'его', 'но', 'да', 'ты', 'к', 'у', 'же', 'вы', 'за', 'бы', 'по', 'только', 'ее', 'мне', 'было', 'вот', 'от', 'меня', 'еще', 'нет', 'о', 'из', 'ему', 'теперь', 'когда', 'даже', 'ну', 'вдруг', 'ли', 'если', 'уже', 'или', 'ни', 'быть', 'был', 'него', 'до', 'вас', 'нибудь', 'опять', 'уж', 'вам', 'ведь', 'там', 'потом', 'себя', 'ничего', 'ей', 'может', 'они', 'тут', 'где', 'есть', 'надо', 'ней', 'для', 'мы', 'тебя', 'их', 'чем', 'была', 'сам', 'чтоб', 'без', 'будто', 'чего', 'раз', 'тоже', 'себе', 'под', 'будет', 'ж', 'тогда', 'кто', 'этот', 'того', 'потому', 'этого', 'какой', 'совсем', 'ним', 'здесь', 'этом', 'один', 'почти', 'мой', 'тем', 'чтобы', 'нее', 'сейчас', 'были', 'куда', 'зачем', 'всех', 'никогда', 'можно', 'при', 'наконец', 'два', 'об', 'другой', 'хоть', 'после', 'над', 'больше', 'тот', 'через', 'эти', 'нас', 'про', 'всего', 'них', 'какая', 'много', 'разве', 'три', 'эту', 'моя', 'впрочем', 'хорошо', 'свою', 'этой', 'перед', 'иногда', 'лучше', 'чуть', 'том', 'нельзя', 'такой', 'им', 'более', 'всегда', 'конечно', 'всю', 'между'
+        ]);
+        
             // Leetspeak substitutions (but preserve numbers for emergency codes and word boundaries)
             this.leetspeakMap = {
                 '@': 'a', '4': 'a', '0': 'o', '5': 's', '7': 't', '8': 'b',
                 '$': 's', '#': 'h', '3': 'e'
                 // Note: '1', '2', '6', '9' removed to preserve numbers and emergency codes
+            };
+            
+            // Russian leetspeak substitutions
+            this.russianLeetspeakMap = {
+                '4': 'ч', '6': 'б', '0': 'о', '3': 'з', '7': 'т', '8': 'в',
+                '@': 'а', '$': 'с', '#': 'х'
+            };
+            
+            // Russian transliteration map (Latin to Cyrillic)
+            this.russianTransliterationMap = {
+                'a': 'а', 'b': 'б', 'v': 'в', 'g': 'г', 'd': 'д', 'e': 'е', 'yo': 'ё', 'zh': 'ж',
+                'z': 'з', 'i': 'и', 'j': 'й', 'k': 'к', 'l': 'л', 'm': 'м', 'n': 'н', 'o': 'о',
+                'p': 'п', 'r': 'р', 's': 'с', 't': 'т', 'u': 'у', 'f': 'ф', 'h': 'х', 'c': 'ц',
+                'ch': 'ч', 'sh': 'ш', 'sch': 'щ', 'y': 'ы', 'yu': 'ю', 'ya': 'я',
+                'A': 'А', 'B': 'Б', 'V': 'В', 'G': 'Г', 'D': 'Д', 'E': 'Е', 'YO': 'Ё', 'ZH': 'Ж',
+                'Z': 'З', 'I': 'И', 'J': 'Й', 'K': 'К', 'L': 'Л', 'M': 'М', 'N': 'Н', 'O': 'О',
+                'P': 'П', 'R': 'Р', 'S': 'С', 'T': 'Т', 'U': 'У', 'F': 'Ф', 'H': 'Х', 'C': 'Ц',
+                'CH': 'Ч', 'SH': 'Ш', 'SCH': 'Щ', 'Y': 'Ы', 'YU': 'Ю', 'YA': 'Я'
+            };
+            
+            // Russian keyboard typo map (adjacent keys on Russian QWERTY layout)
+            // Only include common typos, not all adjacent keys to avoid corruption
+            this.russianTypoMap = {
+                // Common Russian typos
+                'т': 'ь', 'ь': 'т',  // т/ь confusion
+                'ш': 'щ', 'щ': 'ш',  // ш/щ confusion  
+                'и': 'й', 'й': 'и',  // и/й confusion
+                'е': 'ё', 'ё': 'е',  // е/ё confusion
+                'о': 'а', 'а': 'о',  // о/а confusion (unstressed)
+                'з': 'с', 'с': 'з',  // з/с confusion
+                'в': 'ф', 'ф': 'в',  // в/ф confusion
+                'п': 'б', 'б': 'п',  // п/б confusion
+                'к': 'г', 'г': 'к',  // к/г confusion
+                'д': 'т', 'т': 'д'   // д/т confusion
+            };
+            
+            // Russian soft/hard signs normalization
+            this.russianSoftSigns = ['ь', 'ъ'];
+            
+            // Russian common prefixes (for stripping)
+            this.russianPrefixes = ['при', 'под', 'над', 'под', 'от', 'об', 'в', 'во', 'за', 'на', 'по', 'про', 'с', 'со', 'у', 'из', 'до', 'для', 'без', 'между', 'через', 'к', 'ко', 'о', 'обо'];
+            
+            // Russian common suffixes (for stripping)
+            this.russianSuffixes = ['ся', 'сь', 'ать', 'ить', 'еть', 'уть', 'ыть', 'а', 'я', 'о', 'е', 'и', 'ы', 'у', 'ю', 'ом', 'ем', 'ой', 'ей', 'ах', 'ях', 'ов', 'ев', 'ами', 'ями'];
+            
+            // Russian clitics/particles (for stripping)
+            this.russianClitics = ['же', 'ли', 'то', 'ка', 'де', 'мол', 'дескать', 'якобы'];
+            
+            // Russian keyboard layout switching map (English keys on Russian layout)
+            this.russianKeyboardLayoutMap = {
+                'q': 'й', 'w': 'ц', 'e': 'у', 'r': 'к', 't': 'е', 'y': 'н', 'u': 'г', 'i': 'ш', 'o': 'щ', 'p': 'з',
+                'a': 'ф', 's': 'ы', 'd': 'в', 'f': 'а', 'g': 'п', 'h': 'р', 'j': 'о', 'k': 'л', 'l': 'д',
+                'z': 'я', 'x': 'ч', 'c': 'с', 'v': 'м', 'b': 'и', 'n': 'т', 'm': 'ь',
+                'Q': 'Й', 'W': 'Ц', 'E': 'У', 'R': 'К', 'T': 'Е', 'Y': 'Н', 'U': 'Г', 'I': 'Ш', 'O': 'Щ', 'P': 'З',
+                'A': 'Ф', 'S': 'Ы', 'D': 'В', 'F': 'А', 'G': 'П', 'H': 'Р', 'J': 'О', 'K': 'Л', 'L': 'Д',
+                'Z': 'Я', 'X': 'Ч', 'C': 'С', 'V': 'М', 'B': 'И', 'N': 'Т', 'M': 'Ь'
             };
             
             // Common abbreviations/synonyms mapping
@@ -179,6 +250,52 @@ class KeywordDetector {
                 'בוקר טוב': 'בוקר טוב',
                 'צהריים טובים': 'צהריים טובים',
                 'ערב טוב': 'ערב טוב'
+            };
+            
+            // Russian abbreviations/synonyms mapping
+            this.russianAbbreviationMap = {
+                // Common Russian abbreviations
+                'встр': 'встреча',  // meeting
+                'приветик': 'привет',  // hi (diminutive)
+                'пока': 'до свидания',  // bye
+                'спс': 'спасибо',  // thanks
+                'пж': 'пожалуйста',  // please
+                'изв': 'извините',  // sorry
+                'сорян': 'извините',  // sorry (slang)
+                'ок': 'хорошо',  // ok
+                'норм': 'нормально',  // normal/ok
+                'круто': 'отлично',  // cool/great
+                'фигня': 'плохо',  // bad
+                'хрень': 'плохо',  // bad (slang)
+                'фиг': 'плохо',  // bad (short)
+                'хз': 'не знаю',  // don't know
+                'имхо': 'по моему мнению',  // in my opinion
+                'кста': 'кстати',  // by the way
+                'кст': 'кстати',  // by the way (short)
+                'мб': 'может быть',  // maybe
+                'наверн': 'наверное',  // probably
+                'навер': 'наверное',  // probably (short)
+                'щас': 'сейчас',  // now
+                'ща': 'сейчас',  // now (short)
+                'потом': 'позже',  // later
+                'позже': 'потом',  // later
+                'завтра': 'завтра',  // tomorrow
+                'сегодня': 'сегодня',  // today
+                'вчера': 'вчера',  // yesterday
+                'утром': 'утром',  // in the morning
+                'вечером': 'вечером',  // in the evening
+                'ночью': 'ночью',  // at night
+                'днем': 'днем',  // during the day
+                'срочно': 'срочно',  // urgent
+                'важно': 'важно',  // important
+                'помощь': 'помощь',  // help
+                'встреча': 'встреча',  // meeting
+                'событие': 'событие',  // event
+                'список': 'список',  // list
+                'торт': 'торт',  // cake
+                'салфетки': 'салфетки',  // napkins
+                'критично': 'критично',  // critical
+                'экстренно': 'экстренно'  // emergency
             };
             
             // Hebrew final forms mapping (sofit letters)
@@ -425,6 +542,117 @@ class KeywordDetector {
                 '😇': 'מלאך',  // angel
                 '🤗': 'חיבוק'   // hug
             };
+            
+            // Russian emoji to word mapping
+            this.russianEmojiMap = {
+                '🎂': 'торт',  // cake
+                '🍰': 'торт',  // cake slice
+                '🎉': 'праздник',  // celebration
+                '🎊': 'праздник',  // celebration
+                '🎈': 'воздушный шар',  // balloon
+                '🎁': 'подарок',  // gift
+                '💝': 'подарок',  // gift
+                '🏠': 'дом',  // house
+                '🏡': 'дом',  // house
+                '📝': 'список',  // list
+                '📋': 'список',  // list
+                '📄': 'письмо',  // letter
+                '✉️': 'письмо',  // letter
+                '📧': 'письмо',  // email
+                '📨': 'письмо',  // letter
+                '📩': 'письмо',  // letter
+                '🚨': 'экстренно',  // emergency
+                '🚩': 'флаг',  // flag
+                '⚠️': 'предупреждение',  // warning
+                '❗': 'важно',  // important
+                '❌': 'нет',  // no
+                '✅': 'да',  // yes
+                '👍': 'хорошо',  // good
+                '👎': 'плохо',  // bad
+                '❤️': 'любовь',  // love
+                '💕': 'любовь',  // love
+                '💖': 'любовь',  // love
+                '💗': 'любовь',  // love
+                '💘': 'любовь',  // love
+                '💙': 'любовь',  // love
+                '💚': 'любовь',  // love
+                '💛': 'любовь',  // love
+                '💜': 'любовь',  // love
+                '🖤': 'любовь',  // love
+                '🤍': 'любовь',  // love
+                '💔': 'любовь',  // broken heart
+                '😊': 'счастливый',  // happy
+                '😄': 'счастливый',  // happy
+                '😃': 'счастливый',  // happy
+                '😁': 'счастливый',  // happy
+                '😆': 'счастливый',  // happy
+                '😅': 'счастливый',  // happy
+                '😂': 'смех',  // laugh
+                '🤣': 'смех',  // laugh
+                '😭': 'плач',  // cry
+                '😢': 'грустный',  // sad
+                '😔': 'грустный',  // sad
+                '😞': 'грустный',  // sad
+                '😟': 'грустный',  // sad
+                '😕': 'грустный',  // sad
+                '🙁': 'грустный',  // sad
+                '☹️': 'грустный',  // sad
+                '😣': 'грустный',  // sad
+                '😖': 'грустный',  // sad
+                '😫': 'грустный',  // sad
+                '😩': 'грустный',  // sad
+                '😤': 'злой',  // angry
+                '😠': 'злой',  // angry
+                '😡': 'злой',  // angry
+                '🤬': 'злой',  // angry
+                '😱': 'страх',  // fear
+                '😨': 'страх',  // fear
+                '😰': 'страх',  // fear
+                '😳': 'смущение',  // embarrassment
+                '😵': 'головокружение',  // dizziness
+                '🤯': 'шок',  // shock
+                '🤔': 'размышление',  // thinking
+                '🤨': 'скептицизм',  // skepticism
+                '😐': 'нейтральный',  // neutral
+                '😑': 'нейтральный',  // neutral
+                '😶': 'тихий',  // quiet
+                '🤐': 'тихий',  // quiet
+                '😴': 'сон',  // sleep
+                '😪': 'усталость',  // tired
+                '🤤': 'слюна',  // drool
+                '😋': 'вкусно',  // delicious
+                '😛': 'язык',  // tongue
+                '😜': 'язык',  // tongue
+                '😝': 'язык',  // tongue
+                '🤪': 'сумасшедший',  // crazy
+                '😒': 'равнодушие',  // indifference
+                '🙄': 'равнодушие',  // indifference
+                '😬': 'смущение',  // embarrassment
+                '🤭': 'смущение',  // embarrassment
+                '🤫': 'тихий',  // quiet
+                '🤥': 'ложь',  // lie
+                '😷': 'маска',  // mask
+                '🤒': 'больной',  // sick
+                '🤕': 'раненый',  // injured
+                '🤢': 'тошнота',  // nausea
+                '🤮': 'рвота',  // vomit
+                '🤧': 'чихание',  // sneeze
+                '🥵': 'жарко',  // hot
+                '🥶': 'холодно',  // cold
+                '🥴': 'головокружение',  // dizziness
+                '😵‍💫': 'головокружение',  // dizziness
+                '🤯': 'шок',  // shock
+                '🤠': 'ковбой',  // cowboy
+                '🥳': 'праздник',  // celebration
+                '🥸': 'маскировка',  // disguise
+                '😎': 'крутой',  // cool
+                '🤓': 'умный',  // smart
+                '🧐': 'расследование',  // investigation
+                '😏': 'хитрость',  // sly
+                '😌': 'тихий',  // quiet
+                '😇': 'ангел',  // angel
+                '🤗': 'объятие'   // hug
+            };
         
         this.loadConfig();
     }
@@ -562,12 +790,12 @@ class KeywordDetector {
         
         let normalized = text;
         
-        // 1. Handle Hebrew emojis BEFORE removing emojis
-        if (this.handleHebrew) {
-            normalized = this.handleHebrewEmojis(normalized);
+        // 1. Handle emojis BEFORE removing emojis (language-aware)
+        if (this.handleHebrew || this.handleRussian) {
+            normalized = this.handleLanguageAwareEmojis(normalized);
         }
         
-        // 1.1. Remove remaining emojis and symbols (after Hebrew emoji processing)
+        // 1.2. Remove remaining emojis and symbols (after Hebrew and Russian emoji processing)
         if (this.removeEmojis) {
             normalized = normalized.replace(/[\u{1F600}-\u{1F64F}]|[\u{1F300}-\u{1F5FF}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/gu, '');
         }
@@ -581,11 +809,24 @@ class KeywordDetector {
         } else if (this.handleHebrew && this.containsHebrew(normalized)) {
             // Fallback to original Hebrew-only processing
             normalized = this.normalizeHebrew(normalized);
+        } else if (this.handleRussian && this.containsRussian(normalized)) {
+            // Russian-only processing
+            normalized = this.normalizeRussian(normalized);
+        }
+        
+        // 2.1. Handle keyboard layout switching (before language-specific processing)
+        if (this.detectRussianKeyboardLayout) {
+            normalized = this.fixRussianKeyboardLayout(normalized);
         }
         
         // 2.1. Handle Hebrew numbers mixed with letters
         if (this.handleHebrew) {
             normalized = this.handleHebrewNumbers(normalized);
+        }
+        
+        // 2.2. Handle Russian numbers mixed with letters
+        if (this.handleRussian) {
+            normalized = this.handleRussianNumbers(normalized);
         }
         
         // 3. Normalize diacritics/accents (for Latin scripts)
@@ -638,6 +879,14 @@ class KeywordDetector {
                     const slangExpansion = this.hebrewSlangMap[word];
                     if (slangExpansion) {
                         return slangExpansion;
+                    }
+                }
+                
+                // Check Russian abbreviations
+                if (this.russianAbbreviationMap && this.containsRussian(word)) {
+                    const russianExpansion = this.russianAbbreviationMap[word];
+                    if (russianExpansion) {
+                        return russianExpansion;
                     }
                 }
                 
@@ -727,13 +976,20 @@ class KeywordDetector {
         
         const hasHebrew = this.containsHebrew(token);
         const hasEnglish = this.containsEnglish(token);
+        const hasRussian = this.containsRussian(token);
         
         if (hasHebrew && hasEnglish) {
+            return 'mixed';
+        } else if (hasHebrew && hasRussian) {
+            return 'mixed';
+        } else if (hasEnglish && hasRussian) {
             return 'mixed';
         } else if (hasHebrew) {
             return 'hebrew';
         } else if (hasEnglish) {
             return 'english';
+        } else if (hasRussian) {
+            return 'russian';
         } else {
             return 'other';
         }
@@ -764,6 +1020,8 @@ class KeywordDetector {
                             result += this.normalizeHebrew(currentPart);
                         } else if (currentLanguage === 'english') {
                             result += this.normalizeEnglish(currentPart);
+                        } else if (currentLanguage === 'russian') {
+                            result += this.normalizeRussian(currentPart);
                         } else {
                             // Handle numbers and other characters
                             result += currentPart.replace(/\d/g, '');
@@ -782,6 +1040,8 @@ class KeywordDetector {
                     result += this.normalizeHebrew(currentPart);
                 } else if (currentLanguage === 'english') {
                     result += this.normalizeEnglish(currentPart);
+                } else if (currentLanguage === 'russian') {
+                    result += this.normalizeRussian(currentPart);
                 } else {
                     // Handle numbers and other characters
                     result += currentPart.replace(/\d/g, '');
@@ -793,6 +1053,8 @@ class KeywordDetector {
             return this.normalizeHebrew(word);
         } else if (language === 'english') {
             return this.normalizeEnglish(word);
+        } else if (language === 'russian') {
+            return this.normalizeRussian(word);
         } else {
             return word.toLowerCase();
         }
@@ -1178,6 +1440,29 @@ class KeywordDetector {
             }
         }
         
+        // Method 6: Russian root extraction matching
+        if (this.containsRussian(word) && this.containsRussian(keyword)) {
+            const wordRoot = this.extractRussianRoot(word);
+            const keywordRoot = this.extractRussianRoot(keyword);
+            
+            if (wordRoot !== word || keywordRoot !== keyword) {
+                // Try matching with extracted roots
+                if (this.isDirectFuzzyMatch(wordRoot, keywordRoot)) {
+                    return true;
+                }
+                if (this.isSubstringFuzzyMatch(wordRoot, keywordRoot)) {
+                    return true;
+                }
+            }
+        }
+        
+        // Method 7: Enhanced Russian fuzzy matching
+        if (this.containsRussian(word) && this.containsRussian(keyword)) {
+            if (this.performRussianFuzzyMatch(word, keyword)) {
+                return true;
+            }
+        }
+        
         return false;
     }
     
@@ -1223,8 +1508,14 @@ class KeywordDetector {
             if (bestDistance > 1) {
                 return false;
             }
+        } else if (this.containsRussian(keyword)) {
+            // Russian words: use Russian-specific thresholds
+            const russianThreshold = this.getRussianFuzzyThreshold(keywordLength);
+            if (bestDistance > russianThreshold) {
+                return false;
+            }
         } else if (bestDistance > threshold) {
-            // Non-Hebrew words: respect the threshold strictly
+            // Non-Hebrew/Russian words: respect the threshold strictly
             return false;
         }
         
@@ -1347,6 +1638,363 @@ class KeywordDetector {
         const validPattern = /^[a-zA-Z0-9_\-+]*$/;
         return validPattern.test(text);
     }
+    
+    // Handle emojis with language awareness
+    handleLanguageAwareEmojis(text) {
+        if (!text) return text;
+        
+        let processed = text;
+        
+        // Determine the primary language of the text
+        const hasHebrew = this.containsHebrew(text);
+        const hasRussian = this.containsRussian(text);
+        
+        // If text contains both Hebrew and Russian, prioritize based on content
+        if (hasHebrew && hasRussian) {
+            // Count Hebrew vs Russian characters to determine priority
+            const hebrewCount = (text.match(/[\u0590-\u05FF]/g) || []).length;
+            const russianCount = (text.match(/[\u0400-\u04FF]/g) || []).length;
+            
+            if (russianCount > hebrewCount) {
+                // Russian priority
+                processed = this.handleRussianEmojis(processed);
+                processed = this.handleHebrewEmojis(processed);
+            } else {
+                // Hebrew priority
+                processed = this.handleHebrewEmojis(processed);
+                processed = this.handleRussianEmojis(processed);
+            }
+        } else if (hasRussian) {
+            // Russian-only text
+            processed = this.handleRussianEmojis(processed);
+        } else if (hasHebrew) {
+            // Hebrew-only text
+            processed = this.handleHebrewEmojis(processed);
+        } else {
+            // No specific language, try both
+            processed = this.handleRussianEmojis(processed);
+            processed = this.handleHebrewEmojis(processed);
+        }
+        
+        return processed;
+    }
+    
+    // ==================== RUSSIAN PROCESSING METHODS ====================
+    
+    // Check if text contains Russian (Cyrillic) characters
+    containsRussian(text) {
+        if (!text || typeof text !== 'string') {
+            return false;
+        }
+        // Cyrillic Unicode range: U+0400-U+04FF
+        return /[\u0400-\u04FF]/.test(text);
+    }
+    
+    // Check if text contains English characters
+    containsEnglish(text) {
+        if (!text || typeof text !== 'string') {
+            return false;
+        }
+        return /[a-zA-Z]/.test(text);
+    }
+    
+    // Normalize Russian text (stress marks, soft signs, etc.)
+    normalizeRussian(text) {
+        if (!this.handleRussian || !text) return text;
+        
+        let processed = text;
+        
+        // 1. Remove stress marks (combining diacritics)
+        if (this.normalizeRussianStress) {
+            processed = processed.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        }
+        
+        // 2. Normalize soft/hard signs
+        if (this.normalizeRussianSoftSigns) {
+            processed = processed.replace(/[ьъ]/g, '');
+        }
+        
+        // 3. Handle Russian leetspeak
+        if (this.handleLeetspeak) {
+            for (const [leet, normal] of Object.entries(this.russianLeetspeakMap)) {
+                const escapedLeet = leet.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                processed = processed.replace(new RegExp(escapedLeet, 'g'), normal);
+            }
+        }
+        
+        // 4. Handle keyboard layout switching
+        if (this.detectRussianKeyboardLayout) {
+            processed = this.fixRussianKeyboardLayout(processed);
+        }
+        
+        // 5. Normalize letter elongation
+        if (this.handleRussianElongation) {
+            processed = processed.replace(/([а-я])\1{2,}/gi, '$1');
+        }
+        
+        // 6. Handle Russian typos (disabled for now - too aggressive)
+        // if (this.handleRussianTypos) {
+        //     processed = this.fixRussianTypos(processed);
+        // }
+        
+        return processed;
+    }
+    
+    // Fix Russian keyboard layout switching (English keys on Russian layout)
+    fixRussianKeyboardLayout(text) {
+        if (!text) return text;
+        
+        let fixed = text;
+        
+        // Check if text looks like English keys on Russian layout
+        const englishPattern = /^[qwertyuiopasdfghjklzxcvbnmQWERTYUIOPASDFGHJKLZXCVBNM\s]+$/;
+        
+        if (englishPattern.test(text)) {
+            // Convert English keys to Russian
+            for (const [english, russian] of Object.entries(this.russianKeyboardLayoutMap)) {
+                fixed = fixed.replace(new RegExp(english, 'g'), russian);
+            }
+        }
+        
+        return fixed;
+    }
+    
+    // Fix Russian keyboard typos
+    fixRussianTypos(text) {
+        if (!text) return text;
+        
+        let fixed = text;
+        
+        // Apply typo corrections
+        for (const [wrong, correct] of Object.entries(this.russianTypoMap)) {
+            fixed = fixed.replace(new RegExp(wrong, 'g'), correct);
+        }
+        
+        return fixed;
+    }
+    
+    // Strip Russian prefixes and suffixes
+    stripRussianAffixes(word) {
+        if (!this.handleRussian || !word || word.length <= 3) return word;
+        
+        let processed = word;
+        
+        // Strip prefixes
+        if (this.stripRussianPrefixes) {
+            for (const prefix of this.russianPrefixes) {
+                if (processed.toLowerCase().startsWith(prefix.toLowerCase())) {
+                    processed = processed.substring(prefix.length);
+                    break; // Only strip one prefix
+                }
+            }
+        }
+        
+        // Strip suffixes
+        for (const suffix of this.russianSuffixes) {
+            if (processed.toLowerCase().endsWith(suffix.toLowerCase())) {
+                processed = processed.substring(0, processed.length - suffix.length);
+                break; // Only strip one suffix
+            }
+        }
+        
+        return processed;
+    }
+    
+    // Strip Russian clitics/particles
+    stripRussianClitics(word) {
+        if (!this.handleRussian || !word) return word;
+        
+        let processed = word;
+        
+        for (const clitic of this.russianClitics) {
+            if (processed.toLowerCase().endsWith(clitic.toLowerCase())) {
+                processed = processed.substring(0, processed.length - clitic.length);
+                break; // Only strip one clitic
+            }
+        }
+        
+        return processed;
+    }
+    
+    // Russian stemming/root extraction (simplified)
+    extractRussianRoot(word) {
+        if (!this.containsRussian(word) || word.length <= 2) {
+            return word;
+        }
+        
+        let root = word.toLowerCase();
+        
+        // Strip affixes
+        root = this.stripRussianAffixes(root);
+        root = this.stripRussianClitics(root);
+        
+        return root;
+    }
+    
+    // Handle Russian emojis
+    handleRussianEmojis(text) {
+        if (!this.handleRussian || !text) return text;
+        
+        let processed = text;
+        
+        // Replace Russian emojis with their corresponding words
+        for (const [emoji, russianWord] of Object.entries(this.russianEmojiMap)) {
+            processed = processed.replace(new RegExp(emoji, 'g'), russianWord);
+        }
+        
+        return processed;
+    }
+    
+    // Handle Russian numbers mixed with letters
+    handleRussianNumbers(text) {
+        if (!this.handleRussian || !text) return text;
+        
+        let processed = text;
+        
+        // Pattern: Russian word + number + Russian word
+        processed = processed.replace(/([\u0400-\u04FF]+)(\d+)([\u0400-\u04FF]*)/g, (match, before, number, after) => {
+            if (after) {
+                return before + after;
+            }
+            return before;
+        });
+        
+        // Pattern: Russian word + number at the end
+        processed = processed.replace(/([\u0400-\u04FF]+)(\d+)$/g, '$1');
+        
+        return processed;
+    }
+    
+    // Enhanced Russian fuzzy matching
+    performRussianFuzzyMatch(word, keyword) {
+        if (!this.containsRussian(word) || !this.containsRussian(keyword)) {
+            return false;
+        }
+        
+        // Method 1: Direct match
+        if (word === keyword) return true;
+        
+        // Method 2: Standard fuzzy match
+        if (this.isDirectFuzzyMatch(word, keyword)) return true;
+        
+        // Method 3: Russian root extraction matching
+        const wordRoot = this.extractRussianRoot(word);
+        const keywordRoot = this.extractRussianRoot(keyword);
+        
+        if (wordRoot !== word || keywordRoot !== keyword) {
+            if (this.isDirectFuzzyMatch(wordRoot, keywordRoot)) return true;
+        }
+        
+        return false;
+    }
+    
+    // Normalize mixed Russian-English words
+    normalizeMixedRussianWord(word) {
+        if (!this.handleMixedLanguages || !word) return word;
+        
+        const language = this.detectTokenLanguage(word);
+        
+        if (language === 'russian') {
+            return this.normalizeRussian(word);
+        } else if (language === 'english') {
+            return this.normalizeText(word);
+        } else if (language === 'mixed') {
+            // Split mixed word into parts and normalize each part
+            const parts = this.splitMixedWord(word);
+            const normalizedParts = parts.map(part => {
+                if (this.containsRussian(part)) {
+                    return this.normalizeRussian(part);
+                } else if (this.containsEnglish(part)) {
+                    return this.normalizeText(part);
+                } else {
+                    // Handle numbers and other characters
+                    return part.replace(/\d/g, '');
+                }
+            });
+            return normalizedParts.join('');
+        }
+        
+        return word;
+    }
+    
+    // Split mixed word into language parts
+    splitMixedWord(word) {
+        const parts = [];
+        let currentPart = '';
+        let currentLanguage = null;
+        
+        for (const char of word) {
+            const charLanguage = this.detectCharLanguage(char);
+            
+            if (charLanguage !== currentLanguage) {
+                if (currentPart) {
+                    parts.push(currentPart);
+                }
+                currentPart = char;
+                currentLanguage = charLanguage;
+            } else {
+                currentPart += char;
+            }
+        }
+        
+        if (currentPart) {
+            parts.push(currentPart);
+        }
+        
+        return parts;
+    }
+    
+    // Detect language of a single character
+    detectCharLanguage(char) {
+        if (/[\u0400-\u04FF]/.test(char)) return 'russian';
+        if (/[a-zA-Z]/.test(char)) return 'english';
+        if (/\d/.test(char)) return 'number';
+        return 'other';
+    }
+    
+    // Detect language of a token
+    detectTokenLanguage(token) {
+        if (!token) return 'other';
+        
+        const hasRussian = this.containsRussian(token);
+        const hasEnglish = this.containsEnglish(token);
+        
+        if (hasRussian && hasEnglish) {
+            return 'mixed';
+        } else if (hasRussian) {
+            return 'russian';
+        } else if (hasEnglish) {
+            return 'english';
+        }
+        
+        return 'other';
+    }
+    
+    // Expand Russian abbreviations
+    expandRussianAbbreviations(word) {
+        if (!this.expandAbbreviations || !word) return word;
+        
+        // Check Russian abbreviations
+        if (this.russianAbbreviationMap && this.containsRussian(word)) {
+            const russianExpansion = this.russianAbbreviationMap[word];
+            if (russianExpansion) {
+                return russianExpansion;
+            }
+        }
+        
+        return word;
+    }
+    
+    // Get fuzzy matching threshold for Russian words
+    getRussianFuzzyThreshold(wordLength) {
+        // Russian-specific thresholds
+        if (wordLength <= 3) return 0;      // 2-3 letter words → only exact matches
+        if (wordLength <= 6) return 1;      // 4-6 letters → distance = 1 max
+        if (wordLength <= 10) return 2;     // 7-10 letters → distance = 2 max
+        return 3;                            // Longer words → distance = 3 max
+    }
+    
+    // ==================== END RUSSIAN PROCESSING METHODS ====================
 
     // Enhanced keyword detection with fuzzy matching
     detectKeywordsWithFuzzy(messageText, groupName = null) {

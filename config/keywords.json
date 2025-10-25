@@ -39,7 +39,19 @@
     "торт",
     "салфетки",
     "критично",
-    "экстренно"
+    "экстренно",
+    "привет",
+    "спасибо",
+    "пожалуйста",
+    "хорошо",
+    "мел",
+    "ходить",
+    "читать",
+    "сделал",
+    "пришел",
+    "машина",
+    "праздник",
+    "варт"
   ],
   "caseSensitive": false,
   "exactMatch": true,
@@ -58,12 +70,20 @@
       "handleHebrewTypos": true,
       "hebrewStemming": true,
       "hebrewStopWords": true,
-      "handleMixedLanguages": true,
-      "detectLanguagePerToken": true,
-      "diacriticInsensitiveSubstring": true,
-      "fuzzySubstringThreshold": {
-        "short": 1,
-        "medium": 2,
-        "long": 3
-      }
-}
+          "handleMixedLanguages": true,
+          "detectLanguagePerToken": true,
+          "diacriticInsensitiveSubstring": true,
+          "fuzzySubstringThreshold": {
+            "short": 1,
+            "medium": 2,
+            "long": 3
+          },
+          "handleRussian": true,
+          "normalizeRussianStress": true,
+          "normalizeRussianSoftSigns": true,
+          "stripRussianPrefixes": true,
+          "handleRussianTypos": true,
+          "russianStemming": true,
+          "handleRussianElongation": true,
+          "detectRussianKeyboardLayout": true
+    }
