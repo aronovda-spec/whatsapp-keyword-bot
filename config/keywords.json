@@ -36,5 +36,11 @@
   ],
   "caseSensitive": false,
   "exactMatch": true,
-  "enabled": true
+  "enabled": true,
+  "fuzzyMatching": true,
+  "fuzzyThreshold": {
+    "short": 1,
+    "medium": 1,
+    "long": 2
+  }
 }
