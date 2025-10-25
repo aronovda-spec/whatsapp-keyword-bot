@@ -210,6 +210,210 @@ class KeywordDetector {
                 'ס': 'ש', 'ש': 'ס',  // samekh/shin
                 'ע': 'א', 'א': 'ע'   // ayin/alef
             };
+            
+            // Hebrew homoglyphs / similar-looking letters (for OCR and visual confusion)
+            this.hebrewHomoglyphs = {
+                'ד': 'ר', 'ר': 'ד',  // dalet/resh (visually similar)
+                'ג': 'כ', 'כ': 'ג',  // gimel/kaf (visually similar)
+                'ש': 'ס', 'ס': 'ש',  // shin/samekh (visually similar)
+                'ו': 'ז', 'ז': 'ו',  // vav/zayin (visually similar)
+                'ה': 'ח', 'ח': 'ה',  // he/het (visually similar)
+                'ט': 'י', 'י': 'ט',  // tet/yod (visually similar)
+                'ע': 'פ', 'פ': 'ע',  // ayin/pe (visually similar)
+                'צ': 'ק', 'ק': 'צ',  // tsadi/qof (visually similar)
+                'ב': 'כ', 'כ': 'ב',  // bet/kaf (visually similar)
+                'ל': 'כ', 'כ': 'ל'   // lamed/kaf (visually similar)
+            };
+            
+            // Hebrew abbreviations and slang mapping
+            this.hebrewSlangMap = {
+                // Common Hebrew abbreviations
+                'חג': 'חגיגה',  // holiday → celebration
+                'מזל': 'מזל טוב',  // luck → congratulations
+                'שלום': 'שלום',  // hello/peace
+                'תודה': 'תודה',  // thank you
+                'בבקשה': 'בבקשה',  // please
+                'סליחה': 'סליחה',  // sorry
+                'מצטער': 'מצטער',  // sorry (formal)
+                'בהצלחה': 'בהצלחה',  // good luck
+                'לילה טוב': 'לילה טוב',  // good night
+                'בוקר טוב': 'בוקר טוב',  // good morning
+                'צהריים טובים': 'צהריים טובים',  // good afternoon
+                'ערב טוב': 'ערב טוב',  // good evening
+                
+                // Common chat abbreviations
+                'אוקיי': 'בסדר',  // okay → alright
+                'אוקי': 'בסדר',  // ok → alright
+                'כן': 'כן',  // yes
+                'לא': 'לא',  // no
+                'אולי': 'אולי',  // maybe
+                'בטח': 'בטח',  // sure
+                'בטחון': 'בטחון',  // security
+                'חירום': 'חירום',  // emergency
+                'דחוף': 'דחוף',  // urgent
+                'חשוב': 'חשוב',  // important
+                'קריטי': 'קריטי',  // critical
+                'עזרה': 'עזרה',  // help
+                'מפגש': 'מפגש',  // meeting
+                'אירוע': 'אירוע',  // event
+                'רשימה': 'רשימה',  // list
+                'עוגה': 'עוגה',  // cake
+                'מפיות': 'מפיות',  // napkins
+                'בית': 'בית',  // house/home
+                'מכתב': 'מכתב'   // letter
+            };
+            
+            // Hebrew emoji to word mapping
+            this.hebrewEmojiMap = {
+                '🎂': 'עוגה',  // cake
+                '🍰': 'עוגה',  // cake slice
+                '🎉': 'חגיגה',  // celebration
+                '🎊': 'חגיגה',  // celebration
+                '🎈': 'בלון',  // balloon
+                '🎁': 'מתנה',  // gift
+                '💝': 'מתנה',  // gift
+                '🏠': 'בית',  // house
+                '🏡': 'בית',  // house
+                '📝': 'רשימה',  // list
+                '📋': 'רשימה',  // list
+                '📄': 'מכתב',  // letter
+                '✉️': 'מכתב',  // letter
+                '📧': 'מכתב',  // email
+                '📨': 'מכתב',  // letter
+                '📩': 'מכתב',  // letter
+                '🚨': 'חירום',  // emergency
+                '🚩': 'דגל',  // flag
+                '⚠️': 'אזהרה',  // warning
+                '❗': 'חשוב',  // important
+                '❌': 'לא',  // no
+                '✅': 'כן',  // yes
+                '👍': 'טוב',  // good
+                '👎': 'רע',  // bad
+                '❤️': 'אהבה',  // love
+                '💕': 'אהבה',  // love
+                '💖': 'אהבה',  // love
+                '💗': 'אהבה',  // love
+                '💘': 'אהבה',  // love
+                '💙': 'אהבה',  // love
+                '💚': 'אהבה',  // love
+                '💛': 'אהבה',  // love
+                '💜': 'אהבה',  // love
+                '🖤': 'אהבה',  // love
+                '🤍': 'אהבה',  // love
+                '💔': 'אהבה',  // broken heart
+                '😊': 'שמח',  // happy
+                '😄': 'שמח',  // happy
+                '😃': 'שמח',  // happy
+                '😁': 'שמח',  // happy
+                '😆': 'שמח',  // happy
+                '😅': 'שמח',  // happy
+                '😂': 'צחוק',  // laugh
+                '🤣': 'צחוק',  // laugh
+                '😭': 'בכי',  // cry
+                '😢': 'עצוב',  // sad
+                '😔': 'עצוב',  // sad
+                '😞': 'עצוב',  // sad
+                '😟': 'עצוב',  // sad
+                '😕': 'עצוב',  // sad
+                '🙁': 'עצוב',  // sad
+                '☹️': 'עצוב',  // sad
+                '😣': 'עצוב',  // sad
+                '😖': 'עצוב',  // sad
+                '😫': 'עצוב',  // sad
+                '😩': 'עצוב',  // sad
+                '😤': 'כעס',  // angry
+                '😠': 'כעס',  // angry
+                '😡': 'כעס',  // angry
+                '🤬': 'כעס',  // angry
+                '😱': 'פחד',  // fear
+                '😨': 'פחד',  // fear
+                '😰': 'פחד',  // fear
+                '😳': 'מבוכה',  // embarrassment
+                '😵': 'סחרחורת',  // dizziness
+                '🤯': 'הלם',  // shock
+                '🤔': 'חשיבה',  // thinking
+                '🤨': 'ספקנות',  // skepticism
+                '😐': 'ניטרלי',  // neutral
+                '😑': 'ניטרלי',  // neutral
+                '😶': 'שקט',  // quiet
+                '🤐': 'שקט',  // quiet
+                '😴': 'שינה',  // sleep
+                '😪': 'עייפות',  // tired
+                '🤤': 'רוק',  // drool
+                '😋': 'טעים',  // delicious
+                '😛': 'לשון',  // tongue
+                '😜': 'לשון',  // tongue
+                '😝': 'לשון',  // tongue
+                '🤪': 'משוגע',  // crazy
+                '😒': 'אדישות',  // indifference
+                '🙄': 'אדישות',  // indifference
+                '😬': 'מבוכה',  // embarrassment
+                '🤭': 'מבוכה',  // embarrassment
+                '🤫': 'שקט',  // quiet
+                '🤥': 'שקר',  // lie
+                '😷': 'מסכה',  // mask
+                '🤒': 'חולה',  // sick
+                '🤕': 'פצוע',  // injured
+                '🤢': 'בחילה',  // nausea
+                '🤮': 'הקאה',  // vomit
+                '🤧': 'עיטוש',  // sneeze
+                '🥵': 'חם',  // hot
+                '🥶': 'קר',  // cold
+                '🥴': 'סחרחורת',  // dizziness
+                '😵‍💫': 'סחרחורת',  // dizziness
+                '🤯': 'הלם',  // shock
+                '🤠': 'קאובוי',  // cowboy
+                '🥳': 'חגיגה',  // celebration
+                '🥸': 'התחפשות',  // disguise
+                '😎': 'מגניב',  // cool
+                '🤓': 'חכם',  // smart
+                '🧐': 'חקירה',  // investigation
+                '😏': 'ערמומיות',  // sly
+                '😌': 'שקט',  // quiet
+                '😇': 'מלאך',  // angel
+                '🤗': 'חיבוק',  // hug
+                '🤔': 'חשיבה',  // thinking
+                '🤨': 'ספקנות',  // skepticism
+                '😐': 'ניטרלי',  // neutral
+                '😑': 'ניטרלי',  // neutral
+                '😶': 'שקט',  // quiet
+                '🤐': 'שקט',  // quiet
+                '😴': 'שינה',  // sleep
+                '😪': 'עייפות',  // tired
+                '🤤': 'רוק',  // drool
+                '😋': 'טעים',  // delicious
+                '😛': 'לשון',  // tongue
+                '😜': 'לשון',  // tongue
+                '😝': 'לשון',  // tongue
+                '🤪': 'משוגע',  // crazy
+                '😒': 'אדישות',  // indifference
+                '🙄': 'אדישות',  // indifference
+                '😬': 'מבוכה',  // embarrassment
+                '🤭': 'מבוכה',  // embarrassment
+                '🤫': 'שקט',  // quiet
+                '🤥': 'שקר',  // lie
+                '😷': 'מסכה',  // mask
+                '🤒': 'חולה',  // sick
+                '🤕': 'פצוע',  // injured
+                '🤢': 'בחילה',  // nausea
+                '🤮': 'הקאה',  // vomit
+                '🤧': 'עיטוש',  // sneeze
+                '🥵': 'חם',  // hot
+                '🥶': 'קר',  // cold
+                '🥴': 'סחרחורת',  // dizziness
+                '😵‍💫': 'סחרחורת',  // dizziness
+                '🤯': 'הלם',  // shock
+                '🤠': 'קאובוי',  // cowboy
+                '🥳': 'חגיגה',  // celebration
+                '🥸': 'התחפשות',  // disguise
+                '😎': 'מגניב',  // cool
+                '🤓': 'חכם',  // smart
+                '🧐': 'חקירה',  // investigation
+                '😏': 'ערמומיות',  // sly
+                '😌': 'שקט',  // quiet
+                '😇': 'מלאך',  // angel
+                '🤗': 'חיבוק'   // hug
+            };
         
         this.loadConfig();
     }
@@ -347,7 +551,12 @@ class KeywordDetector {
         
         let normalized = text;
         
-        // 1. Remove emojis and symbols
+        // 1. Handle Hebrew emojis BEFORE removing emojis
+        if (this.handleHebrew) {
+            normalized = this.handleHebrewEmojis(normalized);
+        }
+        
+        // 1.1. Remove remaining emojis and symbols (after Hebrew emoji processing)
         if (this.removeEmojis) {
             normalized = normalized.replace(/[\u{1F600}-\u{1F64F}]|[\u{1F300}-\u{1F5FF}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/gu, '');
         }
@@ -355,6 +564,11 @@ class KeywordDetector {
         // 2. Hebrew-specific normalization (before other processing)
         if (this.handleHebrew && this.containsHebrew(normalized)) {
             normalized = this.normalizeHebrew(normalized);
+        }
+        
+        // 2.1. Handle Hebrew numbers mixed with letters
+        if (this.handleHebrew) {
+            normalized = this.handleHebrewNumbers(normalized);
         }
         
         // 3. Normalize diacritics/accents (for Latin scripts)
@@ -399,6 +613,14 @@ class KeywordDetector {
                     const hebrewExpansion = this.hebrewAbbreviationMap[word];
                     if (hebrewExpansion) {
                         return hebrewExpansion;
+                    }
+                }
+                
+                // Check Hebrew slang
+                if (this.hebrewSlangMap && this.containsHebrew(word)) {
+                    const slangExpansion = this.hebrewSlangMap[word];
+                    if (slangExpansion) {
+                        return slangExpansion;
                     }
                 }
                 
@@ -579,7 +801,90 @@ class KeywordDetector {
         
         return word;
     }
-
+    
+    // Handle Hebrew emojis - convert emojis to Hebrew words
+    handleHebrewEmojis(text) {
+        if (!this.handleHebrew || !text) return text;
+        
+        let processed = text;
+        
+        // Replace Hebrew emojis with their corresponding words
+        for (const [emoji, hebrewWord] of Object.entries(this.hebrewEmojiMap)) {
+            processed = processed.replace(new RegExp(emoji, 'g'), hebrewWord);
+        }
+        
+        return processed;
+    }
+    
+    // Handle Hebrew numbers mixed with letters (e.g., שבת2, שב3ת)
+    handleHebrewNumbers(text) {
+        if (!this.handleHebrew || !text) return text;
+        
+        let processed = text;
+        
+        // Pattern: Hebrew word + number + Hebrew word
+        // Example: שב3ת → שבת, שבת2 → שבת
+        processed = processed.replace(/([\u0590-\u05FF]+)(\d+)([\u0590-\u05FF]*)/g, (match, before, number, after) => {
+            // If there's text after the number, try to reconstruct the word
+            if (after) {
+                return before + after;
+            }
+            // If no text after, just return the part before the number
+            return before;
+        });
+        
+        // Pattern: Hebrew word + number at the end
+        processed = processed.replace(/([\u0590-\u05FF]+)(\d+)$/g, '$1');
+        
+        return processed;
+    }
+    
+    // Enhanced Hebrew fuzzy matching with homoglyphs
+    performHebrewFuzzyMatch(word, keyword) {
+        if (!this.containsHebrew(word) || !this.containsHebrew(keyword)) {
+            return false;
+        }
+        
+        // Method 1: Direct match
+        if (word === keyword) return true;
+        
+        // Method 2: Standard fuzzy match
+        if (this.isDirectFuzzyMatch(word, keyword)) return true;
+        
+        // Method 3: Homoglyph substitution match
+        if (this.isHomoglyphMatch(word, keyword)) return true;
+        
+        // Method 4: Hebrew root extraction matching
+        const wordRoot = this.extractHebrewRoot(word);
+        const keywordRoot = this.extractHebrewRoot(keyword);
+        
+        if (wordRoot !== word || keywordRoot !== keyword) {
+            if (this.isDirectFuzzyMatch(wordRoot, keywordRoot)) return true;
+            if (this.isHomoglyphMatch(wordRoot, keywordRoot)) return true;
+        }
+        
+        return false;
+    }
+    
+    // Check if two Hebrew words match with homoglyph substitutions
+    isHomoglyphMatch(word1, word2) {
+        if (!this.containsHebrew(word1) || !this.containsHebrew(word2)) return false;
+        
+        // Try substituting homoglyphs in word1
+        for (const [char, substitute] of Object.entries(this.hebrewHomoglyphs)) {
+            const modifiedWord1 = word1.replace(new RegExp(char, 'g'), substitute);
+            if (this.isDirectFuzzyMatch(modifiedWord1, word2)) return true;
+        }
+        
+        // Try substituting homoglyphs in word2
+        for (const [char, substitute] of Object.entries(this.hebrewHomoglyphs)) {
+            const modifiedWord2 = word2.replace(new RegExp(char, 'g'), substitute);
+            if (this.isDirectFuzzyMatch(word1, modifiedWord2)) return true;
+        }
+        
+        return false;
+    }
+    
     // Get fuzzy matching threshold based on word length
     getFuzzyThreshold(wordLength, word = null) {
         // Hebrew words are typically shorter, so use stricter thresholds
@@ -653,6 +958,17 @@ class KeywordDetector {
                 if (this.isSubstringFuzzyMatch(wordRoot, keywordRoot)) {
                     return true;
                 }
+                // Try homoglyph matching with roots
+                if (this.isHomoglyphMatch(wordRoot, keywordRoot)) {
+                    return true;
+                }
+            }
+        }
+        
+        // Method 5: Enhanced Hebrew fuzzy matching (including homoglyphs)
+        if (this.containsHebrew(word) && this.containsHebrew(keyword)) {
+            if (this.performHebrewFuzzyMatch(word, keyword)) {
+                return true;
             }
         }
         
