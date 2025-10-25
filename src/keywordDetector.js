@@ -17,20 +17,37 @@ class KeywordDetector {
             long: 3      // Words > 8 characters
         };
         
-        // Enhanced processing options
-        this.normalizeDiacritics = true;
-        this.removeStopWords = true;
-        this.handlePlurals = true;
+            // Enhanced processing options
+            this.normalizeDiacritics = true;
+            this.removeStopWords = true;
+            this.handlePlurals = true;
             this.handleLeetspeak = true;
             this.removeEmojis = true;
             this.multiWordKeywords = true;
             this.expandAbbreviations = true;
+            
+            // Hebrew-specific processing options
+            this.handleHebrew = true;
+            this.removeHebrewNiqqud = true;
+            this.normalizeHebrewFinalForms = true;
+            this.stripHebrewPrefixes = true;
+            this.handleHebrewTypos = true;
+            this.hebrewStemming = true;
+            // this.hebrewStopWords is already initialized as a Set above
         
         // Stop words for filtering
         this.stopWords = new Set([
             'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by',
             'is', 'are', 'was', 'were', 'be', 'been', 'have', 'has', 'had', 'do', 'does', 'did',
             'will', 'would', 'could', 'should', 'may', 'might', 'can', 'this', 'that', 'these', 'those'
+        ]);
+        
+        // Hebrew stop words
+        this.hebrewStopWords = new Set([
+            'את', 'של', 'עם', 'על', 'אל', 'מן', 'כל', 'זה', 'זו', 'אלה', 'אלו', 'הוא', 'היא', 'הם', 'הן',
+            'אני', 'אתה', 'את', 'אנחנו', 'אתם', 'אתן', 'היה', 'היתה', 'היו', 'יהיה', 'תהיה', 'יהיו',
+            'יש', 'אין', 'לא', 'כן', 'גם', 'רק', 'כבר', 'עוד', 'יותר', 'פחות', 'הכי', 'כמה', 'איך',
+            'מה', 'מי', 'איפה', 'מתי', 'למה', 'איזה', 'איזו', 'איזה', 'איזו', 'איזה', 'איזו'
         ]);
         
             // Leetspeak substitutions (but preserve numbers for emergency codes and word boundaries)
@@ -124,6 +141,75 @@ class KeywordDetector {
                 'f2f': 'face to face',
                 'irl': 'in real life'
             };
+            
+            // Hebrew abbreviations/synonyms mapping
+            this.hebrewAbbreviationMap = {
+                // Common Hebrew abbreviations
+                'דחוף': 'דחוף',
+                'חשוב': 'חשוב',
+                'עזרה': 'עזרה',
+                'מפגש': 'מפגש',
+                'אירוע': 'אירוע',
+                'רשימה': 'רשימה',
+                'עוגה': 'עוגה',
+                'מפיות': 'מפיות',
+                'חירום': 'חירום',
+                'קריטי': 'קריטי',
+                
+                // Hebrew contractions and common forms
+                'שלום': 'שלום',
+                'תודה': 'תודה',
+                'בבקשה': 'בבקשה',
+                'סליחה': 'סליחה',
+                'מצטער': 'מצטער',
+                'בהצלחה': 'בהצלחה',
+                'לילה טוב': 'לילה טוב',
+                'בוקר טוב': 'בוקר טוב',
+                'צהריים טובים': 'צהריים טובים',
+                'ערב טוב': 'ערב טוב'
+            };
+            
+            // Hebrew final forms mapping (sofit letters)
+            this.hebrewFinalForms = {
+                'ך': 'כ',  // final kaf
+                'ם': 'מ',  // final mem
+                'ן': 'נ',  // final nun
+                'ף': 'פ',  // final pe
+                'ץ': 'צ'   // final tsadi
+            };
+            
+            // Hebrew common prefixes (clitics)
+            this.hebrewPrefixes = ['ב', 'ל', 'כ', 'מ', 'ו', 'ה'];
+            
+            // Hebrew keyboard typo map (adjacent keys) - enhanced
+            this.hebrewTypoMap = {
+                // Common Hebrew keyboard substitutions (Qwerty layout)
+                'ש': 'א', 'א': 'ש',  // shin/alef
+                'ב': 'נ', 'נ': 'ב',  // bet/nun
+                'ג': 'ד', 'ד': 'ג',  // gimel/dalet
+                'ה': 'ח', 'ח': 'ה',  // he/het
+                'ו': 'ז', 'ז': 'ו',  // vav/zayin
+                'ט': 'י', 'י': 'ט',  // tet/yod
+                'כ': 'ל', 'ל': 'כ',  // kaf/lamed
+                'מ': 'ס', 'ס': 'מ',  // mem/samekh
+                'ע': 'פ', 'פ': 'ע',  // ayin/pe
+                'צ': 'ק', 'ק': 'צ',  // tsadi/qof
+                'ר': 'ת', 'ת': 'ר',  // resh/tav
+                
+                // Additional common typos
+                'ך': 'כ', 'כ': 'ך',  // kaf/final kaf
+                'ם': 'מ', 'מ': 'ם',  // mem/final mem
+                'ן': 'נ', 'נ': 'ן',  // nun/final nun
+                'ף': 'פ', 'פ': 'ף',  // pe/final pe
+                'ץ': 'צ', 'צ': 'ץ',  // tsadi/final tsadi
+                
+                // Similar sounding letters
+                'ב': 'ו', 'ו': 'ב',  // bet/vav
+                'ח': 'כ', 'כ': 'ח',  // het/kaf
+                'ט': 'ת', 'ת': 'ט',  // tet/tav
+                'ס': 'ש', 'ש': 'ס',  // samekh/shin
+                'ע': 'א', 'א': 'ע'   // ayin/alef
+            };
         
         this.loadConfig();
     }
@@ -150,6 +236,16 @@ class KeywordDetector {
             this.removeEmojis = config.removeEmojis !== undefined ? config.removeEmojis : true;
             this.multiWordKeywords = config.multiWordKeywords !== undefined ? config.multiWordKeywords : true;
             this.expandAbbreviations = config.expandAbbreviations !== undefined ? config.expandAbbreviations : true;
+            
+            // Load Hebrew-specific processing options
+            this.handleHebrew = config.handleHebrew !== undefined ? config.handleHebrew : true;
+            this.removeHebrewNiqqud = config.removeHebrewNiqqud !== undefined ? config.removeHebrewNiqqud : true;
+            this.normalizeHebrewFinalForms = config.normalizeHebrewFinalForms !== undefined ? config.normalizeHebrewFinalForms : true;
+            this.stripHebrewPrefixes = config.stripHebrewPrefixes !== undefined ? config.stripHebrewPrefixes : true;
+            this.handleHebrewTypos = config.handleHebrewTypos !== undefined ? config.handleHebrewTypos : true;
+            this.hebrewStemming = config.hebrewStemming !== undefined ? config.hebrewStemming : true;
+            // Hebrew stop words is a Set, not a boolean - don't override it
+            // this.hebrewStopWords = config.hebrewStopWords !== undefined ? config.hebrewStopWords : true;
             
             console.log(`Loaded ${this.keywords.length} keywords:`, this.keywords);
         } catch (error) {
@@ -256,18 +352,23 @@ class KeywordDetector {
             normalized = normalized.replace(/[\u{1F600}-\u{1F64F}]|[\u{1F300}-\u{1F5FF}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/gu, '');
         }
         
-        // 2. Normalize diacritics/accents
+        // 2. Hebrew-specific normalization (before other processing)
+        if (this.handleHebrew && this.containsHebrew(normalized)) {
+            normalized = this.normalizeHebrew(normalized);
+        }
+        
+        // 3. Normalize diacritics/accents (for Latin scripts)
         if (this.normalizeDiacritics) {
             normalized = normalized.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
         }
         
-        // 3. Convert to lowercase
+        // 4. Convert to lowercase
         normalized = normalized.toLowerCase();
         
-        // 4. Handle separators - convert them to spaces to preserve word boundaries
+        // 5. Handle separators - convert them to spaces to preserve word boundaries
         normalized = normalized.replace(/[_\-\+]/g, ' ');
         
-        // 5. Handle leetspeak substitutions (after separator handling)
+        // 6. Handle leetspeak substitutions (after separator handling)
         if (this.handleLeetspeak) {
             for (const [leet, normal] of Object.entries(this.leetspeakMap)) {
                 // Escape special regex characters
@@ -276,31 +377,128 @@ class KeywordDetector {
             }
         }
         
-        // 6. Remove punctuation, keep letters, numbers, and Unicode letters
+        // 7. Remove punctuation, keep letters, numbers, and Unicode letters
         normalized = normalized.replace(/[^\w\s\u0590-\u05FF\u0400-\u04FF\u0600-\u06FF]/g, '');
         
-        // 7. Expand abbreviations/synonyms
-        if (this.expandAbbreviations && this.abbreviationMap) {
+        // 8. Expand abbreviations/synonyms
+        if (this.expandAbbreviations) {
             const words = normalized.split(/\s+/);
             const expandedWords = words.map(word => {
                 const lowerWord = word.toLowerCase();
-                const expansion = this.abbreviationMap[lowerWord];
-                if (expansion) {
-                    // For multi-word expansions, we need to handle them specially
-                    // to avoid stop word filtering issues
-                    return expansion;
+                
+                // Check English abbreviations
+                if (this.abbreviationMap) {
+                    const expansion = this.abbreviationMap[lowerWord];
+                    if (expansion) {
+                        return expansion;
+                    }
                 }
+                
+                // Check Hebrew abbreviations
+                if (this.hebrewAbbreviationMap && this.containsHebrew(word)) {
+                    const hebrewExpansion = this.hebrewAbbreviationMap[word];
+                    if (hebrewExpansion) {
+                        return hebrewExpansion;
+                    }
+                }
+                
                 return word;
             });
             normalized = expandedWords.join(' ');
         }
         
-        // 8. Normalize whitespace
+        // 9. Normalize whitespace
         normalized = normalized.replace(/\s+/g, ' ').trim();
         
         return normalized;
     }
-
+    
+    // Hebrew-specific normalization
+    normalizeHebrew(text) {
+        if (!this.handleHebrew || !text || typeof text !== 'string') {
+            return text;
+        }
+        
+        let normalized = text;
+        
+        // 1. Remove Hebrew niqqud (vowel marks) - precise range
+        if (this.removeHebrewNiqqud) {
+            // Remove only Hebrew diacritical marks, not Hebrew letters
+            // Hebrew letters: \u05D0-\u05EA
+            // Hebrew diacritics: \u0591-\u05AF, \u05B0-\u05B9, \u05BB-\u05BD, \u05BF-\u05C7
+            normalized = normalized.replace(/[\u0591-\u05AF\u05B0-\u05B9\u05BB-\u05BD\u05BF-\u05C7]/g, '');
+        }
+        
+        // 2. Normalize Hebrew final forms (sofit letters) - disabled for now
+        // Note: This was causing issues with exact matching
+        // if (this.normalizeHebrewFinalForms) {
+        //     for (const [finalForm, regularForm] of Object.entries(this.hebrewFinalForms)) {
+        //         normalized = normalized.replace(new RegExp(finalForm, 'g'), regularForm);
+        //     }
+        // }
+        
+        // Note: Hebrew typo handling should be done during fuzzy matching, not normalization
+        // to avoid corrupting the original text
+        
+        return normalized;
+    }
+    
+    // Strip Hebrew prefixes (clitics) - more conservative approach
+    stripHebrewPrefixesFromWord(word) {
+        if (!this.stripHebrewPrefixes || !word || typeof word !== 'string') {
+            return word;
+        }
+        
+        // Only strip prefixes if the remaining word is a known keyword
+        // This prevents over-stripping of legitimate Hebrew words
+        for (const prefix of this.hebrewPrefixes) {
+            if (word.startsWith(prefix)) {
+                const remainingWord = word.substring(1);
+                // Only strip if the remaining word is a known keyword
+                if (this.keywords.includes(remainingWord)) {
+                    return remainingWord;
+                }
+            }
+        }
+        
+        return word;
+    }
+    
+    // Check if text contains Hebrew characters
+    containsHebrew(text) {
+        if (!text || typeof text !== 'string') {
+            return false;
+        }
+        return /[\u0590-\u05FF]/.test(text);
+    }
+    
+    // Hebrew stemming/root extraction (simplified)
+    extractHebrewRoot(word) {
+        if (!this.containsHebrew(word) || word.length <= 2) {
+            return word;
+        }
+        
+        // Remove common Hebrew suffixes
+        const suffixes = ['ים', 'ות', 'יות', 'ה', 'ך', 'ת', 'נו', 'כם', 'כן'];
+        
+        for (const suffix of suffixes) {
+            if (word.endsWith(suffix) && word.length > suffix.length + 1) {
+                return word.slice(0, -suffix.length);
+            }
+        }
+        
+        // Remove common Hebrew prefixes
+        const prefixes = ['ה', 'ב', 'ל', 'כ', 'מ', 'ו'];
+        
+        for (const prefix of prefixes) {
+            if (word.startsWith(prefix) && word.length > prefix.length + 1) {
+                return word.slice(prefix.length);
+            }
+        }
+        
+        return word;
+    }
+    
     // Enhanced tokenization with stop word filtering and plural handling
     tokenizeText(text) {
         const normalized = this.normalizeText(text);
@@ -308,8 +506,21 @@ class KeywordDetector {
         
         // Remove stop words if enabled
         if (this.removeStopWords) {
-            tokens = tokens.filter(token => !this.stopWords.has(token));
+            tokens = tokens.filter(token => {
+                // Check both English and Hebrew stop words
+                const isEnglishStopWord = this.stopWords.has(token);
+                const isHebrewStopWord = this.hebrewStopWords.has(token);
+                return !isEnglishStopWord && !isHebrewStopWord;
+            });
         }
+        
+        // Handle Hebrew prefixes if text contains Hebrew
+        if (this.handleHebrew && this.containsHebrew(text)) {
+            tokens = tokens.map(token => this.stripHebrewPrefixesFromWord(token));
+        }
+        
+        // Note: Hebrew plural handling is done during keyword comparison, not tokenization
+        // This prevents modifying tokens that might be needed for exact matching
         
         // Handle plurals if enabled (but don't modify tokens for fuzzy matching)
         // Plurals are handled during keyword comparison, not tokenization
@@ -320,6 +531,11 @@ class KeywordDetector {
     // Handle plural/singular forms
     handlePlural(word) {
         if (word.length <= 3) return word; // Don't modify very short words
+        
+        // Hebrew plural handling
+        if (this.containsHebrew(word)) {
+            return this.handleHebrewPlural(word);
+        }
         
         // Simple English plural handling
         if (word.endsWith('ies') && word.length > 4) {
@@ -337,9 +553,44 @@ class KeywordDetector {
         
         return word;
     }
+    
+    // Handle Hebrew plural/singular forms
+    handleHebrewPlural(word) {
+        if (word.length <= 2) return word;
+        
+        // Common Hebrew plural patterns
+        // Alternative feminine plural: add יות (check this first - more specific)
+        if (word.endsWith('יות') && word.length > 4) {
+            return word.slice(0, -3);
+        }
+        
+        // Masculine plural: add ים
+        if (word.endsWith('ים') && word.length > 3) {
+            return word.slice(0, -2);
+        }
+        
+        // Feminine plural: add ות (but not if it's part of יות)
+        // For feminine words ending in ות, we need to add ה back
+        if (word.endsWith('ות') && word.length > 3 && !word.endsWith('יות')) {
+            const base = word.slice(0, -2);
+            // Add ה for feminine singular
+            return base + 'ה';
+        }
+        
+        return word;
+    }
 
     // Get fuzzy matching threshold based on word length
-    getFuzzyThreshold(wordLength) {
+    getFuzzyThreshold(wordLength, word = null) {
+        // Hebrew words are typically shorter, so use stricter thresholds
+        if (word && this.containsHebrew(word)) {
+            // Hebrew-specific thresholds (stricter)
+            if (wordLength <= 3) return 1;      // 2-3 letter words → distance = 1
+            if (wordLength <= 6) return 1;       // 4-6 letters → distance = 1
+            return 2;                            // Longer words → distance = 2
+        }
+        
+        // Standard thresholds for Latin scripts
         if (wordLength < 5) return this.fuzzyThreshold.short;
         if (wordLength <= 8) return this.fuzzyThreshold.medium;
         return this.fuzzyThreshold.long;
@@ -389,6 +640,22 @@ class KeywordDetector {
             return true;
         }
         
+        // Method 4: Hebrew root extraction matching
+        if (this.containsHebrew(word) && this.containsHebrew(keyword)) {
+            const wordRoot = this.extractHebrewRoot(word);
+            const keywordRoot = this.extractHebrewRoot(keyword);
+            
+            if (wordRoot !== word || keywordRoot !== keyword) {
+                // Try matching with extracted roots
+                if (this.isDirectFuzzyMatch(wordRoot, keywordRoot)) {
+                    return true;
+                }
+                if (this.isSubstringFuzzyMatch(wordRoot, keywordRoot)) {
+                    return true;
+                }
+            }
+        }
+        
         return false;
     }
     
@@ -422,7 +689,7 @@ class KeywordDetector {
         
         const distance = levenshtein.get(word, keyword);
         const damerauDistance = damerauLevenshtein(word, keyword).steps;
-        const threshold = this.getFuzzyThreshold(keywordLength);
+        const threshold = this.getFuzzyThreshold(keywordLength, keyword);
         
         // Use the better (lower) distance for matching
         const bestDistance = Math.min(distance, damerauDistance);
