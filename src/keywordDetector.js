@@ -12,9 +12,9 @@ class KeywordDetector {
         this.enabled = true;
         this.fuzzyMatching = true;
         this.fuzzyThreshold = {
-            short: 1,    // Words < 5 characters
-            medium: 2,  // Words 5-8 characters
-            long: 3      // Words > 8 characters
+            short: 0,    // Words < 5 characters - only exact matches
+            medium: 0,  // Words 5-8 characters - only exact matches
+            long: 1      // Words > 8 characters - very strict
         };
         
             // Enhanced processing options
@@ -34,6 +34,18 @@ class KeywordDetector {
             this.handleHebrewTypos = true;
             this.hebrewStemming = true;
             // this.hebrewStopWords is already initialized as a Set above
+            
+            // Mixed Hebrew-English processing options
+            this.handleMixedLanguages = true;
+            this.detectLanguagePerToken = true;
+            
+            // Diacritic-insensitive fuzzy substring matching
+            this.diacriticInsensitiveSubstring = true;
+            this.fuzzySubstringThreshold = {
+                short: 1,    // Phrases < 10 characters
+                medium: 2,   // Phrases 10-20 characters
+                long: 3      // Phrases > 20 characters
+            };
         
         // Stop words for filtering
         this.stopWords = new Set([
@@ -53,8 +65,8 @@ class KeywordDetector {
             // Leetspeak substitutions (but preserve numbers for emergency codes and word boundaries)
             this.leetspeakMap = {
                 '@': 'a', '4': 'a', '0': 'o', '5': 's', '7': 't', '8': 'b',
-                '$': 's', '#': 'h'
-                // Note: '1', '2', '3', '6', '9' removed to preserve numbers and emergency codes
+                '$': 's', '#': 'h', '3': 'e'
+                // Note: '1', '2', '6', '9' removed to preserve numbers and emergency codes
             };
             
             // Common abbreviations/synonyms mapping
@@ -216,7 +228,6 @@ class KeywordDetector {
                 'ד': 'ר', 'ר': 'ד',  // dalet/resh (visually similar)
                 'ג': 'כ', 'כ': 'ג',  // gimel/kaf (visually similar)
                 'ש': 'ס', 'ס': 'ש',  // shin/samekh (visually similar)
-                'ו': 'ז', 'ז': 'ו',  // vav/zayin (visually similar)
                 'ה': 'ח', 'ח': 'ה',  // he/het (visually similar)
                 'ט': 'י', 'י': 'ט',  // tet/yod (visually similar)
                 'ע': 'פ', 'פ': 'ע',  // ayin/pe (visually similar)
@@ -561,8 +572,14 @@ class KeywordDetector {
             normalized = normalized.replace(/[\u{1F600}-\u{1F64F}]|[\u{1F300}-\u{1F5FF}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/gu, '');
         }
         
-        // 2. Hebrew-specific normalization (before other processing)
-        if (this.handleHebrew && this.containsHebrew(normalized)) {
+        // 2. Mixed language processing (before other processing)
+        if (this.handleMixedLanguages) {
+            // Process each token separately based on its language
+            const tokens = normalized.split(/\s+/);
+            const processedTokens = tokens.map(token => this.normalizeMixedLanguageWord(token));
+            normalized = processedTokens.join(' ');
+        } else if (this.handleHebrew && this.containsHebrew(normalized)) {
+            // Fallback to original Hebrew-only processing
             normalized = this.normalizeHebrew(normalized);
         }
         
@@ -694,6 +711,195 @@ class KeywordDetector {
         return /[\u0590-\u05FF]/.test(text);
     }
     
+    // Check if text contains English characters
+    containsEnglish(text) {
+        if (!text || typeof text !== 'string') {
+            return false;
+        }
+        return /[a-zA-Z]/.test(text);
+    }
+    
+    // Detect language of a token (Hebrew, English, Mixed, Other)
+    detectTokenLanguage(token) {
+        if (!token || typeof token !== 'string') {
+            return 'other';
+        }
+        
+        const hasHebrew = this.containsHebrew(token);
+        const hasEnglish = this.containsEnglish(token);
+        
+        if (hasHebrew && hasEnglish) {
+            return 'mixed';
+        } else if (hasHebrew) {
+            return 'hebrew';
+        } else if (hasEnglish) {
+            return 'english';
+        } else {
+            return 'other';
+        }
+    }
+    
+    // Normalize mixed Hebrew-English words by processing each language part separately
+    normalizeMixedLanguageWord(word) {
+        if (!this.handleMixedLanguages || !word) {
+            return word;
+        }
+        
+        const language = this.detectTokenLanguage(word);
+        
+        if (language === 'mixed') {
+            // Simple approach: process character by character, maintaining order
+            let result = '';
+            let currentPart = '';
+            let currentLanguage = null;
+            
+            for (let i = 0; i < word.length; i++) {
+                const char = word[i];
+                const charLanguage = this.detectTokenLanguage(char);
+                
+                if (charLanguage !== currentLanguage) {
+                    // Process the accumulated part
+                    if (currentPart && currentLanguage) {
+                        if (currentLanguage === 'hebrew') {
+                            result += this.normalizeHebrew(currentPart);
+                        } else if (currentLanguage === 'english') {
+                            result += this.normalizeEnglish(currentPart);
+                        } else {
+                            // Handle numbers and other characters
+                            result += currentPart.replace(/\d/g, '');
+                        }
+                    }
+                    currentPart = char;
+                    currentLanguage = charLanguage;
+                } else {
+                    currentPart += char;
+                }
+            }
+            
+            // Process the last part
+            if (currentPart && currentLanguage) {
+                if (currentLanguage === 'hebrew') {
+                    result += this.normalizeHebrew(currentPart);
+                } else if (currentLanguage === 'english') {
+                    result += this.normalizeEnglish(currentPart);
+                } else {
+                    // Handle numbers and other characters
+                    result += currentPart.replace(/\d/g, '');
+                }
+            }
+            
+            return result;
+        } else if (language === 'hebrew') {
+            return this.normalizeHebrew(word);
+        } else if (language === 'english') {
+            return this.normalizeEnglish(word);
+        } else {
+            return word.toLowerCase();
+        }
+    }
+    
+    // Normalize English text (separate from Hebrew processing)
+    normalizeEnglish(text) {
+        if (!text || typeof text !== 'string') return '';
+        
+        let normalized = text;
+        
+        // Convert to lowercase
+        normalized = normalized.toLowerCase();
+        
+        // Normalize diacritics/accents
+        if (this.normalizeDiacritics) {
+            normalized = normalized.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        }
+        
+        // Handle leetspeak substitutions
+        if (this.handleLeetspeak) {
+            for (const [leet, normal] of Object.entries(this.leetspeakMap)) {
+                const escapedLeet = leet.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                normalized = normalized.replace(new RegExp(escapedLeet, 'g'), normal);
+            }
+        }
+        
+        // Remove punctuation, keep letters, numbers
+        normalized = normalized.replace(/[^\w\s]/g, '');
+        
+        // Normalize whitespace
+        normalized = normalized.replace(/\s+/g, ' ').trim();
+        
+        return normalized;
+    }
+    
+    // Perform diacritic-insensitive fuzzy substring matching for phrases
+    performDiacriticInsensitiveSubstringMatch(text, keyword) {
+        if (!this.diacriticInsensitiveSubstring || !text || !keyword) {
+            return false;
+        }
+        
+        // Remove diacritics from both text and keyword
+        const normalizedText = this.removeDiacritics(text);
+        const normalizedKeyword = this.removeDiacritics(keyword);
+        
+        // Only apply substring matching for multi-word keywords or when text is significantly longer
+        // This prevents false positives with single-word tokens
+        if (normalizedText.length <= normalizedKeyword.length + 2) {
+            // For similar length text, only check exact substring match
+            return normalizedText.includes(normalizedKeyword);
+        }
+        
+        // For single-word tokens, be extra strict - only allow exact substring matches
+        if (!normalizedText.includes(' ') && !normalizedKeyword.includes(' ')) {
+            return normalizedText.includes(normalizedKeyword);
+        }
+        
+        // Check for exact substring match first
+        if (normalizedText.includes(normalizedKeyword)) {
+            return true;
+        }
+        
+        // For longer text, perform fuzzy substring matching with stricter thresholds
+        const keywordLength = normalizedKeyword.length;
+        const threshold = Math.min(1, this.getFuzzySubstringThreshold(keywordLength)); // Stricter threshold
+        
+        // Slide through the text with fuzzy matching
+        for (let i = 0; i <= normalizedText.length - keywordLength; i++) {
+            const substring = normalizedText.substring(i, i + keywordLength);
+            const distance = levenshtein.get(substring, normalizedKeyword);
+            
+            if (distance <= threshold) {
+                return true;
+            }
+        }
+        
+        // Disable partial matches to prevent false positives
+        return false;
+    }
+    
+    // Remove diacritics from text (both Hebrew and Latin scripts)
+    removeDiacritics(text) {
+        if (!text || typeof text !== 'string') return '';
+        
+        let normalized = text;
+        
+        // Remove Hebrew niqqud (vowel marks) - corrected pattern
+        normalized = normalized.replace(/[\u05B0-\u05B9\u05BB-\u05BD\u05BF-\u05C7]/g, '');
+        
+        // Remove Latin diacritics
+        normalized = normalized.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        
+        return normalized;
+    }
+    
+    // Get fuzzy substring threshold based on phrase length
+    getFuzzySubstringThreshold(phraseLength) {
+        if (phraseLength <= 10) {
+            return this.fuzzySubstringThreshold.short;
+        } else if (phraseLength <= 20) {
+            return this.fuzzySubstringThreshold.medium;
+        } else {
+            return this.fuzzySubstringThreshold.long;
+        }
+    }
+    
     // Hebrew stemming/root extraction (simplified)
     extractHebrewRoot(word) {
         if (!this.containsHebrew(word) || word.length <= 2) {
@@ -754,10 +960,10 @@ class KeywordDetector {
     handlePlural(word) {
         if (word.length <= 3) return word; // Don't modify very short words
         
-        // Hebrew plural handling
-        if (this.containsHebrew(word)) {
-            return this.handleHebrewPlural(word);
-        }
+        // Hebrew plural handling - disabled to prevent false positives
+        // if (this.containsHebrew(word)) {
+        //     return this.handleHebrewPlural(word);
+        // }
         
         // Simple English plural handling
         if (word.endsWith('ies') && word.length > 4) {
@@ -889,10 +1095,10 @@ class KeywordDetector {
     getFuzzyThreshold(wordLength, word = null) {
         // Hebrew words are typically shorter, so use stricter thresholds
         if (word && this.containsHebrew(word)) {
-            // Hebrew-specific thresholds (stricter)
-            if (wordLength <= 3) return 1;      // 2-3 letter words → distance = 1
-            if (wordLength <= 6) return 1;       // 4-6 letters → distance = 1
-            return 2;                            // Longer words → distance = 2
+            // Hebrew-specific thresholds (very strict)
+            if (wordLength <= 3) return 0;      // 2-3 letter words → only exact matches
+            if (wordLength <= 6) return 0;       // 4-6 letters → only exact matches
+            return 1;                            // Longer words → distance = 1 max
         }
         
         // Standard thresholds for Latin scripts
@@ -1011,8 +1217,14 @@ class KeywordDetector {
         const bestDistance = Math.min(distance, damerauDistance);
         
         // Additional check: if distance is too high relative to word length, reject
-        // But allow distance = 2 for potential transpositions
-        if (bestDistance > threshold && bestDistance !== 2) {
+        // For Hebrew words, be extra strict about transpositions
+        if (this.containsHebrew(keyword)) {
+            // Hebrew words: only allow exact matches or very close matches (distance = 1)
+            if (bestDistance > 1) {
+                return false;
+            }
+        } else if (bestDistance > threshold) {
+            // Non-Hebrew words: respect the threshold strictly
             return false;
         }
         
@@ -1218,6 +1430,18 @@ class KeywordDetector {
                         break;
                     }
                 }
+                
+                // Diacritic-insensitive fuzzy substring match for multi-word keywords
+                if (this.performDiacriticInsensitiveSubstringMatch(messageText, keyword)) {
+                    detectedKeywords.push({ 
+                        keyword, 
+                        type: 'global', 
+                        matchType: 'diacritic-insensitive',
+                        token: keyword,
+                        phraseMatch: true,
+                        substringMatch: true
+                    });
+                }
             } else {
                 // Single word keyword matching
                 for (const token of tokens) {
@@ -1230,6 +1454,12 @@ class KeywordDetector {
                     // Fuzzy match
                     if (this.fuzzyMatch(token, normalizedKeyword)) {
                         detectedKeywords.push({ keyword, type: 'global', matchType: 'fuzzy', token });
+                        break;
+                    }
+                    
+                    // Diacritic-insensitive fuzzy substring match
+                    if (this.performDiacriticInsensitiveSubstringMatch(token, normalizedKeyword)) {
+                        detectedKeywords.push({ keyword, type: 'global', matchType: 'diacritic-insensitive', token });
                         break;
                     }
                 }
