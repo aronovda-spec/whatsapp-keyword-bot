@@ -86,7 +86,13 @@ class EmailChannel {
 
     getEmailForUser(userId) {
         if (!userId) return null;
-        return this.userEmailMap.get(userId.toString());
+        const userEmails = this.userEmailMap.get(userId.toString());
+        
+        // Support both single email (string) and multiple emails (array)
+        if (Array.isArray(userEmails)) {
+            return userEmails; // Return array for multiple emails
+        }
+        return userEmails ? [userEmails] : null; // Convert single email to array
     }
 
     async sendKeywordAlert(keyword, message, sender, group, messageId, phoneNumber = null, matchType = 'exact', matchedToken = null, attachment = null) {
@@ -137,11 +143,20 @@ class EmailChannel {
         }
 
         // If per-user email mapping exists, use it
-        const userEmail = this.getEmailForUser(targetUserId);
+        const userEmails = this.getEmailForUser(targetUserId);
         
-        if (userEmail) {
-            // Send to specific user's email only
-            return await this.sendToSpecificRecipient(keyword, message, sender, group, messageId, phoneNumber, matchType, matchedToken, attachment, userEmail);
+        if (userEmails && userEmails.length > 0) {
+            // Send to all user's emails
+            const results = await Promise.allSettled(
+                userEmails.map(email => 
+                    this.sendToSpecificRecipient(keyword, message, sender, group, messageId, phoneNumber, matchType, matchedToken, attachment, email)
+                )
+            );
+            
+            const successCount = results.filter(r => r.status === 'fulfilled').length;
+            console.log(`📧 Personal keyword alert sent to ${successCount}/${userEmails.length} emails for user ${targetUserId}`);
+            
+            return successCount > 0;
         } else {
             // Fallback to all recipients if no per-user mapping
             return await this.sendKeywordAlert(keyword, message, sender, group, messageId, phoneNumber, matchType, matchedToken, attachment);
@@ -154,7 +169,7 @@ class EmailChannel {
             
             await this.sendWithRetry(emailContent, recipientEmail);
             
-            console.log(`📧 Personal keyword alert sent to ${recipientEmail}`);
+            console.log(`📧 Email sent to ${recipientEmail}`);
             
             logBotEvent('personal_email_sent', {
                 keyword,
