@@ -122,7 +122,8 @@ class KeywordDetector {
             this.russianSoftSigns = ['ь', 'ъ'];
             
             // Russian common prefixes (for stripping)
-            this.russianPrefixes = ['при', 'под', 'над', 'под', 'от', 'об', 'в', 'во', 'за', 'на', 'по', 'про', 'с', 'со', 'у', 'из', 'до', 'для', 'без', 'между', 'через', 'к', 'ко', 'о', 'обо'];
+            // Note: removed single letters ('с', 'в', 'к', 'о', 'у', 'из', 'на', 'по', 'за') to prevent over-stripping
+            this.russianPrefixes = ['при', 'под', 'над', 'от', 'об', 'во', 'про', 'со', 'для', 'без', 'между', 'через', 'ко', 'обо'];
             
             // Russian common suffixes (for stripping)
             this.russianSuffixes = ['ся', 'сь', 'ать', 'ить', 'еть', 'уть', 'ыть', 'а', 'я', 'о', 'е', 'и', 'ы', 'у', 'ю', 'ом', 'ем', 'ой', 'ей', 'ах', 'ях', 'ов', 'ев', 'ами', 'ями'];
@@ -785,7 +786,7 @@ class KeywordDetector {
     }
 
     // Enhanced text normalization for fuzzy matching
-    normalizeText(text) {
+    normalizeText(text, skipKeyboardConversion = false) {
         if (!text || typeof text !== 'string') return '';
         
         let normalized = text;
@@ -804,7 +805,7 @@ class KeywordDetector {
         if (this.handleMixedLanguages) {
             // Process each token separately based on its language
             const tokens = normalized.split(/\s+/);
-            const processedTokens = tokens.map(token => this.normalizeMixedLanguageWord(token));
+            const processedTokens = tokens.map(token => this.normalizeMixedLanguageWordWithoutPrefixStrip(token));
             normalized = processedTokens.join(' ');
         } else if (this.handleHebrew && this.containsHebrew(normalized)) {
             // Fallback to original Hebrew-only processing
@@ -814,9 +815,19 @@ class KeywordDetector {
             normalized = this.normalizeRussian(normalized);
         }
         
-        // 2.1. Handle keyboard layout switching (before language-specific processing)
-        if (this.detectRussianKeyboardLayout) {
-            normalized = this.fixRussianKeyboardLayout(normalized);
+        // 2.1. Handle keyboard layout switching
+        // Only for pure English text that could be mistyped Russian
+        // SKIP for keyword normalization to prevent corrupting valid English keywords
+        if (this.detectRussianKeyboardLayout && !skipKeyboardConversion) {
+            const isPureEnglish = /^[a-zA-Z\s]+$/.test(normalized);
+            if (isPureEnglish && !this.containsHebrew(normalized)) {
+                // Try to convert English keyboard to Russian
+                // Only apply if result is valid Russian
+                const converted = this.fixRussianKeyboardLayout(normalized);
+                if (this.containsRussian(converted)) {
+                    normalized = converted;
+                }
+            }
         }
         
         // 2.1. Handle Hebrew numbers mixed with letters
@@ -1060,6 +1071,117 @@ class KeywordDetector {
         }
     }
     
+    // Normalize mixed language word WITHOUT prefix stripping (for tokenization)
+    normalizeMixedLanguageWordWithoutPrefixStrip(word) {
+        if (!this.handleMixedLanguages || !word) {
+            return word;
+        }
+        
+        const language = this.detectTokenLanguage(word);
+        
+        // For mixed words, just apply basic normalization (lowercase, diacritics, leetspeak)
+        // Prefix stripping will be handled later in tokenizeText
+        if (language === 'mixed') {
+            let normalized = word;
+            
+            // Basic lowercase
+            normalized = normalized.toLowerCase();
+            
+            // Remove diacritics
+            if (this.normalizeDiacritics) {
+                normalized = normalized.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+            }
+            
+            // Handle leetspeak
+            if (this.handleLeetspeak) {
+                // Handle English leetspeak
+                for (const [leet, normal] of Object.entries(this.leetspeakMap)) {
+                    const escapedLeet = leet.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                    normalized = normalized.replace(new RegExp(escapedLeet, 'g'), normal);
+                }
+                
+                // Handle Russian leetspeak
+                for (const [leet, normal] of Object.entries(this.russianLeetspeakMap)) {
+                    const escapedLeet = leet.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                    normalized = normalized.replace(new RegExp(escapedLeet, 'g'), normal);
+                }
+            }
+            
+            return normalized;
+        } else if (language === 'hebrew') {
+            // For Hebrew, do basic normalization without prefix stripping
+            return this.normalizeHebrewWithoutPrefixStrip(word);
+        } else if (language === 'english') {
+            return this.normalizeEnglish(word);
+        } else if (language === 'russian') {
+            // For Russian, do basic normalization without prefix stripping
+            return this.normalizeRussianWithoutPrefixStrip(word);
+        } else {
+            return word.toLowerCase();
+        }
+    }
+    
+    // Normalize Hebrew without prefix stripping
+    normalizeHebrewWithoutPrefixStrip(text) {
+        if (!this.handleHebrew || !text) return text;
+        
+        let processed = text.toLowerCase();
+        
+        // Remove stress marks
+        processed = processed.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        
+        // Normalize Hebrew final forms
+        if (this.normalizeHebrewFinalForms) {
+            processed = processed.replace(/ך/g, 'כ')
+                                .replace(/ם/g, 'מ')
+                                .replace(/ן/g, 'נ')
+                                .replace(/ף/g, 'פ')
+                                .replace(/ץ/g, 'צ');
+        }
+        
+        return processed;
+    }
+    
+    // Normalize Russian without prefix stripping
+    normalizeRussianWithoutPrefixStrip(text) {
+        if (!this.handleRussian || !text) return text;
+        
+        let processed = text;
+        
+        // 1. Remove stress marks (combining diacritics)
+        if (this.normalizeRussianStress) {
+            processed = processed.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        }
+        
+        // 2. Normalize soft/hard signs
+        if (this.normalizeRussianSoftSigns) {
+            processed = processed.replace(/[ьъ]/g, '');
+        }
+        
+        // 3. Handle Russian leetspeak
+        if (this.handleLeetspeak) {
+            for (const [leet, normal] of Object.entries(this.russianLeetspeakMap)) {
+                const escapedLeet = leet.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                processed = processed.replace(new RegExp(escapedLeet, 'g'), normal);
+            }
+        }
+        
+        // 4. Handle keyboard layout switching
+        if (this.detectRussianKeyboardLayout) {
+            processed = this.fixRussianKeyboardLayout(processed);
+        }
+        
+        // 5. Normalize letter elongation
+        if (this.handleRussianElongation) {
+            processed = processed.replace(/([а-я])\1{2,}/gi, '$1');
+        }
+        
+        // Convert to lowercase
+        processed = processed.toLowerCase();
+        
+        return processed;
+    }
+    
     // Normalize English text (separate from Hebrew processing)
     normalizeEnglish(text) {
         if (!text || typeof text !== 'string') return '';
@@ -1194,19 +1316,57 @@ class KeywordDetector {
         const normalized = this.normalizeText(text);
         let tokens = normalized.split(/\s+/).filter(token => token.length > 0);
         
-        // Remove stop words if enabled
-        if (this.removeStopWords) {
-            tokens = tokens.filter(token => {
-                // Check both English and Hebrew stop words
-                const isEnglishStopWord = this.stopWords.has(token);
-                const isHebrewStopWord = this.hebrewStopWords.has(token);
-                return !isEnglishStopWord && !isHebrewStopWord;
+        // Split mixed-language tokens (e.g., "срочноurgent" -> ["срочно", "urgent"])
+        // Do this BEFORE prefix stripping to avoid splitting incorrectly
+        if (this.handleMixedLanguages) {
+            tokens = this.splitMixedLanguageTokens(tokens);
+        }
+        
+        // Apply keyboard layout conversion to pure English tokens
+        if (this.detectRussianKeyboardLayout) {
+            tokens = tokens.map(token => {
+                const isPureEnglish = /^[a-zA-Z]+$/.test(token);
+                if (isPureEnglish && !this.containsHebrew(token)) {
+                    const converted = this.fixRussianKeyboardLayout(token);
+                    if (this.containsRussian(converted)) {
+                        return converted;
+                    }
+                }
+                return token;
             });
         }
         
-        // Handle Hebrew prefixes if text contains Hebrew
+        // Remove stop words if enabled
+        if (this.removeStopWords) {
+            tokens = tokens.filter(token => {
+                // Check English, Hebrew, and Russian stop words
+                const isEnglishStopWord = this.stopWords.has(token);
+                const isHebrewStopWord = this.hebrewStopWords.has(token);
+                const isRussianStopWord = this.russianStopWords.has(token);
+                return !isEnglishStopWord && !isHebrewStopWord && !isRussianStopWord;
+            });
+        }
+        
+        // Handle Hebrew prefixes if text contains Hebrew (only for pure Hebrew tokens)
         if (this.handleHebrew && this.containsHebrew(text)) {
-            tokens = tokens.map(token => this.stripHebrewPrefixesFromWord(token));
+            tokens = tokens.map(token => {
+                // Only strip prefixes if token is pure Hebrew, not mixed
+                if (this.containsHebrew(token) && !this.containsMultipleLanguages(token)) {
+                    return this.stripHebrewPrefixesFromWord(token);
+                }
+                return token;
+            });
+        }
+        
+        // Handle Russian prefixes if text contains Russian (only for pure Russian tokens)
+        if (this.handleRussian && this.containsRussian(text)) {
+            tokens = tokens.map(token => {
+                // Only strip prefixes if token is pure Russian, not mixed
+                if (this.containsRussian(token) && !this.containsMultipleLanguages(token)) {
+                    return this.stripRussianPrefixesFromWord(token);
+                }
+                return token;
+            });
         }
         
         // Note: Hebrew plural handling is done during keyword comparison, not tokenization
@@ -1216,6 +1376,92 @@ class KeywordDetector {
         // Plurals are handled during keyword comparison, not tokenization
         
         return tokens;
+    }
+    
+    // Split mixed-language tokens into separate parts
+    splitMixedLanguageTokens(tokens) {
+        const splitTokens = [];
+        
+        for (const token of tokens) {
+            // Check if token contains mixed languages
+            if (this.containsMultipleLanguages(token)) {
+                // Split the token into language-specific parts
+                const parts = this.splitTokenByLanguage(token);
+                splitTokens.push(...parts);
+            } else {
+                splitTokens.push(token);
+            }
+        }
+        
+        return splitTokens;
+    }
+    
+    // Check if a token contains multiple languages
+    containsMultipleLanguages(token) {
+        if (!token) return false;
+        
+        const hasHebrew = this.containsHebrew(token);
+        const hasEnglish = this.containsEnglish(token);
+        const hasRussian = this.containsRussian(token);
+        
+        // Count languages present
+        let languages = 0;
+        if (hasHebrew) languages++;
+        if (hasEnglish) languages++;
+        if (hasRussian) languages++;
+        
+        return languages >= 2;
+    }
+    
+    // Split a mixed-language token into language-specific parts
+    splitTokenByLanguage(token) {
+        if (!token) return [token];
+        
+        const parts = [];
+        let currentPart = '';
+        let currentLanguage = null;
+        
+        for (const char of token) {
+            const charLanguage = this.detectCharLanguage(char);
+            
+            if (charLanguage !== currentLanguage) {
+                // Start a new part
+                if (currentPart && currentLanguage) {
+                    parts.push(currentPart);
+                }
+                currentPart = char;
+                currentLanguage = charLanguage;
+            } else {
+                currentPart += char;
+            }
+        }
+        
+        // Add the last part
+        if (currentPart && currentLanguage) {
+            parts.push(currentPart);
+        }
+        
+        return parts;
+    }
+    
+    // Strip Russian prefixes from a word (similar to Hebrew prefix stripping)
+    stripRussianPrefixesFromWord(token) {
+        if (!this.handleRussian || !token || token.length <= 3) return token;
+        
+        if (!this.containsRussian(token)) return token;
+        
+        // Try to strip Russian prefixes
+        for (const prefix of this.russianPrefixes) {
+            if (token.toLowerCase().startsWith(prefix.toLowerCase())) {
+                const withoutPrefix = token.substring(prefix.length);
+                // Only strip if what's left is a reasonable word (at least 2 characters)
+                if (withoutPrefix.length >= 2) {
+                    return withoutPrefix;
+                }
+            }
+        }
+        
+        return token;
     }
     
     // Handle plural/singular forms
@@ -1744,19 +1990,28 @@ class KeywordDetector {
     fixRussianKeyboardLayout(text) {
         if (!text) return text;
         
-        let fixed = text;
-        
         // Check if text looks like English keys on Russian layout
         const englishPattern = /^[qwertyuiopasdfghjklzxcvbnmQWERTYUIOPASDFGHJKLZXCVBNM\s]+$/;
         
-        if (englishPattern.test(text)) {
-            // Convert English keys to Russian
-            for (const [english, russian] of Object.entries(this.russianKeyboardLayoutMap)) {
-                fixed = fixed.replace(new RegExp(english, 'g'), russian);
-            }
+        if (!englishPattern.test(text)) {
+            return text; // Not pure English letters, don't convert
         }
         
-        return fixed;
+        // Check if the result would be a valid Russian word
+        // Only convert if the resulting text contains Cyrillic characters
+        let fixed = text;
+        for (const [english, russian] of Object.entries(this.russianKeyboardLayoutMap)) {
+            fixed = fixed.replace(new RegExp(english, 'g'), russian);
+        }
+        
+        // Only apply the conversion if the result contains Russian characters
+        // This prevents converting legitimate English words
+        if (this.containsRussian(fixed)) {
+            return fixed;
+        }
+        
+        // If conversion didn't result in Russian, don't apply it
+        return text;
     }
     
     // Fix Russian keyboard typos
@@ -2007,7 +2262,8 @@ class KeywordDetector {
         
         // Check global keywords
         for (const keyword of this.keywords) {
-            const normalizedKeyword = this.normalizeText(keyword);
+            // Skip keyboard conversion for keywords to prevent corrupting valid English keywords
+            const normalizedKeyword = this.normalizeText(keyword, true);
             
             // Check if it's a multi-word keyword
             if (this.multiWordKeywords && normalizedKeyword.includes(' ')) {
@@ -2120,7 +2376,8 @@ class KeywordDetector {
             for (const userId of groupSubscribers) {
                 const personalKeywords = this.getPersonalKeywords(userId);
                 for (const keyword of personalKeywords) {
-                    const normalizedKeyword = this.normalizeText(keyword);
+                    // Skip keyboard conversion for personal keywords too
+                    const normalizedKeyword = this.normalizeText(keyword, true);
                     
                     for (const token of tokens) {
                         // Exact match first
