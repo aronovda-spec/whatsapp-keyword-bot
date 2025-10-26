@@ -247,8 +247,13 @@ class WhatsAppKeywordBot {
 
     async handleMessage(messageData, phoneNumber) {
         try {
-            // Validate message data
-            if (!messageData || !messageData.text || typeof messageData.text !== 'string') {
+            // Validate message data - must have text OR attachment
+            if (!messageData) {
+                return;
+            }
+
+            // If no text and no attachment, skip
+            if ((!messageData.text || typeof messageData.text !== 'string') && !messageData.attachment) {
                 return;
             }
 
@@ -275,8 +280,17 @@ class WhatsAppKeywordBot {
             connection.antiBan.trackMessageProcessing();
             this.stats.messagesProcessed++;
 
-            // Detect keywords in the message (global + personal for subscribed users only)
-            const detectedKeywords = this.keywordDetector.detectKeywords(messageData.text, messageData.group);
+            // Prepare text for keyword detection (combine text and file name if present)
+            let textToSearch = messageData.text || '';
+            
+            // If there's an attachment with a filename, also search the filename for keywords
+            if (messageData.attachment && messageData.attachment.filename) {
+                // Combine filename with message text for keyword detection
+                textToSearch = (textToSearch ? textToSearch + '\n' : '') + messageData.attachment.filename;
+            }
+
+            // Detect keywords in the message text and file name (global + personal for subscribed users only)
+            const detectedKeywords = this.keywordDetector.detectKeywords(textToSearch, messageData.group);
 
             if (detectedKeywords.length > 0) {
                 this.stats.keywordsDetected += detectedKeywords.length;
@@ -296,7 +310,8 @@ class WhatsAppKeywordBot {
                             messageData.id,
                             phoneNumber,
                             keywordData.matchType,
-                            keywordData.token
+                            keywordData.token,
+                            messageData.attachment
                         );
 
                         if (success) {
@@ -324,7 +339,8 @@ class WhatsAppKeywordBot {
                             phoneNumber,
                             keywordData.userId,
                             keywordData.matchType,
-                            keywordData.token
+                            keywordData.token,
+                            messageData.attachment
                         );
 
                         if (success) {

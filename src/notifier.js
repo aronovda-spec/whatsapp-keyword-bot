@@ -50,14 +50,14 @@ class Notifier {
         }
     }
 
-    async sendKeywordAlert(keyword, message, sender, group, messageId, phoneNumber = null, matchType = 'exact', matchedToken = null) {
+    async sendKeywordAlert(keyword, message, sender, group, messageId, phoneNumber = null, matchType = 'exact', matchedToken = null, attachment = null) {
         if (!this.enabled) {
             console.log('📱 Telegram notifications disabled');
             return false;
         }
 
         try {
-            const alertMessage = this.formatAlertMessage(keyword, message, sender, group, messageId, phoneNumber, matchType, matchedToken);
+            const alertMessage = this.formatAlertMessage(keyword, message, sender, group, messageId, phoneNumber, matchType, matchedToken, attachment);
             
             // Send to all authorized chat IDs only
             const authorizedChatIds = this.chatIds.filter(chatId => 
@@ -105,7 +105,7 @@ class Notifier {
         }
     }
 
-    async sendPersonalKeywordAlert(keyword, message, sender, group, messageId, phoneNumber = null, targetUserId = null, matchType = 'exact', matchedToken = null) {
+    async sendPersonalKeywordAlert(keyword, message, sender, group, messageId, phoneNumber = null, targetUserId = null, matchType = 'exact', matchedToken = null, attachment = null) {
         if (!this.enabled) {
             console.log('📱 Telegram notifications disabled');
             return false;
@@ -117,7 +117,7 @@ class Notifier {
         }
 
         try {
-            const alertMessage = this.formatPersonalAlertMessage(keyword, message, sender, group, messageId, phoneNumber, matchType, matchedToken);
+            const alertMessage = this.formatPersonalAlertMessage(keyword, message, sender, group, messageId, phoneNumber, matchType, matchedToken, attachment);
             
             // Send only to the specific user
             const success = await this.sendWithRetry(alertMessage, targetUserId);
@@ -147,7 +147,7 @@ class Notifier {
         }
     }
 
-    formatPersonalAlertMessage(keyword, message, sender, group, messageId, phoneNumber = null, matchType = 'exact', matchedToken = null) {
+    formatPersonalAlertMessage(keyword, message, sender, group, messageId, phoneNumber = null, matchType = 'exact', matchedToken = null, attachment = null) {
         const timestamp = new Date().toLocaleString();
         const phoneInfo = phoneNumber ? ` (via ${phoneNumber})` : '';
         
@@ -158,12 +158,25 @@ class Notifier {
             matchInfo = `\n✅ <b>Exact Match</b>`;
         }
         
+        // Add attachment info if present
+        let attachmentInfo = '';
+        if (attachment) {
+            attachmentInfo = `\n📎 <b>Attachment:</b> ${attachment.type}`;
+            if (attachment.filename) {
+                attachmentInfo += ` - ${this.escapeHtml(attachment.filename)}`;
+            }
+            if (attachment.size) {
+                const sizeKB = (attachment.size / 1024).toFixed(2);
+                attachmentInfo += ` (${sizeKB} KB)`;
+            }
+        }
+        
         return `🔑 <b>Personal Keyword Alert</b>
 
 🚨 <b>Keyword:</b> ${this.escapeHtml(keyword)}${matchInfo}
 👤 <b>From:</b> ${this.escapeHtml(sender)}
 📱 <b>Group:</b> ${this.escapeHtml(group)}${phoneInfo}
-🕐 <b>Time:</b> ${timestamp}
+🕐 <b>Time:</b> ${timestamp}${attachmentInfo}
 
 💬 <b>Message:</b>
 "${this.escapeHtml(message.substring(0, 200))}${message.length > 200 ? '...' : ''}"
@@ -195,7 +208,7 @@ class Notifier {
         throw lastError;
     }
 
-    formatAlertMessage(keyword, message, sender, group, messageId, phoneNumber = null, matchType = 'exact', matchedToken = null) {
+    formatAlertMessage(keyword, message, sender, group, messageId, phoneNumber = null, matchType = 'exact', matchedToken = null, attachment = null) {
         const timestamp = new Date().toLocaleString();
         const truncatedMessage = message.length > 200 ? message.substring(0, 200) + '...' : message;
         
@@ -206,13 +219,26 @@ class Notifier {
             matchInfo = `\n✅ <b>Exact Match</b>`;
         }
         
+        // Add attachment info if present
+        let attachmentInfo = '';
+        if (attachment) {
+            attachmentInfo = `\n📎 <b>Attachment:</b> ${attachment.type}`;
+            if (attachment.filename) {
+                attachmentInfo += ` - ${this.escapeHtml(attachment.filename)}`;
+            }
+            if (attachment.size) {
+                const sizeKB = (attachment.size / 1024).toFixed(2);
+                attachmentInfo += ` (${sizeKB} KB)`;
+            }
+        }
+        
         return `🚨 <b>Keyword Alert!</b>
 
 🔍 <b>Keyword:</b> ${keyword}${matchInfo}
 👤 <b>Sender:</b> ${sender || 'Unknown'}
 👥 <b>Group:</b> ${group || 'Unknown'}
 📱 <b>Detected by:</b> ${phoneNumber || 'Unknown Phone'}
-🕐 <b>Time:</b> ${timestamp}
+🕐 <b>Time:</b> ${timestamp}${attachmentInfo}
 
 💬 <b>Message:</b>
 ${this.escapeHtml(truncatedMessage)}

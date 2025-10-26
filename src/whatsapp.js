@@ -235,15 +235,80 @@ class WhatsAppConnection {
             // Apply human-like delay before processing
             await this.antiBan.humanLikeDelay();
 
-            // Only process text messages
-            if (!message.message?.conversation && !message.message?.extendedTextMessage?.text) {
-                return;
+            // Extract message content and type
+            const msg = message.message;
+            let messageText = '';
+            let attachment = null;
+
+            // Check for text content
+            if (msg?.conversation) {
+                messageText = msg.conversation;
+            } else if (msg?.extendedTextMessage?.text) {
+                messageText = msg.extendedTextMessage.text;
+                // Extended text may also have caption for media
+                if (msg.extendedTextMessage?.contextInfo?.quotedMessage) {
+                    // Handle quote, but focus on the text itself
+                }
             }
 
-            const messageText = message.message.conversation ||
-                              message.message.extendedTextMessage?.text || '';
+            // Check for attachments (documents, images, audio, video)
+            if (msg?.documentMessage) {
+                const doc = msg.documentMessage;
+                attachment = {
+                    type: 'document',
+                    mimetype: doc.mimetype || 'unknown',
+                    filename: doc.fileName || 'unnamed_file',
+                    size: doc.fileLength || 0,
+                    caption: doc.caption || ''
+                };
+                // Add caption to text if present
+                if (doc.caption) {
+                    messageText += (messageText ? '\n' : '') + doc.caption;
+                }
+            } else if (msg?.imageMessage) {
+                const img = msg.imageMessage;
+                attachment = {
+                    type: 'image',
+                    mimetype: img.mimetype || 'image/jpeg',
+                    size: img.fileLength || 0,
+                    caption: img.caption || ''
+                };
+                // Add caption to text if present
+                if (img.caption) {
+                    messageText += (messageText ? '\n' : '') + img.caption;
+                }
+            } else if (msg?.videoMessage) {
+                const vid = msg.videoMessage;
+                attachment = {
+                    type: 'video',
+                    mimetype: vid.mimetype || 'video/mp4',
+                    size: vid.fileLength || 0,
+                    caption: vid.caption || ''
+                };
+                // Add caption to text if present
+                if (vid.caption) {
+                    messageText += (messageText ? '\n' : '') + vid.caption;
+                }
+            } else if (msg?.audioMessage) {
+                const aud = msg.audioMessage;
+                attachment = {
+                    type: 'audio',
+                    mimetype: aud.mimetype || 'audio/mp3',
+                    size: aud.fileLength || 0,
+                    caption: ''
+                };
+            } else if (msg?.stickerMessage) {
+                attachment = {
+                    type: 'sticker',
+                    mimetype: 'image/webp',
+                    caption: ''
+                };
+            }
 
-            if (!messageText.trim()) return;
+            // If no text and no attachment, skip
+            if (!messageText.trim() && !attachment) {
+                return;
+            }
 
             // Extract message metadata
             const sender = message.key.participant || message.key.remoteJid;
@@ -257,21 +322,36 @@ class WhatsAppConnection {
                 console.log(`📱 Group Message Detected:`);
                 console.log(`   Group ID: ${chatId}`);
                 console.log(`   Sender: ${sender}`);
-                console.log(`   Message: ${messageText.substring(0, 50)}...`);
+                if (attachment) {
+                    console.log(`   Attachment: ${attachment.type} - ${attachment.filename || 'no filename'}`);
+                }
+                if (messageText) {
+                    console.log(`   Message: ${messageText.substring(0, 50)}...`);
+                }
                 console.log(`   Time: ${new Date().toLocaleString()}`);
                 console.log('');
             } else if (isPrivate) {
                 console.log(`👤 Private Chat Message Detected:`);
                 console.log(`   User ID: ${chatId}`);
                 console.log(`   Sender: ${sender}`);
-                console.log(`   Message: ${messageText.substring(0, 50)}...`);
+                if (attachment) {
+                    console.log(`   Attachment: ${attachment.type} - ${attachment.filename || 'no filename'}`);
+                }
+                if (messageText) {
+                    console.log(`   Message: ${messageText.substring(0, 50)}...`);
+                }
                 console.log(`   Time: ${new Date().toLocaleString()}`);
                 console.log('');
             } else if (isBroadcast) {
                 console.log(`📢 Broadcast Message Detected:`);
                 console.log(`   Broadcast ID: ${chatId}`);
                 console.log(`   Sender: ${sender}`);
-                console.log(`   Message: ${messageText.substring(0, 50)}...`);
+                if (attachment) {
+                    console.log(`   Attachment: ${attachment.type} - ${attachment.filename || 'no filename'}`);
+                }
+                if (messageText) {
+                    console.log(`   Message: ${messageText.substring(0, 50)}...`);
+                }
                 console.log(`   Time: ${new Date().toLocaleString()}`);
                 console.log('');
             }
@@ -284,7 +364,8 @@ class WhatsAppConnection {
                 sender: this.getSenderName(message),
                 group: isGroup ? this.getGroupName(chatId) : 
                        isPrivate ? 'Private Chat' : 
-                       isBroadcast ? 'Broadcast' : 'Unknown'
+                       isBroadcast ? 'Broadcast' : 'Unknown',
+                attachment: attachment // Add attachment info
             };
 
             // Emit message event for keyword detection
