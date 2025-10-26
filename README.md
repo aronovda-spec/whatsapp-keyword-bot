@@ -7,8 +7,11 @@ A cloud-based bot that monitors WhatsApp group messages for specific keywords an
 ### 🔍 Core Monitoring
 - ✅ WhatsApp connection using Baileys
 - ✅ Real-time message monitoring
-- ✅ Keyword detection in text messages (33 keywords in multiple languages)
-- ✅ Telegram notifications
+- ✅ Keyword detection in text messages (52 keywords in multiple languages)
+- ✅ **Telegram notifications**
+- ✅ **Email notifications** (Gmail, SendGrid, etc.)
+- ✅ **File attachment detection** (PDF, Excel, Word, Images)
+- ✅ **Smart repeating reminders** for personal keywords
 - ✅ Comprehensive logging
 - ✅ Cloud deployment ready
 
@@ -20,7 +23,10 @@ A cloud-based bot that monitors WhatsApp group messages for specific keywords an
 - ✅ **Group Filtering**: Monitor only specific groups or all groups
 
 ### 🌍 Advanced Features
-- ✅ **Multi-Language Support**: English, Hebrew, Russian keywords
+- ✅ **Multi-Language Support**: English, Hebrew, Russian keywords with fuzzy matching
+- ✅ **File Content Extraction**: Extract text from PDFs, Excel, Word documents
+- ✅ **Multi-Channel Notifications**: Telegram + Email
+- ✅ **Repeating Reminders**: Personal keywords send reminders until acknowledged
 - ✅ **Per-User Timezone**: Each user can set their own timezone
 - ✅ **Anti-Ban Protection**: Rate limiting, human-like behavior, sleep schedules
 - ✅ **Authorization System**: Admin-controlled user access
@@ -61,6 +67,8 @@ A cloud-based bot that monitors WhatsApp group messages for specific keywords an
 - `/start` - Start the bot
 - `/status` - Check bot status
 - `/help` - Show this help
+- `/ok` - Acknowledge reminder and stop
+- `/reminders` - Show active reminders
 - `/sleep` - Check sleep status
 
 ### 📱 Group Management
@@ -107,6 +115,15 @@ A cloud-based bot that monitors WhatsApp group messages for specific keywords an
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token
 TELEGRAM_CHAT_ID=your_telegram_chat_id
 TELEGRAM_ADDITIONAL_CHAT_IDS=user1_id,user2_id,user3_id
+
+# Email Notifications (Optional)
+EMAIL_ENABLED=true
+EMAIL_SMTP_HOST=smtp.gmail.com
+EMAIL_SMTP_PORT=587
+EMAIL_SMTP_USER=your_email@gmail.com
+EMAIL_SMTP_PASS=your_app_password
+EMAIL_TO=user1@mail.com,user2@mail.com
+
 PORT=3000
 NODE_ENV=production
 ```
@@ -155,23 +172,29 @@ src/
 ├── bot.js                    # Main bot application
 ├── whatsapp.js              # WhatsApp connection handler
 ├── keywordDetector.js       # Keyword detection logic
-├── notifier.js              # Telegram notification handler
+├── notifier.js              # Multi-channel notifications (Telegram + Email)
+├── reminderManager.js       # Repeating reminders for personal keywords
+├── fileExtractor.js          # File content extraction (PDF, Excel, Word)
 ├── telegram-commands.js     # Telegram command handler
 ├── telegram-auth.js         # User authorization system
 ├── anti-ban.js              # Anti-ban protection
 ├── keep-alive.js            # Anti-sleep mechanism
-└── logger.js                # Logging configuration
+├── logger.js                # Logging configuration
+└── notifiers/
+    └── emailChannel.js      # Email notification channel
 
 config/
 ├── keywords.json            # Keyword configuration
+├── file-extraction.json     # File content extraction settings
 ├── settings.json            # Bot settings
 ├── multi-phone.json         # Multi-phone configuration
 ├── telegram-auth.json       # User authorization data
 ├── user-preferences.json    # Per-user timezone preferences
 ├── group-subscriptions.json # Group subscription data
-├── personal-keywords.json  # Personal keyword management
-├── non-active-hours.json   # Sleep schedule configuration
-└── discovered-groups.json   # Auto-discovered groups
+├── personal-keywords.json   # Personal keyword management
+├── non-active-hours.json    # Sleep schedule configuration
+├── discovered-groups.json   # Auto-discovered groups
+└── active-reminders.json    # Active reminder tracking
 
 sessions/                    # WhatsApp session storage
 logs/                        # Log files
@@ -218,22 +241,38 @@ services:
 
 ## 🆕 Recent Enhancements
 
+### File Attachment Support (NEW!)
+- **File Detection**: Detects PDF, Excel, Word, Images, Audio, Videos
+- **Filename Keywords**: Detects keywords in file names (multi-language)
+- **File Content Extraction**: Extract text from PDFs, Excel, Word documents
+- **Image OCR**: Ready for implementation (disabled by default)
+- **Metadata Display**: Shows file type, size, and name in notifications
+
+### Multi-Channel Notifications (NEW!)
+- **Telegram**: Instant messaging notifications (already implemented)
+- **Email**: HTML formatted email notifications (NEW!)
+- **Parallel Sending**: Both channels work simultaneously
+- **Free Tier Compatible**: Works on free Render
+
+### Repeating Reminders for Personal Keywords (NEW!)
+- **Smart Schedule**: Reminders at 0min, 1min, 2min, 15min, 1hour
+- **User Control**: Type `/ok` to acknowledge and stop
+- **Auto-Stop**: Stops after 1 hour or when acknowledged
+- **Same Keyword**: Detecting same keyword restarts timer
+- **Never Miss**: Ensures critical personal messages are seen
+
 ### Enhanced User Management
-- **`/users` Command**: Now shows all users with clear admin badges (👑 for admins, 👤 for users)
-- **`/admins` Command**: New command to show only admin users with their privileges
-- **Role Visibility**: Easy identification of who has admin privileges
-- **User Statistics**: Summary counts of total users, admins, and regular users
+- **`/users` Command**: Shows all users with clear admin badges (👑 for admins, 👤 for users)
+- **`/admins` Command**: Shows only admin users with their privileges
+- **Role Visibility**: Easy identification of admin privileges
+- **User Statistics**: Summary counts of users
 
-### Keyword Management System
+### Advanced Keyword System
 - **Global Keywords**: Admin-managed keywords that notify all users
-- **Personal Keywords**: User-managed keywords that notify only the specific user
-- **Multilingual Support**: Full Unicode support for any language (Hebrew, Russian, Arabic, etc.)
+- **Personal Keywords**: User-managed keywords with repeating reminders
+- **Fuzzy Matching**: Handles typos in all languages (Hebrew, English, Russian)
+- **Multi-Language**: Full Unicode support (Hebrew, Russian, Arabic, etc.)
 - **Easy Management**: Simple commands to add/remove keywords
-
-### Project Optimization
-- **File Cleanup**: Removed unused files for cleaner project structure
-- **Code Integration**: Multi-phone, anti-ban, and multilingual features fully integrated
-- **Performance**: Optimized codebase with no redundant implementations
 
 ## 🚀 Usage Examples
 
@@ -252,6 +291,24 @@ services:
 - **User A**: Sets Israeli timezone with `/israel`
 - **User B**: Sets US timezone with `/usa`
 - **Each user**: Gets sleep status in their local time
+
+### Personal Keywords with Reminders
+- **User adds**: `/addmykeyword urgent`
+- **WhatsApp message**: "urgent meeting at 3pm"
+- **User receives**: 
+  - Immediate alert at 0min
+  - Reminder at 1min
+  - Reminder at 2min
+  - Reminder at 15min
+  - Final reminder at 1hour
+- **User types**: `/ok`
+- **Reminders stop**: No more notifications
+
+### File Attachments
+- **WhatsApp file**: "urgent_report.pdf"
+- **Bot detects**: Filename keyword "urgent"
+- **Bot extracts**: Text from PDF content
+- **User receives**: Notification with file info + extracted content
 
 ## 📝 License
 
