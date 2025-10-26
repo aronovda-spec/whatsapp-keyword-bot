@@ -1,0 +1,12 @@
+{
+  "authorizedUsers": [
+    "YOUR_TELEGRAM_USER_ID"
+  ],
+  "adminUsers": [
+    "YOUR_TELEGRAM_USER_ID"
+  ],
+  "userNames": {
+    "YOUR_TELEGRAM_USER_ID": "Your Name"
+  }
+}
+
