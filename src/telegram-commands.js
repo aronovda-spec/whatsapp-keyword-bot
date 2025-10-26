@@ -243,8 +243,8 @@ class TelegramCommandHandler {
                     '/start - Start the bot\n' +
                     '/status - Check bot status\n' +
                     '/help - Show this help\n' +
-                    '/ok - Acknowledge reminder and stop\n' +
-                    '/reminders - Show active reminders\n' +
+                    '/ok - Stop repeating reminders for your personal keywords\n' +
+                    '/reminders - Show your active reminder notifications\n' +
                     '/sleep - Check sleep status\n\n' +
                     '📱 Group Management:\n' +
                     '/discover - Show all groups bot is in\n' +
