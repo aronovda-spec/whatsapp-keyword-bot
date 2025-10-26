@@ -1,156 +1,273 @@
-# Multi-User Notification Setup
+# Multi-User & Multi-Email Setup Guide
 
-## 🎯 Single Virtual Number → Multiple Users
+## 📧 Multiple Email Recipients
 
-### **How It Works:**
-- **1 Virtual Number** = 1 WhatsApp Bot Account
-- **Multiple Users** = Multiple Telegram Chat IDs
-- **Bot monitors groups** → Sends alerts to ALL users
+### How It Works
+The bot supports **unlimited email recipients**! Just add comma-separated emails to `EMAIL_TO`.
 
-## 📱 Configuration Options:
+### .env Configuration for Multiple Emails
 
-### **Option 1: Multiple Telegram Users (Recommended)**
+```env
+EMAIL_ENABLED=true
+EMAIL_SMTP_HOST=smtp.gmail.com
+EMAIL_SMTP_PORT=587
+EMAIL_SMTP_USER=your_email@gmail.com
+EMAIL_SMTP_PASS=your_app_password_here
+EMAIL_TO=user1@gmail.com,user2@yahoo.com,user3@company.com,user4@gmail.com
+```
 
-#### **1. Get Telegram Chat IDs:**
+### Example Scenarios
+
+#### Scenario 1: Team Notifications
+Send to 3 team members:
+```env
+EMAIL_TO=alice@company.com,bob@company.com,charlie@company.com
+```
+
+#### Scenario 2: Personal + Backup
+Your primary email plus backup:
+```env
+EMAIL_TO=you@gmail.com,backup@gmail.com
+```
+
+#### Scenario 3: Multiple Personal Emails
+Send to your work and personal emails:
+```env
+EMAIL_TO=you@gmail.com,you@company.com
+```
+
+### How Bot Handles Multiple Emails
+
+1. **Global Keywords**: All recipients get notification
+2. **Personal Keywords**: All recipients get notification (by design)
+3. **Error Handling**: If one email fails, others still get it
+4. **Retry Logic**: Each email gets 3 retry attempts
+
+Example output when sending:
+```
+📧 Email sent to 3/3 recipients
+```
+
+If one fails:
+```
+⚠️ Failed to send email to 1 recipients
+📧 Email sent to 2/3 recipients
+```
+
+## 👥 Multiple Telegram Users
+
+### How It Works
+Add additional users via `TELEGRAM_ADDITIONAL_CHAT_IDS` environment variable.
+
+### .env Configuration for Multiple Users
+
+```env
+TELEGRAM_BOT_TOKEN=123456:ABC-defghijklmnopqrstuvwxyz
+TELEGRAM_CHAT_ID=1022850808
+
+# Add more users (comma-separated)
+TELEGRAM_ADDITIONAL_CHAT_IDS=123456789,987654321,555123456
+```
+
+### Finding Telegram Chat IDs
+
+1. Start a chat with [@userinfobot](https://t.me/userinfobot)
+2. Send any message
+3. Bot replies with your ID
+4. Copy the ID number
+
+### Adding Users Dynamically
+
+You can also add users via Telegram commands:
+
+#### As Admin:
+```
+/approve 123456789
+```
+
+This will:
+- Add user to authorized users
+- User can now receive notifications
+- Saves to `config/telegram-auth.json`
+
+#### Check All Users:
+```
+/users
+```
+
+Shows:
+- All authorized users (👑 = admin, 👤 = user)
+- User statistics
+- Total users count
+
+## 🎯 How Both Systems Work Together
+
+### Example Setup
+
+**Your .env:**
+```env
+# Telegram - Primary user (you)
+TELEGRAM_CHAT_ID=1022850808
+
+# Telegram - Additional users
+TELEGRAM_ADDITIONAL_CHAT_IDS=123456789,987654321
+
+# Email - Multiple recipients
+EMAIL_ENABLED=true
+EMAIL_SMTP_HOST=smtp.gmail.com
+EMAIL_SMTP_PORT=587
+EMAIL_SMTP_USER=your_email@gmail.com
+EMAIL_SMTP_PASS=your_app_password
+EMAIL_TO=you@gmail.com,colleague@company.com,backup@gmail.com
+```
+
+### When Keywords Are Detected
+
+**Global Keywords:**
+- ✅ All Telegram users get notification
+- ✅ All Email users get notification
+
+**Personal Keywords:**
+- ✅ User who added the keyword gets Telegram notification
+- ✅ User who added the keyword gets Email notification
+- ⏰ Repeating reminders activated for that user only
+
+## 🔐 Authorization System
+
+### User Levels
+
+#### 1. **Primary User** (TELEGRAM_CHAT_ID)
+- First user added
+- Receives all notifications
+- Has admin privileges by default
+
+#### 2. **Additional Users** (TELEGRAM_ADDITIONAL_CHAT_IDS)
+- Receives all notifications
+- Regular user by default
+- Can be promoted to admin via `/admin` panel
+
+#### 3. **Approved Users** (via /approve command)
+- Added dynamically by admin
+- Regular user privileges
+- Can manage personal keywords
+
+### Admin Privileges
+
+Admins can:
+- ✅ `/approve <user_id>` - Add new users
+- ✅ `/reject <user_id>` - Remove users
+- ✅ `/pending` - Show approval requests
+- ✅ `/addkeyword <word>` - Add global keywords
+- ✅ `/removekeyword <word>` - Remove global keywords
+- ✅ `/users` - List all users
+- ✅ `/admins` - List admin users
+
+Regular users can:
+- ✅ `/addmykeyword <word>` - Add personal keywords
+- ✅ `/removemykeyword <word>` - Remove personal keywords
+- ✅ `/mykeywords` - List their personal keywords
+- ✅ `/mygroups` - Manage group subscriptions
+- ✅ `/ok` - Acknowledge reminders
+
+## 📊 Complete Configuration Example
+
+### For a Team of 5 People
+
+**Your .env:**
+```env
+# Telegram Bot
+TELEGRAM_BOT_TOKEN=123456:ABC...
+TELEGRAM_CHAT_ID=1022850808
+TELEGRAM_ADDITIONAL_CHAT_IDS=123456789,987654321,555123456,444567890
+
+# Email Notifications
+EMAIL_ENABLED=true
+EMAIL_SMTP_HOST=smtp.gmail.com
+EMAIL_SMTP_PORT=587
+EMAIL_SMTP_USER=team@gmail.com
+EMAIL_SMTP_PASS=your_app_password
+EMAIL_TO=admin@company.com,dev1@company.com,dev2@company.com,dev3@company.com,dev4@company.com
+
+# Server
+PORT=3000
+NODE_ENV=production
+```
+
+### Result
+
+- **5 Telegram users** receive notifications
+- **5 Email addresses** receive notifications
+- **Global keywords**: All 10 recipients get notified
+- **Personal keywords**: Specific user gets notified (Telegram + Email + Reminders)
+
+## 💡 Pro Tips
+
+### Tip 1: Separate Email and Telegram
+Keep them separate! Email for backup, Telegram for instant alerts.
+
+### Tip 2: Use Admin Panel
+Easily manage users via Telegram `/admin` command.
+
+### Tip 3: Fallback Admin
+Set `TELEGRAM_FALLBACK_ADMIN` for recovery:
+```env
+TELEGRAM_FALLBACK_ADMIN=backup_admin_id
+```
+
+### Tip 4: Test Gradually
+1. Add one additional user
+2. Test notifications
+3. Add more users
+4. Test again
+
+### Tip 5: Monitor Status
 ```bash
-# Each user needs to:
-# 1. Start chat with your bot
-# 2. Send /start command
-# 3. Get their chat ID from bot logs
+# Check who receives notifications
+/users
+
+# Check bot statistics
+/stats
 ```
 
-#### **2. Configure .env:**
-```bash
-# Primary user (you)
-TELEGRAM_BOT_TOKEN=YOUR_TELEGRAM_BOT_TOKEN_HERE
-TELEGRAM_CHAT_ID=YOUR_TELEGRAM_CHAT_ID_HERE
+## 🚨 Important Notes
 
-# Additional users (comma-separated)
-TELEGRAM_ADDITIONAL_CHAT_IDS=USER2_CHAT_ID,USER3_CHAT_ID,USER4_CHAT_ID
-```
+### Email Limitations
+- **Gmail**: 500 emails/day (free tier)
+- **Multiple recipients**: Still counts as 1 email per keyword detection
+- **Retry logic**: 3 attempts per recipient
 
-#### **3. Example Setup:**
-```bash
-# User 1 (You): YOUR_CHAT_ID
-# User 2 (Spouse): USER2_CHAT_ID  
-# User 3 (Child): USER3_CHAT_ID
-# User 4 (Parent): USER4_CHAT_ID
+### Telegram Limitations
+- **No rate limits** for notifications
+- **Bot must be running** to send notifications
+- **User must authorize** via `/start` (for additional users)
 
-TELEGRAM_ADDITIONAL_CHAT_IDS=USER2_CHAT_ID,USER3_CHAT_ID,USER4_CHAT_ID
-```
+### Security
+- ✅ Never commit `.env` file
+- ✅ Use strong app passwords for email
+- ✅ Restrict bot access to authorized users only
+- ✅ Monitor `/users` regularly
 
-### **Option 2: Telegram Group Notifications**
+## ✅ Quick Setup Checklist
 
-#### **1. Create Telegram Group:**
-```bash
-# Create group: "Family Alerts"
-# Add all family members
-# Add your bot to the group
-# Get group chat ID
-```
+- [ ] Copy `env.example` to `.env`
+- [ ] Add `TELEGRAM_CHAT_ID` (your ID)
+- [ ] Add `TELEGRAM_ADDITIONAL_CHAT_IDS` (comma-separated)
+- [ ] Configure email settings
+- [ ] Add all email addresses to `EMAIL_TO`
+- [ ] Test with one additional user
+- [ ] Test with multiple emails
+- [ ] Verify all users receive notifications
+- [ ] Set up fallback admin
 
-#### **2. Configure .env:**
-```bash
-TELEGRAM_BOT_TOKEN=YOUR_TELEGRAM_BOT_TOKEN_HERE
-TELEGRAM_CHAT_ID=YOUR_GROUP_CHAT_ID_HERE  # Group chat ID (negative number)
-```
+## 🎉 You're Ready!
 
-## 🚀 Real-World Example:
+Your bot now supports:
+- ✅ Multiple email recipients
+- ✅ Multiple Telegram users
+- ✅ Admin approval system
+- ✅ Personal vs global keywords
+- ✅ Repeating reminders for personal keywords
+- ✅ File attachment notifications
+- ✅ Multi-language keyword detection
 
-### **Scenario: Family Monitoring**
-- **Virtual Number**: +1-555-123-4567 (Bot WhatsApp)
-- **Groups Monitored**: "Family Chat", "School Parents", "Neighborhood"
-- **Users Notified**: You, Spouse, Child, Parents
-
-### **Configuration:**
-```bash
-# .env file
-TELEGRAM_BOT_TOKEN=YOUR_TELEGRAM_BOT_TOKEN_HERE
-TELEGRAM_CHAT_ID=YOUR_TELEGRAM_CHAT_ID_HERE
-TELEGRAM_ADDITIONAL_CHAT_IDS=USER2_CHAT_ID,USER3_CHAT_ID,USER4_CHAT_ID
-```
-
-### **Process:**
-1. **Bot joins groups** using +1-555-123-4567
-2. **Bot detects keywords** in group messages
-3. **Bot sends alerts** to all 4 users
-4. **Everyone gets notified** instantly
-
-## 📊 Benefits:
-
-### **✅ Cost Effective:**
-- **1 virtual number** = $0-10/month
-- **Multiple users** = No additional cost
-- **Shared monitoring** = Efficient resource use
-
-### **✅ Easy Management:**
-- **Single bot instance** = Easy maintenance
-- **Centralized configuration** = Simple setup
-- **Unified logging** = Easy troubleshooting
-
-### **✅ Flexible:**
-- **Add/remove users** = Just update .env
-- **Different groups** = Same bot monitors all
-- **Custom keywords** = Shared across all users
-
-## 🔧 Setup Steps:
-
-### **1. Get Virtual Number:**
-```bash
-# Google Voice: +1-555-123-4567
-# This becomes bot's WhatsApp account
-```
-
-### **2. Configure Bot:**
-```json
-// config/multi-phone.json
-{
-  "phones": [
-    {
-      "number": "+15551234567",
-      "sessionPath": "./sessions/bot1",
-      "enabled": true,
-      "description": "Family monitoring bot"
-    }
-  ]
-}
-```
-
-### **3. Configure Users:**
-```bash
-# .env
-TELEGRAM_BOT_TOKEN=YOUR_TELEGRAM_BOT_TOKEN_HERE
-TELEGRAM_CHAT_ID=YOUR_TELEGRAM_CHAT_ID_HERE
-TELEGRAM_ADDITIONAL_CHAT_IDS=USER2_CHAT_ID,USER3_CHAT_ID,USER4_CHAT_ID
-```
-
-### **4. Start Bot:**
-```bash
-npm start
-# Bot shows QR code
-# Scan with virtual number's WhatsApp
-# Add bot to groups you want monitored
-```
-
-## 💡 Pro Tips:
-
-### **✅ Best Practices:**
-- **Use Telegram groups** for family notifications
-- **Individual chats** for personal alerts
-- **Test with small group** first
-- **Monitor bot logs** for delivery status
-
-### **✅ Troubleshooting:**
-- **Check chat IDs** are correct
-- **Verify bot permissions** in groups
-- **Test notifications** before going live
-- **Monitor delivery rates** in logs
-
-## 🎉 Result:
-
-**✅ Single virtual number monitors multiple groups**
-**✅ All family members get instant alerts**
-**✅ Cost-effective shared monitoring**
-**✅ Easy to manage and maintain**
-
-**Perfect for family, team, or community monitoring! 🚀**
+Happy monitoring! 🚀
