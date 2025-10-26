@@ -12,6 +12,7 @@ class TelegramCommandHandler {
         try {
             this.bot = new TelegramBot(token, { polling: true });
             this.authorization = authorization;
+            this.reminderManager = null; // Will be set by bot
             this.lastCommandTime = new Map(); // Track last command time per user
             this.setupCommandHandlers();
             console.log('✅ Telegram command handler initialized successfully');
@@ -23,6 +24,9 @@ class TelegramCommandHandler {
     }
 
     setupCommandHandlers() {
+        // Setup reminder commands first
+        this.setupReminderCommands(this.bot);
+        
         // Unified message handler - handles all message types with proper flow control
         this.bot.on('message', (msg) => {
             const userId = msg.from.id;
@@ -239,6 +243,8 @@ class TelegramCommandHandler {
                     '/start - Start the bot\n' +
                     '/status - Check bot status\n' +
                     '/help - Show this help\n' +
+                    '/ok - Acknowledge reminder and stop\n' +
+                    '/reminders - Show active reminders\n' +
                     '/sleep - Check sleep status\n\n' +
                     '📱 Group Management:\n' +
                     '/discover - Show all groups bot is in\n' +
@@ -1419,6 +1425,93 @@ class TelegramCommandHandler {
         
         this.lastCommandTime.set(key, now);
         return false;
+    }
+
+    // Setup reminder commands
+    setupReminderCommands(bot) {
+        // /ok command - acknowledge and stop reminders
+        bot.onText(/\/ok/, (msg) => {
+            const chatId = msg.chat.id;
+            const userId = msg.from.id;
+            
+            console.log('📨 Received /ok from user', userId);
+            
+            if (!this.authorization.isAuthorized(userId)) {
+                bot.sendMessage(chatId, '❌ You are not authorized to use this bot.');
+                return;
+            }
+
+            if (this.isDuplicateCommand(userId, 'ok')) {
+                return;
+            }
+
+            // Get active reminder
+            const reminderManager = this.getReminderManager();
+            if (reminderManager) {
+                const acknowledged = reminderManager.acknowledgeReminder(userId);
+                if (acknowledged) {
+                    bot.sendMessage(chatId, '✅ Reminder acknowledged and stopped.');
+                } else {
+                    bot.sendMessage(chatId, 'ℹ️ No active reminders to acknowledge.');
+                }
+            }
+        });
+
+        // /reminders command - show active reminders
+        bot.onText(/\/reminders/, (msg) => {
+            const chatId = msg.chat.id;
+            const userId = msg.from.id;
+            
+            console.log('📨 Received /reminders from user', userId);
+            
+            if (!this.authorization.isAuthorized(userId)) {
+                bot.sendMessage(chatId, '❌ You are not authorized to use this bot.');
+                return;
+            }
+
+            if (this.isDuplicateCommand(userId, 'reminders')) {
+                return;
+            }
+
+            const reminderManager = this.getReminderManager();
+            if (reminderManager) {
+                const reminder = reminderManager.getReminders(userId);
+                if (reminder) {
+                    const timeElapsed = this.calculateTimeElapsed(reminder.firstDetectedAt);
+                    const response = `⏰ Active Reminder\n\n` +
+                        `Keyword: ${reminder.keyword}\n` +
+                        `From: ${reminder.sender}\n` +
+                        `Group: ${reminder.group}\n` +
+                        `Detected: ${timeElapsed}\n` +
+                        `Reminders sent: ${reminder.reminderCount}/4\n\n` +
+                        `Message:\n"${reminder.message.substring(0, 100)}${reminder.message.length > 100 ? '...' : ''}"\n\n` +
+                        `Reply /ok to acknowledge and stop.`;
+                    bot.sendMessage(chatId, response);
+                } else {
+                    bot.sendMessage(chatId, 'ℹ️ No active reminders.');
+                }
+            }
+        });
+    }
+
+    // Get reminder manager (will be injected by bot)
+    getReminderManager() {
+        return this.reminderManager;
+    }
+
+    // Calculate time elapsed
+    calculateTimeElapsed(date) {
+        const now = Date.now();
+        const then = new Date(date).getTime();
+        const minutes = Math.floor((now - then) / 60000);
+        
+        if (minutes < 1) return 'Just now';
+        if (minutes === 1) return '1 minute ago';
+        if (minutes < 60) return `${minutes} minutes ago`;
+        
+        const hours = Math.floor(minutes / 60);
+        if (hours === 1) return '1 hour ago';
+        return `${hours} hours ago`;
     }
 
     updateTimezone(chatId, timezone) {
