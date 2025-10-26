@@ -1,6 +1,7 @@
 const TelegramBot = require('node-telegram-bot-api');
 const { logError, logBotEvent } = require('./logger');
 const TelegramAuthorization = require('./telegram-auth');
+const EmailChannel = require('./notifiers/emailChannel');
 
 class Notifier {
     constructor() {
@@ -10,6 +11,7 @@ class Notifier {
         this.retryAttempts = 3;
         this.retryDelay = 1000;
         this.authorization = new TelegramAuthorization(); // Authorization system
+        this.emailChannel = new EmailChannel(); // Email notifications
         this.init();
     }
 
@@ -51,100 +53,109 @@ class Notifier {
     }
 
     async sendKeywordAlert(keyword, message, sender, group, messageId, phoneNumber = null, matchType = 'exact', matchedToken = null, attachment = null) {
-        if (!this.enabled) {
-            console.log('📱 Telegram notifications disabled');
-            return false;
-        }
+        let telegramSuccess = false;
+        let emailSuccess = false;
 
-        try {
-            const alertMessage = this.formatAlertMessage(keyword, message, sender, group, messageId, phoneNumber, matchType, matchedToken, attachment);
-            
-            // Send to all authorized chat IDs only
-            const authorizedChatIds = this.chatIds.filter(chatId => 
-                this.authorization.isAuthorized(chatId)
-            );
-            
-            if (authorizedChatIds.length === 0) {
-                console.log('⚠️ No authorized users to send alerts to');
-                return false;
-            }
-            
-            const results = await Promise.allSettled(
-                authorizedChatIds.map(chatId => this.sendWithRetry(alertMessage, chatId))
-            );
-            
-            const successCount = results.filter(result => result.status === 'fulfilled').length;
-            const failureCount = results.filter(result => result.status === 'rejected').length;
-            
-            console.log(`📤 Alert sent to ${successCount}/${this.chatIds.length} users`);
-            if (failureCount > 0) {
-                console.warn(`⚠️ Failed to send to ${failureCount} users`);
-            }
-            
-            logBotEvent('keyword_alert_sent', {
-                keyword,
-                sender,
-                group,
-                messageId,
-                phoneNumber,
-                successCount,
-                failureCount,
-                totalUsers: this.chatIds.length
-            });
-
-            return successCount > 0;
-        } catch (error) {
-            logError(error, {
-                context: 'send_keyword_alert',
-                keyword,
-                sender,
-                group,
-                phoneNumber
-            });
-            return false;
-        }
-    }
-
-    async sendPersonalKeywordAlert(keyword, message, sender, group, messageId, phoneNumber = null, targetUserId = null, matchType = 'exact', matchedToken = null, attachment = null) {
-        if (!this.enabled) {
-            console.log('📱 Telegram notifications disabled');
-            return false;
-        }
-
-        if (!targetUserId) {
-            console.log('⚠️ No target user ID provided for personal keyword alert');
-            return false;
-        }
-
-        try {
-            const alertMessage = this.formatPersonalAlertMessage(keyword, message, sender, group, messageId, phoneNumber, matchType, matchedToken, attachment);
-            
-            // Send only to the specific user
-            const success = await this.sendWithRetry(alertMessage, targetUserId);
-            
-            if (success) {
-                logBotEvent('personal_keyword_alert_sent', {
+        // Send Telegram notification
+        if (this.enabled) {
+            try {
+                const alertMessage = this.formatAlertMessage(keyword, message, sender, group, messageId, phoneNumber, matchType, matchedToken, attachment);
+                
+                // Send to all authorized chat IDs only
+                const authorizedChatIds = this.chatIds.filter(chatId => 
+                    this.authorization.isAuthorized(chatId)
+                );
+                
+                if (authorizedChatIds.length > 0) {
+                    const results = await Promise.allSettled(
+                        authorizedChatIds.map(chatId => this.sendWithRetry(alertMessage, chatId))
+                    );
+                    
+                    const successCount = results.filter(result => result.status === 'fulfilled').length;
+                    const failureCount = results.filter(result => result.status === 'rejected').length;
+                    
+                    console.log(`📤 Telegram alert sent to ${successCount}/${authorizedChatIds.length} users`);
+                    if (failureCount > 0) {
+                        console.warn(`⚠️ Failed to send Telegram to ${failureCount} users`);
+                    }
+                    
+                    telegramSuccess = successCount > 0;
+                }
+            } catch (error) {
+                logError(error, {
+                    context: 'send_keyword_alert_telegram',
                     keyword,
                     sender,
                     group,
-                    messageId,
-                    phoneNumber,
+                    phoneNumber
+                });
+            }
+        }
+
+        // Send Email notification
+        if (this.emailChannel && this.emailChannel.enabled) {
+            try {
+                emailSuccess = await this.emailChannel.sendKeywordAlert(
+                    keyword, message, sender, group, messageId, phoneNumber, matchType, matchedToken, attachment
+                );
+            } catch (error) {
+                logError(error, {
+                    context: 'send_keyword_alert_email',
+                    keyword,
+                    sender,
+                    group
+                });
+            }
+        }
+
+        // Log combined results
+        logBotEvent('keyword_alert_sent', {
+            keyword,
+            sender,
+            group,
+            messageId,
+            phoneNumber,
+            telegramSuccess,
+            emailSuccess
+        });
+
+        return telegramSuccess || emailSuccess;
+    }
+
+    async sendPersonalKeywordAlert(keyword, message, sender, group, messageId, phoneNumber = null, targetUserId = null, matchType = 'exact', matchedToken = null, attachment = null) {
+        let telegramSuccess = false;
+        let emailSuccess = false;
+
+        // Send Telegram notification
+        if (this.enabled && targetUserId) {
+            try {
+                const alertMessage = this.formatPersonalAlertMessage(keyword, message, sender, group, messageId, phoneNumber, matchType, matchedToken, attachment);
+                telegramSuccess = await this.sendWithRetry(alertMessage, targetUserId);
+            } catch (error) {
+                logError(error, {
+                    context: 'send_personal_keyword_alert_telegram',
+                    keyword,
                     targetUserId
                 });
             }
-            
-            return success;
-        } catch (error) {
-            logError(error, {
-                context: 'send_personal_keyword_alert',
-                keyword,
-                sender,
-                group,
-                phoneNumber,
-                targetUserId
-            });
-            return false;
         }
+
+        // Send Email notification
+        if (this.emailChannel && this.emailChannel.enabled) {
+            try {
+                emailSuccess = await this.emailChannel.sendPersonalKeywordAlert(
+                    keyword, message, sender, group, messageId, phoneNumber, targetUserId, matchType, matchedToken, attachment
+                );
+            } catch (error) {
+                logError(error, {
+                    context: 'send_personal_keyword_alert_email',
+                    keyword,
+                    targetUserId
+                });
+            }
+        }
+
+        return telegramSuccess || emailSuccess;
     }
 
     formatPersonalAlertMessage(keyword, message, sender, group, messageId, phoneNumber = null, matchType = 'exact', matchedToken = null, attachment = null) {
