@@ -817,10 +817,13 @@ class KeywordDetector {
         
         // 2.1. Handle keyboard layout switching
         // Only for pure English text that could be mistyped Russian
-        // SKIP for keyword normalization to prevent corrupting valid English keywords
+        // SKIP for keyword normalization and mixed-language text to prevent corruption
         if (this.detectRussianKeyboardLayout && !skipKeyboardConversion) {
             const isPureEnglish = /^[a-zA-Z\s]+$/.test(normalized);
-            if (isPureEnglish && !this.containsHebrew(normalized)) {
+            const isMixedLanguage = this.containsHebrew(normalized) || this.containsRussian(normalized);
+            
+            // Only convert if pure English and not mixed with other languages
+            if (isPureEnglish && !this.containsHebrew(normalized) && !isMixedLanguage) {
                 // Try to convert English keyboard to Russian
                 // Only apply if result is valid Russian
                 const converted = this.fixRussianKeyboardLayout(normalized);
@@ -1079,35 +1082,48 @@ class KeywordDetector {
         
         const language = this.detectTokenLanguage(word);
         
-        // For mixed words, just apply basic normalization (lowercase, diacritics, leetspeak)
+        // For mixed words, split by language and normalize each part separately
         // Prefix stripping will be handled later in tokenizeText
         if (language === 'mixed') {
-            let normalized = word;
+            // Split the word into language-specific parts
+            const parts = [];
+            let currentPart = '';
+            let currentLanguage = null;
             
-            // Basic lowercase
-            normalized = normalized.toLowerCase();
-            
-            // Remove diacritics
-            if (this.normalizeDiacritics) {
-                normalized = normalized.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-            }
-            
-            // Handle leetspeak
-            if (this.handleLeetspeak) {
-                // Handle English leetspeak
-                for (const [leet, normal] of Object.entries(this.leetspeakMap)) {
-                    const escapedLeet = leet.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                    normalized = normalized.replace(new RegExp(escapedLeet, 'g'), normal);
-                }
+            for (const char of word) {
+                const charLanguage = this.detectCharLanguage(char);
                 
-                // Handle Russian leetspeak
-                for (const [leet, normal] of Object.entries(this.russianLeetspeakMap)) {
-                    const escapedLeet = leet.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                    normalized = normalized.replace(new RegExp(escapedLeet, 'g'), normal);
+                if (charLanguage !== currentLanguage) {
+                    // Start a new part
+                    if (currentPart && currentLanguage) {
+                        parts.push({ text: currentPart, language: currentLanguage });
+                    }
+                    currentPart = char;
+                    currentLanguage = charLanguage;
+                } else {
+                    currentPart += char;
                 }
             }
             
-            return normalized;
+            // Add the last part
+            if (currentPart && currentLanguage) {
+                parts.push({ text: currentPart, language: currentLanguage });
+            }
+            
+            // Normalize each part separately
+            const normalizedParts = parts.map(part => {
+                if (part.language === 'english') {
+                    return part.text.toLowerCase();
+                } else if (part.language === 'hebrew') {
+                    return this.normalizeHebrewWithoutPrefixStrip(part.text);
+                } else if (part.language === 'russian') {
+                    return this.normalizeRussianWithoutPrefixStrip(part.text);
+                } else {
+                    return part.text;
+                }
+            });
+            
+            return normalizedParts.join('');
         } else if (language === 'hebrew') {
             // For Hebrew, do basic normalization without prefix stripping
             return this.normalizeHebrewWithoutPrefixStrip(word);
@@ -1323,10 +1339,14 @@ class KeywordDetector {
         }
         
         // Apply keyboard layout conversion to pure English tokens
+        // Convert token-by-token, NOT globally, to handle mixed language messages correctly
         if (this.detectRussianKeyboardLayout) {
             tokens = tokens.map(token => {
+                // Only apply conversion to pure English tokens (no Russian/Hebrew in token)
                 const isPureEnglish = /^[a-zA-Z]+$/.test(token);
-                if (isPureEnglish && !this.containsHebrew(token)) {
+                const containsOtherLanguages = this.containsHebrew(token) || this.containsRussian(token);
+                
+                if (isPureEnglish && !containsOtherLanguages) {
                     const converted = this.fixRussianKeyboardLayout(token);
                     if (this.containsRussian(converted)) {
                         return converted;
@@ -2004,13 +2024,22 @@ class KeywordDetector {
             fixed = fixed.replace(new RegExp(english, 'g'), russian);
         }
         
-        // Only apply the conversion if the result contains Russian characters
-        // This prevents converting legitimate English words
+        // Only apply the conversion if the result is a known Russian keyword
+        // This prevents converting legitimate English words like "hello" or "urgent"
         if (this.containsRussian(fixed)) {
-            return fixed;
+            // Check if the converted text matches any Russian keyword in our list
+            const matchesKnownKeyword = this.keywords.some(keyword => {
+                if (!this.containsRussian(keyword)) return false;
+                return keyword === fixed || keyword.includes(fixed) || fixed.includes(keyword);
+            });
+            
+            // Only convert if it matches a known Russian keyword
+            if (matchesKnownKeyword) {
+                return fixed;
+            }
         }
         
-        // If conversion didn't result in Russian, don't apply it
+        // If conversion didn't result in a known Russian keyword, don't apply it
         return text;
     }
     
@@ -2201,7 +2230,8 @@ class KeywordDetector {
     
     // Detect language of a single character
     detectCharLanguage(char) {
-        if (/[\u0400-\u04FF]/.test(char)) return 'russian';
+        if (/[\u0590-\u05FF]/.test(char)) return 'hebrew';  // Hebrew Unicode range
+        if (/[\u0400-\u04FF]/.test(char)) return 'russian'; // Cyrillic Unicode range
         if (/[a-zA-Z]/.test(char)) return 'english';
         if (/\d/.test(char)) return 'number';
         return 'other';
@@ -2213,13 +2243,22 @@ class KeywordDetector {
         
         const hasRussian = this.containsRussian(token);
         const hasEnglish = this.containsEnglish(token);
+        const hasHebrew = this.containsHebrew(token);
         
-        if (hasRussian && hasEnglish) {
+        // Count languages present
+        let languages = 0;
+        if (hasHebrew) languages++;
+        if (hasEnglish) languages++;
+        if (hasRussian) languages++;
+        
+        if (languages >= 2) {
             return 'mixed';
-        } else if (hasRussian) {
-            return 'russian';
+        } else if (hasHebrew) {
+            return 'hebrew';
         } else if (hasEnglish) {
             return 'english';
+        } else if (hasRussian) {
+            return 'russian';
         }
         
         return 'other';
