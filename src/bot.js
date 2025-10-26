@@ -10,6 +10,7 @@ const Notifier = require('./notifier');
 const KeepAliveService = require('./keep-alive');
 const TelegramCommandHandler = require('./telegram-commands');
 const { logger, logKeywordDetection, logBotEvent, logError } = require('./logger');
+const requireAuth = require('./middleware/auth');
 
 class WhatsAppKeywordBot {
     constructor() {
@@ -147,8 +148,8 @@ class WhatsAppKeywordBot {
             });
         });
 
-        // Stats endpoint
-        this.app.get('/stats', (req, res) => {
+        // Stats endpoint (protected)
+        this.app.get('/stats', requireAuth, (req, res) => {
             const phoneStatus = {};
             for (const [phone, connection] of this.connections) {
                 phoneStatus[phone] = connection.getConnectionStatus();
@@ -167,8 +168,8 @@ class WhatsAppKeywordBot {
             });
         });
 
-        // Test notification endpoint
-        this.app.post('/test-notification', async (req, res) => {
+        // Test notification endpoint (protected)
+        this.app.post('/test-notification', requireAuth, async (req, res) => {
             try {
                 const success = await this.notifier.sendTestMessage();
                 res.json({ success, message: success ? 'Test notification sent' : 'Failed to send test notification' });
@@ -177,8 +178,8 @@ class WhatsAppKeywordBot {
             }
         });
 
-        // Reload keywords endpoint
-        this.app.post('/reload-keywords', (req, res) => {
+        // Reload keywords endpoint (protected)
+        this.app.post('/reload-keywords', requireAuth, (req, res) => {
             try {
                 this.keywordDetector.reloadConfig();
                 res.json({ success: true, keywords: this.keywordDetector.getKeywords() });
