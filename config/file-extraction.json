@@ -1,0 +1,11 @@
+{
+  "enabled": true,
+  "extractPDF": true,
+  "extractExcel": true,
+  "extractWord": true,
+  "extractImageOCR": false,
+  "maxFileSize": 10485760,
+  "timeout": 30000,
+  "languages": ["eng", "heb", "rus"]
+}
+
