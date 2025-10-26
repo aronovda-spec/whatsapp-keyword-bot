@@ -12,9 +12,9 @@
 ```
 Group message: "urgent meeting at 3pm"
     ↓
-Keyword "urgent" detected (personal for user 1022850808)
+Keyword "urgent" detected (personal for user YOUR_USER_ID)
     ↓
-Notification sent to user 1022850808
+Notification sent to user YOUR_USER_ID
     ↓
 Silent... (what if user didn't see it?)
 ```
