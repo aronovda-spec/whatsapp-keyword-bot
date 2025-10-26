@@ -1,4 +1,6 @@
 const nodemailer = require('nodemailer');
+const fs = require('fs');
+const path = require('path');
 const { logError, logBotEvent } = require('../logger');
 
 class EmailChannel {
@@ -6,6 +8,7 @@ class EmailChannel {
         this.enabled = false;
         this.transporter = null;
         this.recipients = [];
+        this.userEmailMap = new Map(); // userId -> email
         this.retryAttempts = 3;
         this.retryDelay = 1000;
         this.init();
@@ -44,19 +47,46 @@ class EmailChannel {
             // Parse recipients (comma-separated)
             this.recipients = recipients.split(',').map(email => email.trim());
 
+            // Load per-user email mapping (optional)
+            this.loadUserEmailMap();
+
             this.enabled = true;
 
             logBotEvent('email_initialized', {
                 host,
-                recipients: this.recipients.length
+                recipients: this.recipients.length,
+                perUserEmails: this.userEmailMap.size
             });
 
             console.log('✅ Email notifications enabled');
-            console.log(`📧 Email will be sent to ${this.recipients.length} recipients`);
+            console.log(`📧 Email will be sent to ${this.recipients.length} global recipients`);
+            if (this.userEmailMap.size > 0) {
+                console.log(`📧 Per-user email mapping: ${this.userEmailMap.size} users`);
+            }
         } catch (error) {
             logError(error, { context: 'email_init' });
             console.error('❌ Failed to initialize email:', error.message);
         }
+    }
+
+    loadUserEmailMap() {
+        try {
+            const configPath = path.join(__dirname, '../../config/user-emails.json');
+            if (fs.existsSync(configPath)) {
+                const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+                this.userEmailMap = new Map(Object.entries(config));
+                console.log(`📧 Loaded ${this.userEmailMap.size} per-user email mappings`);
+            } else {
+                console.log('📧 No per-user email mapping found - using global EMAIL_TO');
+            }
+        } catch (error) {
+            console.warn('⚠️ Could not load per-user email mapping:', error.message);
+        }
+    }
+
+    getEmailForUser(userId) {
+        if (!userId) return null;
+        return this.userEmailMap.get(userId.toString());
     }
 
     async sendKeywordAlert(keyword, message, sender, group, messageId, phoneNumber = null, matchType = 'exact', matchedToken = null, attachment = null) {
@@ -106,9 +136,40 @@ class EmailChannel {
             return false;
         }
 
-        // For email, we can send to all recipients or filter
-        // For simplicity, send to all recipients
-        return await this.sendKeywordAlert(keyword, message, sender, group, messageId, phoneNumber, matchType, matchedToken, attachment);
+        // If per-user email mapping exists, use it
+        const userEmail = this.getEmailForUser(targetUserId);
+        
+        if (userEmail) {
+            // Send to specific user's email only
+            return await this.sendToSpecificRecipient(keyword, message, sender, group, messageId, phoneNumber, matchType, matchedToken, attachment, userEmail);
+        } else {
+            // Fallback to all recipients if no per-user mapping
+            return await this.sendKeywordAlert(keyword, message, sender, group, messageId, phoneNumber, matchType, matchedToken, attachment);
+        }
+    }
+
+    async sendToSpecificRecipient(keyword, message, sender, group, messageId, phoneNumber, matchType, matchedToken, attachment, recipientEmail) {
+        try {
+            const emailContent = this.formatEmail(keyword, message, sender, group, messageId, phoneNumber, matchType, matchedToken, attachment);
+            
+            await this.sendWithRetry(emailContent, recipientEmail);
+            
+            console.log(`📧 Personal keyword alert sent to ${recipientEmail}`);
+            
+            logBotEvent('personal_email_sent', {
+                keyword,
+                recipient: recipientEmail
+            });
+            
+            return true;
+        } catch (error) {
+            logError(error, {
+                context: 'send_personal_email',
+                keyword,
+                recipient: recipientEmail
+            });
+            return false;
+        }
     }
 
     formatEmail(keyword, message, sender, group, messageId, phoneNumber = null, matchType = 'exact', matchedToken = null, attachment = null) {

@@ -6,6 +6,7 @@ config/telegram-auth.json # Added for persistent authorization
 config/non-active-hours.json # Added for non-active hours configuration
 config/user-preferences.json # Added for per-user timezone preferences
 config/personal-keywords.json # Added for personal keyword management
+config/user-emails.json # Per-user email mapping
 config/group-subscriptions.json # User group subscriptions
 config/discovered-groups.json # Discovered WhatsApp groups
 config/active-reminders.json # Active reminder data
