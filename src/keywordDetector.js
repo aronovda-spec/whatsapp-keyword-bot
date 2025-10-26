@@ -1791,23 +1791,24 @@ class KeywordDetector {
             return false;
         }
         
+        // Additional check: reject common word variations that shouldn't match
+        // This applies to ALL word lengths, not just short words
+        const commonVariations = {
+            'cake': ['cakes', 'make', 'take', 'wake'], // Removed 'bake' to allow it
+            'help': ['held', 'hell', 'heel'],
+            'list': ['last', 'lost', 'lift'],
+            'urgent': ['argent', 'regent'],
+            'asap': ['asap', 'asap!', 'asap?']
+        };
+        
+        if (commonVariations[keyword] && commonVariations[keyword].includes(word)) {
+            return false;
+        }
+        
         // Additional check: for short words, be extra conservative
         if (shorterLength <= 4 && bestDistance > 0) {
             // Only allow 1 character difference for very short words, OR transpositions (distance = 2)
             if (bestDistance > 1 && bestDistance !== 2) {
-                return false;
-            }
-            
-            // Additional check: reject common word variations that shouldn't match
-            const commonVariations = {
-                'cake': ['cakes', 'make', 'take', 'wake'], // Removed 'bake' to allow it
-                'help': ['held', 'hell', 'heel'],
-                'list': ['last', 'lost', 'lift'],
-                'urgent': ['argent', 'regent'],
-                'asap': ['asap', 'asap!', 'asap?']
-            };
-            
-            if (commonVariations[keyword] && commonVariations[keyword].includes(word)) {
                 return false;
             }
         }
@@ -1849,14 +1850,23 @@ class KeywordDetector {
         const wordLength = word.length;
         const keywordLength = keyword.length;
         
-        // Only apply substring matching if word is reasonably longer than keyword
-        // But not too long (prevent false positives with very long words)
-        if (wordLength <= keywordLength + 1 || wordLength > keywordLength + 2) {
+        // Reject if word is not within reasonable length of keyword
+        if (wordLength <= keywordLength || wordLength > keywordLength + 2) {
             return false;
         }
         
         // Check if keyword is contained in word (exact substring)
         if (word.includes(keyword)) {
+            // Additional check: reject if the extra characters form a common suffix
+            // This prevents "urgently" matching "urgent"
+            const suffix = word.substring(keywordLength);
+            const commonSuffixes = ['ly', 'ing', 'ed', 'er', 'est', 'ness', 'tion', 'ment', 'able', 'ible', 'ful', 'less'];
+            
+            // Only reject if suffix is a known English suffix
+            if (commonSuffixes.some(s => suffix.toLowerCase().includes(s))) {
+                return false;
+            }
+            
             return true;
         }
         
