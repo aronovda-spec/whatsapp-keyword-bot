@@ -65,13 +65,15 @@ Create `config/user-emails.json`:
 {
   "1022850808": "dani@company.com",
   "123456789": "alice@company.com",
-  "987654321": "bob@company.com"
+  "987654321": "bob@company.com",
+  "555123456": ["primary@gmail.com", "backup@company.com"]
 }
 ```
 
 **Format:**
 - Key: Telegram user ID (as string)
-- Value: Email address (as string)
+- Value: Email address as string (single email) OR array (multiple emails)
+- **Multiple emails**: Use array `["email1", "email2"]` to send to multiple addresses
 
 ### Step 3: Update .env (Optional)
 
@@ -173,9 +175,12 @@ EMAIL_TO=supervisor@company.com
 {
   "1022850808": "admin@company.com",
   "123456789": "dev1@gmail.com",
-  "987654321": "dev2@gmail.com"
+  "987654321": "dev2@gmail.com",
+  "555123456": ["work@company.com", "personal@gmail.com"]
 }
 ```
+
+**Note:** User 555123456 receives notifications at BOTH work and personal email!
 
 ### Result
 
