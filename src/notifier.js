@@ -2,6 +2,7 @@ const TelegramBot = require('node-telegram-bot-api');
 const { logError, logBotEvent } = require('./logger');
 const TelegramAuthorization = require('./telegram-auth');
 const EmailChannel = require('./notifiers/emailChannel');
+const ReminderManager = require('./reminderManager');
 
 class Notifier {
     constructor() {
@@ -12,7 +13,11 @@ class Notifier {
         this.retryDelay = 1000;
         this.authorization = new TelegramAuthorization(); // Authorization system
         this.emailChannel = new EmailChannel(); // Email notifications
+        this.reminderManager = new ReminderManager(); // Reminder system
         this.init();
+        
+        // Listen for reminder events
+        this.reminderManager.on('sendReminder', this.handleReminder.bind(this));
     }
 
     init() {
@@ -122,14 +127,19 @@ class Notifier {
         return telegramSuccess || emailSuccess;
     }
 
-    async sendPersonalKeywordAlert(keyword, message, sender, group, messageId, phoneNumber = null, targetUserId = null, matchType = 'exact', matchedToken = null, attachment = null) {
+    async sendPersonalKeywordAlert(keyword, message, sender, group, messageId, phoneNumber = null, targetUserId = null, matchType = 'exact', matchedToken = null, attachment = null, isReminder = false) {
         let telegramSuccess = false;
         let emailSuccess = false;
 
         // Send Telegram notification
         if (this.enabled && targetUserId) {
             try {
-                const alertMessage = this.formatPersonalAlertMessage(keyword, message, sender, group, messageId, phoneNumber, matchType, matchedToken, attachment);
+                const reminder = isReminder ? this.reminderManager.getReminders(targetUserId) : null;
+                const reminderCount = reminder ? reminder.reminderCount : 0;
+                
+                const alertMessage = this.formatPersonalAlertMessage(
+                    keyword, message, sender, group, messageId, phoneNumber, matchType, matchedToken, attachment, reminderCount
+                );
                 telegramSuccess = await this.sendWithRetry(alertMessage, targetUserId);
             } catch (error) {
                 logError(error, {
@@ -158,7 +168,36 @@ class Notifier {
         return telegramSuccess || emailSuccess;
     }
 
-    formatPersonalAlertMessage(keyword, message, sender, group, messageId, phoneNumber = null, matchType = 'exact', matchedToken = null, attachment = null) {
+    /**
+     * Handle reminder event from ReminderManager
+     */
+    async handleReminder(reminder) {
+        console.log(`⏰ Sending reminder ${reminder.reminderCount} for user ${reminder.userId}`);
+        
+        try {
+            await this.sendPersonalKeywordAlert(
+                reminder.keyword,
+                reminder.message,
+                reminder.sender,
+                reminder.group,
+                reminder.messageId,
+                reminder.phoneNumber,
+                reminder.userId,
+                'exact',
+                null,
+                reminder.attachment,
+                true // Mark as reminder
+            );
+        } catch (error) {
+            logError(error, {
+                context: 'handle_reminder',
+                userId: reminder.userId,
+                reminderCount: reminder.reminderCount
+            });
+        }
+    }
+
+    formatPersonalAlertMessage(keyword, message, sender, group, messageId, phoneNumber = null, matchType = 'exact', matchedToken = null, attachment = null, reminderCount = 0) {
         const timestamp = new Date().toLocaleString();
         const phoneInfo = phoneNumber ? ` (via ${phoneNumber})` : '';
         
@@ -167,6 +206,13 @@ class Notifier {
             matchInfo = `\n🔍 <b>Fuzzy Match:</b> "${matchedToken}" → "${keyword}"`;
         } else if (matchType === 'exact') {
             matchInfo = `\n✅ <b>Exact Match</b>`;
+        }
+        
+        // Add reminder indicator
+        let reminderInfo = '';
+        if (reminderCount > 0) {
+            const timeElapsed = this.getTimeElapsed(reminderCount);
+            reminderInfo = `\n⏰ <b>Reminder</b> - ${timeElapsed}`;
         }
         
         // Add attachment info if present
@@ -182,17 +228,34 @@ class Notifier {
             }
         }
         
-        return `🔑 <b>Personal Keyword Alert</b>
+        const header = reminderCount === 0 
+            ? '🔑 <b>Personal Keyword Alert</b>'
+            : '⏰ <b>Reminder</b>';
+        
+        return `${header}
 
 🚨 <b>Keyword:</b> ${this.escapeHtml(keyword)}${matchInfo}
 👤 <b>From:</b> ${this.escapeHtml(sender)}
 📱 <b>Group:</b> ${this.escapeHtml(group)}${phoneInfo}
-🕐 <b>Time:</b> ${timestamp}${attachmentInfo}
+🕐 <b>Time:</b> ${timestamp}${reminderInfo}${attachmentInfo}
 
 💬 <b>Message:</b>
 "${this.escapeHtml(message.substring(0, 200))}${message.length > 200 ? '...' : ''}"
 
-🔑 <i>This is a personal keyword notification</i>`;
+${reminderCount > 0 ? 'Reply /ok to acknowledge and stop reminders.' : '🔑 <i>This is a personal keyword notification</i>'}`;
+    }
+
+    /**
+     * Get human-readable time elapsed based on reminder count
+     */
+    getTimeElapsed(reminderCount) {
+        const timeMap = {
+            1: '1 minute ago',
+            2: '2 minutes ago',
+            3: '15 minutes ago',
+            4: '1 hour ago'
+        };
+        return timeMap[reminderCount] || `${reminderCount} minutes ago`;
     }
 
     async sendWithRetry(message, chatId = null) {

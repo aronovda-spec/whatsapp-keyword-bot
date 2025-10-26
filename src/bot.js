@@ -345,6 +345,36 @@ class WhatsAppKeywordBot {
 
                         if (success) {
                             this.stats.notificationsSent++;
+                            
+                            // Start reminder system for personal keywords
+                            // Check if reminder already exists for this user
+                            const existingReminder = this.notifier.reminderManager.getReminders(keywordData.userId);
+                            
+                            if (existingReminder && existingReminder.keyword === keywordData.keyword) {
+                                // Same keyword detected again - restart timer
+                                this.notifier.reminderManager.resetReminderForKeyword(
+                                    keywordData.userId,
+                                    keywordData.keyword,
+                                    messageData.text,
+                                    messageData.sender,
+                                    messageData.group,
+                                    messageData.id,
+                                    phoneNumber,
+                                    messageData.attachment
+                                );
+                            } else {
+                                // New reminder
+                                this.notifier.reminderManager.addReminder(
+                                    keywordData.userId,
+                                    keywordData.keyword,
+                                    messageData.text,
+                                    messageData.sender,
+                                    messageData.group,
+                                    messageData.id,
+                                    phoneNumber,
+                                    messageData.attachment
+                                );
+                            }
                         }
                     } catch (notificationError) {
                         logError(notificationError, {
@@ -434,6 +464,10 @@ class WhatsAppKeywordBot {
                         process.env.TELEGRAM_BOT_TOKEN,
                         this.notifier.authorization
                     );
+                    // Inject reminder manager into command handler
+                    if (this.commandHandler) {
+                        this.commandHandler.reminderManager = this.notifier.reminderManager;
+                    }
                     console.log('🔐 Telegram authorization system activated');
                 } catch (error) {
                     console.log('⚠️ Telegram command handler failed to initialize:', error.message);
