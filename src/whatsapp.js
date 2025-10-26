@@ -1,9 +1,10 @@
-const { makeWASocket, DisconnectReason, useMultiFileAuthState } = require('@whiskeysockets/baileys');
+const { makeWASocket, DisconnectReason, useMultiFileAuthState, downloadMediaMessage } = require('@whiskeysockets/baileys');
 const qrcode = require('qrcode-terminal');
 const fs = require('fs');
 const path = require('path');
 const { logError, logBotEvent } = require('./logger');
 const WhatsAppAntiBan = require('./anti-ban');
+const FileExtractor = require('./fileExtractor');
 
 class WhatsAppConnection {
     constructor() {
@@ -14,6 +15,7 @@ class WhatsAppConnection {
         this.qrTimeout = 60000;
         this.antiBan = new WhatsAppAntiBan(); // Anti-ban protection
         this.monitoredGroups = new Set(); // Track monitored groups
+        this.fileExtractor = new FileExtractor(); // File content extractor
         this.loadGroupConfig();
         this.init();
     }
@@ -310,6 +312,37 @@ class WhatsAppConnection {
                 return;
             }
 
+            // If attachment exists, download and extract text from file content
+            let extractedText = '';
+            if (attachment && this.fileExtractor && attachment.filename) {
+                try {
+                    console.log(`📥 Downloading and extracting content from: ${attachment.filename}`);
+                    
+                    // Download the file
+                    const fileBuffer = await this.downloadAndExtractFile(message);
+                    
+                    if (fileBuffer) {
+                        // Extract text from file content
+                        extractedText = await this.extractFileContent(
+                            fileBuffer,
+                            attachment.mimetype,
+                            attachment.filename
+                        );
+                        
+                        if (extractedText) {
+                            console.log(`✅ Extracted ${extractedText.length} characters from file`);
+                            // Add extracted text to message text for keyword detection
+                            messageText += (messageText ? '\n\n[File Content]\n' : '') + extractedText;
+                        }
+                    }
+                } catch (error) {
+                    logError(error, {
+                        context: 'file_content_extraction_in_message',
+                        filename: attachment.filename
+                    });
+                }
+            }
+
             // Extract message metadata
             const sender = message.key.participant || message.key.remoteJid;
             const chatId = message.key.remoteJid;
@@ -535,6 +568,72 @@ class WhatsAppConnection {
 
     getSocket() {
         return this.sock;
+    }
+
+    /**
+     * Download and extract text from a media message
+     * @param {Object} message - WhatsApp message object
+     * @returns {Promise<Buffer|null>} File buffer or null
+     */
+    async downloadAndExtractFile(message) {
+        try {
+            if (!this.sock || !this.isConnected) {
+                return null;
+            }
+
+            // Check if message has media
+            let mediaMessage = null;
+            const msg = message.message;
+            
+            if (msg.documentMessage) mediaMessage = msg.documentMessage;
+            else if (msg.imageMessage) mediaMessage = msg.imageMessage;
+            else if (msg.videoMessage) mediaMessage = msg.videoMessage;
+            else if (msg.audioMessage) mediaMessage = msg.audioMessage;
+            
+            if (!mediaMessage) return null;
+
+            // Download the media
+            const buffer = await downloadMediaMessage(
+                message,
+                'buffer',
+                {},
+                { logger: () => {} } // Suppress download logs
+            );
+
+            return buffer;
+        } catch (error) {
+            logError(error, { context: 'file_download' });
+            return null;
+        }
+    }
+
+    /**
+     * Extract text from downloaded file content
+     * @param {Buffer} buffer - File buffer
+     * @param {string} mimetype - MIME type
+     * @param {string} filename - File name
+     * @returns {Promise<string>} Extracted text
+     */
+    async extractFileContent(buffer, mimetype, filename) {
+        if (!buffer || !this.fileExtractor) return '';
+        
+        try {
+            // Check if file type is supported
+            if (!this.fileExtractor.isSupported(mimetype, filename)) {
+                return '';
+            }
+
+            // Extract text from file
+            const extractedText = await this.fileExtractor.extractText(buffer, mimetype, filename);
+            return extractedText;
+        } catch (error) {
+            logError(error, {
+                context: 'file_content_extraction',
+                mimetype,
+                filename
+            });
+            return '';
+        }
     }
 }
 
