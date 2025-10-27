@@ -3,9 +3,12 @@ const path = require('path');
 const levenshtein = require('fast-levenshtein');
 const damerauLevenshtein = require('damerau-levenshtein');
 const natural = require('natural');
+const SupabaseManager = require('./supabase');
 
 class KeywordDetector {
     constructor() {
+        this.supabase = new SupabaseManager();
+        this.supabaseLoaded = false;
         this.keywords = [];
         this.caseSensitive = false;
         this.exactMatch = true;
@@ -658,7 +661,35 @@ class KeywordDetector {
         this.loadConfig();
     }
 
-    loadConfig() {
+    async loadConfig() {
+        try {
+            // Try Supabase first if enabled
+            if (this.supabase.isEnabled()) {
+                try {
+                    const dbKeywords = await this.supabase.getGlobalKeywords();
+                    if (dbKeywords && dbKeywords.length > 0) {
+                        this.keywords = dbKeywords;
+                        this.supabaseLoaded = true;
+                        console.log(`📊 Loaded ${this.keywords.length} keywords from Supabase database`);
+                        // Load config from file for other settings
+                        await this.loadConfigFromFile();
+                        return;
+                    }
+                } catch (error) {
+                    console.warn('⚠️ Failed to load from Supabase, falling back to file:', error.message);
+                }
+            }
+            
+            // Fallback to file-based config
+            await this.loadConfigFromFile();
+        } catch (error) {
+            console.error('Error loading keyword config:', error);
+            // Fallback to default keywords
+            this.keywords = ['urgent', 'emergency', 'important'];
+        }
+    }
+
+    async loadConfigFromFile() {
         try {
             const configPath = path.join(__dirname, '../config/keywords.json');
             const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
@@ -691,16 +722,18 @@ class KeywordDetector {
             // Hebrew stop words is a Set, not a boolean - don't override it
             // this.hebrewStopWords = config.hebrewStopWords !== undefined ? config.hebrewStopWords : true;
             
-            console.log(`Loaded ${this.keywords.length} keywords:`, this.keywords);
+            console.log(`Loaded ${this.keywords.length} keywords from file:`, this.keywords);
         } catch (error) {
-            console.error('Error loading keyword config:', error);
-            // Fallback to default keywords
-            this.keywords = ['urgent', 'emergency', 'important'];
+            console.error('Error loading keyword config from file:', error);
+            // Keep existing keywords or fallback to defaults
+            if (this.keywords.length === 0) {
+                this.keywords = ['urgent', 'emergency', 'important'];
+            }
         }
     }
 
-    reloadConfig() {
-        this.loadConfig();
+    async reloadConfig() {
+        await this.loadConfig();
     }
 
     detectKeywords(messageText, groupName = null) {
