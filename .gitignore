@@ -1,5 +1,4 @@
 # Configuration files with sensitive data
-config/multi-phone.json
 config/phones.json
 config/phone-numbers.json
 config/telegram-auth.json # Added for persistent authorization
