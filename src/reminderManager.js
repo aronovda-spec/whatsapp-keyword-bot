@@ -145,6 +145,8 @@ class ReminderManager extends EventEmitter {
         const reminder = this.reminders.get(userId);
         if (reminder) {
             console.log(`✅ User ${userId} acknowledged reminder - stopping all reminders`);
+            // Mark as acknowledged to prevent scheduled timers from firing
+            reminder.acknowledged = true;
             this.removeReminder(userId);
             return true;
         }
