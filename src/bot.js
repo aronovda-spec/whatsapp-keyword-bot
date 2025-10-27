@@ -437,7 +437,9 @@ class WhatsAppKeywordBot {
         try {
             console.log('🛡️ Anti-Ban Safety Check:');
             for (const [phoneNumber, connection] of this.connections) {
-                console.log(`📱 Phone ${phoneNumber}:`);
+                // Use actual WhatsApp phone if available, otherwise use config phone
+                const actualPhone = connection.phoneNumber || phoneNumber;
+                console.log(`📱 Phone ${actualPhone}:`);
                 connection.antiBan.logSafetyMetrics();
                 
                 // Check if approaching rate limits
