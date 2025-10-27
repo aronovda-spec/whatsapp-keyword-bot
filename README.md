@@ -202,25 +202,46 @@ logs/                        # Log files
 
 ## 🌐 Deployment
 
-This bot is configured for deployment on Render.com:
+This bot is configured for deployment on Render.com (free tier):
 
-1. **Connect your GitHub repository to Render**
-2. **Set environment variables in Render dashboard**
-3. **Deploy as a Web Service**
-4. **Set up UptimeRobot for health monitoring**
+### Step 1: Deploy to Render
+1. Go to [render.com](https://render.com)
+2. Sign up/login with GitHub
+3. Click "New +" → "Web Service"
+4. Connect your GitHub repository
+5. Settings:
+   - **Environment:** Node
+   - **Build Command:** `npm install`
+   - **Start Command:** `npm start`
+   - **Plan:** Free
 
-### Render Configuration (render.yaml)
-```yaml
-services:
-  - type: web
-    name: whatsapp-keyword-bot
-    env: node
-    plan: free
-    buildCommand: npm install
-    startCommand: npm start
-    healthCheckPath: /health
-    autoDeploy: true
+### Step 2: Environment Variables
+In Render dashboard, add:
+```env
+NODE_ENV=production
+PORT=10000
+TELEGRAM_BOT_TOKEN=your_bot_token_here
+TELEGRAM_CHAT_ID=your_chat_id_here
+EMAIL_ENABLED=true
+EMAIL_SMTP_HOST=smtp.gmail.com
+EMAIL_SMTP_PORT=587
+EMAIL_SMTP_USER=your_email@gmail.com
+EMAIL_SMTP_PASS=your_app_password
+EMAIL_TO=your@email.com
+ADMIN_API_KEY=generate_secure_random_key
+LOG_LEVEL=info
 ```
+
+### Step 3: Connect WhatsApp
+1. Deploy service
+2. Check Render logs for QR code
+3. Scan QR code with WhatsApp
+4. Bot auto-connects after scan
+
+### Step 4: Monitoring
+- **Health:** `https://your-app.onrender.com/health`
+- **Stats:** `https://your-app.onrender.com/stats?token=YOUR_API_KEY`
+- **Uptime:** Set up [UptimeRobot](https://uptimerobot.com) to monitor `/health`
 
 ## 🔐 Security Features
 
@@ -309,6 +330,40 @@ services:
 - **Bot detects**: Filename keyword "urgent"
 - **Bot extracts**: Text from PDF content
 - **User receives**: Notification with file info + extracted content
+
+## 🔧 Troubleshooting
+
+### Bot not connecting to WhatsApp
+- Check if QR code is being generated in logs
+- Ensure session files are persisted
+- Verify no firewall blocking WhatsApp Web
+
+### Telegram notifications not working
+- Verify bot token and chat ID in `.env`
+- Test with `/test-notification` endpoint (requires API key)
+- Check if bot is blocked by user
+
+### Keywords not detected
+- Check `config/keywords.json` syntax
+- Verify case sensitivity settings
+- Test with `/reload-keywords` endpoint (requires API key)
+
+### Bot disconnects frequently
+- Check Render logs for errors
+- Verify stable internet connection
+- Consider upgrading to paid Render plan
+
+### Testing Endpoints
+```bash
+# Health check (no auth required)
+curl https://your-app.onrender.com/health
+
+# Stats (requires API key)
+curl "https://your-app.onrender.com/stats?token=YOUR_API_KEY"
+
+# Test notification (requires API key)
+curl -X POST "https://your-app.onrender.com/test-notification?token=YOUR_API_KEY"
+```
 
 ## 📝 License
 
