@@ -1242,7 +1242,7 @@ class TelegramCommandHandler {
                 return;
             }
 
-            this.keywordDetector.addKeyword(keyword);
+            await this.keywordDetector.addKeyword(keyword, userId.toString());
             const escapedKeyword = this.escapeHtml(keyword);
             this.bot.sendMessage(chatId, `✅ Added global keyword: "${escapedKeyword}"`);
             console.log(`🔑 Admin ${userId} added keyword: ${keyword}`);
@@ -1277,7 +1277,7 @@ class TelegramCommandHandler {
                 return;
             }
 
-            this.keywordDetector.removeKeyword(keyword);
+            await this.keywordDetector.removeKeyword(keyword);
             const escapedKeyword = this.escapeHtml(keyword);
             this.bot.sendMessage(chatId, `✅ Removed global keyword: "${escapedKeyword}"`);
             console.log(`🔑 Admin ${userId} removed keyword: ${keyword}`);
