@@ -445,16 +445,23 @@ class TelegramCommandHandler {
                 keywordsText += 'No keywords configured.';
             } else {
                 keywords.forEach((keyword, index) => {
-                    keywordsText += `${index + 1}. ${keyword}\n`;
+                    // Escape HTML special characters to prevent parsing errors
+                    const escapedKeyword = keyword
+                        .replace(/&/g, '&amp;')
+                        .replace(/</g, '&lt;')
+                        .replace(/>/g, '&gt;')
+                        .replace(/"/g, '&quot;')
+                        .replace(/'/g, '&#39;');
+                    keywordsText += `${index + 1}. ${escapedKeyword}\n`;
                 });
             }
             
             keywordsText += '\n💡 <b>Keyword Management:</b>\n';
-            keywordsText += '• /addkeyword <word> - Add global keyword (Admin only)\n';
-            keywordsText += '• /removekeyword <word> - Remove global keyword (Admin only)\n';
+            keywordsText += '• /addkeyword &lt;word&gt; - Add global keyword (Admin only)\n';
+            keywordsText += '• /removekeyword &lt;word&gt; - Remove global keyword (Admin only)\n';
             keywordsText += '• /mykeywords - Show your personal keywords\n';
-            keywordsText += '• /addmykeyword <word> - Add personal keyword\n';
-            keywordsText += '• /removemykeyword <word> - Remove personal keyword';
+            keywordsText += '• /addmykeyword &lt;word&gt; - Add personal keyword\n';
+            keywordsText += '• /removemykeyword &lt;word&gt; - Remove personal keyword';
 
             this.bot.sendMessage(chatId, keywordsText, { parse_mode: 'HTML' });
         });
@@ -1282,14 +1289,21 @@ class TelegramCommandHandler {
                 keywordsText += 'No personal keywords set.\n\n';
             } else {
                 personalKeywords.forEach((keyword, index) => {
-                    keywordsText += `${index + 1}. ${keyword}\n`;
+                    // Escape HTML special characters to prevent parsing errors
+                    const escapedKeyword = keyword
+                        .replace(/&/g, '&amp;')
+                        .replace(/</g, '&lt;')
+                        .replace(/>/g, '&gt;')
+                        .replace(/"/g, '&quot;')
+                        .replace(/'/g, '&#39;');
+                    keywordsText += `${index + 1}. ${escapedKeyword}\n`;
                 });
                 keywordsText += '\n';
             }
             
             keywordsText += '💡 <b>Personal Keyword Management:</b>\n';
-            keywordsText += '• /addmykeyword <word> - Add personal keyword\n';
-            keywordsText += '• /removemykeyword <word> - Remove personal keyword\n\n';
+            keywordsText += '• /addmykeyword &lt;word&gt; - Add personal keyword\n';
+            keywordsText += '• /removemykeyword &lt;word&gt; - Remove personal keyword\n\n';
             keywordsText += 'ℹ️ Personal keywords work alongside global keywords.';
 
             this.bot.sendMessage(chatId, keywordsText, { parse_mode: 'HTML' });
