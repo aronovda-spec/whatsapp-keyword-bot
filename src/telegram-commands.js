@@ -275,7 +275,8 @@ class TelegramCommandHandler {
                     '/reject <user_id> - Reject user\n' +
                     '/pending - Show pending requests\n' +
                     '/remove <user_id> - Remove user (with confirmation)\n' +
-                    '/setemail <user_id> <email> - Set user email';
+                    '/setemail <user_id> <email> - Set user email\n' +
+                    '/makeadmin <user_id> - Promote user to admin';
             this.bot.sendMessage(chatId, helpText);
         });
 
@@ -325,7 +326,8 @@ class TelegramCommandHandler {
                 '/reject <user_id> - Reject user\n' +
                 '/remove <user_id> - Remove user (with confirmation)\n' +
                 '/pending - Show pending requests\n' +
-                '/setemail <user_id> <email> - Set user email';
+                '/setemail <user_id> <email> - Set user email\n' +
+                '/makeadmin <user_id> - Promote user to admin';
             this.bot.sendMessage(chatId, adminText);
         });
 
@@ -1019,6 +1021,41 @@ class TelegramCommandHandler {
                     });
             } else {
                 this.bot.sendMessage(chatId, '❌ Supabase not configured. Cannot update email.');
+            }
+        });
+
+        // Make admin command - Admin only
+        this.bot.onText(/\/makeadmin (.+)/, (msg, match) => {
+            const chatId = msg.chat.id;
+            const adminId = msg.from.id;
+            const userId = match[1];
+            
+            if (!this.authorization.isAdmin(adminId)) {
+                this.bot.sendMessage(chatId, '❌ Admin access required.');
+                return;
+            }
+            
+            console.log(`👑 Admin ${adminId} promoting user ${userId} to admin`);
+            
+            // Promote user to admin in Supabase
+            if (this.authorization.supabase && this.authorization.supabase.isEnabled()) {
+                this.authorization.supabase.promoteToAdmin(userId)
+                    .then(success => {
+                        if (success) {
+                            // Also update local authorization
+                            this.authorization.addAuthorizedUser(userId, adminId);
+                            this.authorization.addAdminUser(userId);
+                            this.bot.sendMessage(chatId, `✅ User ${userId} promoted to admin`);
+                        } else {
+                            this.bot.sendMessage(chatId, `❌ Failed to promote user ${userId}`);
+                        }
+                    })
+                    .catch(err => {
+                        console.error('Error promoting user to admin:', err);
+                        this.bot.sendMessage(chatId, `❌ Error: ${err.message}`);
+                    });
+            } else {
+                this.bot.sendMessage(chatId, '❌ Supabase not configured. Cannot promote admin.');
             }
         });
 
