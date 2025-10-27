@@ -56,41 +56,33 @@ class WhatsAppConnection {
             if (this.supabase && this.supabase.isEnabled()) {
                 console.log('🔍 Supabase enabled, attempting session restore...');
                 try {
-                    // Try multiple possible restore paths
-                    const restorePaths = [this.configPhoneNumber, 'phone1', 'PHONE_PLACEHOLDER:4@s.whatsapp.net'];
-                    let restored = false;
+                    // Use configPhoneNumber as the primary path (e.g. 'phone1')
+                    const restorePath = this.configPhoneNumber;
+                    console.log(`🔍 Trying to restore session from path: ${restorePath}`);
                     
-                    for (const restorePath of restorePaths) {
-                        console.log(`🔍 Trying to restore session from path: ${restorePath}`);
-                        const sessionFiles = await this.supabase.listSessionFiles(restorePath);
+                    const sessionFiles = await this.supabase.listSessionFiles(restorePath);
+                    
+                    console.log(`📋 Session files found for ${restorePath}:`, sessionFiles?.length || 0);
+                    
+                    if (sessionFiles && sessionFiles.length > 0) {
+                        console.log(`📥 Found ${sessionFiles.length} session files from Supabase (${restorePath}), restoring...`);
                         
-                        console.log(`📋 Session files found for ${restorePath}:`, sessionFiles?.length || 0);
-                        
-                        if (sessionFiles && sessionFiles.length > 0) {
-                            console.log(`📥 Found ${sessionFiles.length} session files from Supabase (${restorePath}), restoring...`);
-                            
-                            // Download and write each file
-                            for (const filename of sessionFiles) {
-                                const content = await this.supabase.restoreSessionFile(restorePath, filename);
-                                if (content) {
-                                    const filePath = path.join(this.sessionPath, filename);
-                                    const dir = path.dirname(filePath);
-                                    if (!fs.existsSync(dir)) {
-                                        fs.mkdirSync(dir, { recursive: true });
-                                    }
-                                    fs.writeFileSync(filePath, content, 'utf8');
-                                    console.log(`✅ Restored: ${filename}`);
+                        // Download and write each file
+                        for (const filename of sessionFiles) {
+                            const content = await this.supabase.restoreSessionFile(restorePath, filename);
+                            if (content) {
+                                const filePath = path.join(this.sessionPath, filename);
+                                const dir = path.dirname(filePath);
+                                if (!fs.existsSync(dir)) {
+                                    fs.mkdirSync(dir, { recursive: true });
                                 }
+                                fs.writeFileSync(filePath, content, 'utf8');
+                                console.log(`✅ Restored: ${filename}`);
                             }
-                            console.log('✅ Session restored from cloud');
-                            restored = true;
-                            break; // Stop trying once we restore successfully
                         }
-                    }
-                    
-                    if (!restored) {
-                        console.log('📭 No session found in Supabase storage - QR code will be required');
-                        console.log('💡 Check Render logs to see which paths were tried');
+                        console.log('✅ Session restored from cloud');
+                    } else {
+                        console.log('📭 No session files found in Supabase storage - QR code will be required');
                     }
                 } catch (error) {
                     console.log('⚠️ Could not restore session from Supabase:', error.message);
@@ -232,7 +224,7 @@ class WhatsAppConnection {
         
         // Discover all groups the bot is a member of
         try {
-            await this.discoverGroups();
+        await this.discoverGroups();
         } catch (error) {
             console.error('Failed to discover groups:', error.message);
             // Non-critical, continue anyway
