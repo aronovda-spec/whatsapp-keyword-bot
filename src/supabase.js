@@ -474,6 +474,21 @@ class SupabaseManager {
         if (!this.enabled) return [];
 
         try {
+            // First, try listing ALL files in the bucket to see what's actually there
+            console.log(`🔍 Listing ALL files in bucket to debug...`);
+            const { data: allData, error: allError } = await this.client.storage
+                .from('whatsapp-sessions')
+                .list('sessions', {
+                    limit: 100,
+                    offset: 0,
+                    sortBy: { column: 'name', order: 'asc' }
+                });
+            
+            if (!allError && allData) {
+                console.log(`📦 Total items in sessions folder: ${allData.length}`);
+                console.log(`📋 All items:`, allData.map(item => item.name).slice(0, 20));
+            }
+            
             const folderPath = `sessions/${phoneNumber}`;
             
             console.log(`🔍 Listing files from Supabase path: ${folderPath}`);
