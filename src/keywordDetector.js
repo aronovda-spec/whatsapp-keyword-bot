@@ -2481,22 +2481,28 @@ class KeywordDetector {
         return detectedKeywords;
     }
 
-    addKeyword(keyword) {
+    async addKeyword(keyword, addedBy = 'system') {
         if (!this.keywords.includes(keyword)) {
             this.keywords.push(keyword);
-            this.saveConfig();
+            await this.saveConfig();
+            
+            // Also add to Supabase
+            await this.addKeywordToSupabase(keyword, addedBy);
         }
     }
 
-    removeKeyword(keyword) {
+    async removeKeyword(keyword) {
         const index = this.keywords.indexOf(keyword);
         if (index > -1) {
             this.keywords.splice(index, 1);
-            this.saveConfig();
+            await this.saveConfig();
+            
+            // Also remove from Supabase
+            await this.removeKeywordFromSupabase(keyword);
         }
     }
 
-    saveConfig() {
+    async saveConfig() {
         try {
             const config = {
                 keywords: this.keywords,
@@ -2507,10 +2513,43 @@ class KeywordDetector {
                 fuzzyThreshold: this.fuzzyThreshold
             };
             
+            // Save to local file
             const configPath = path.join(__dirname, '../config/keywords.json');
             fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
         } catch (error) {
             console.error('Error saving keyword config:', error);
+        }
+    }
+    
+    async addKeywordToSupabase(keyword, addedBy = 'system') {
+        if (this.supabase.isEnabled()) {
+            try {
+                console.log(`💾 Adding keyword "${keyword}" to Supabase...`);
+                const success = await this.supabase.addGlobalKeyword(keyword, addedBy);
+                if (success) {
+                    console.log(`✅ Keyword "${keyword}" added to Supabase`);
+                } else {
+                    console.error(`❌ Failed to add keyword "${keyword}" to Supabase`);
+                }
+            } catch (error) {
+                console.error(`Error adding keyword to Supabase:`, error.message);
+            }
+        }
+    }
+    
+    async removeKeywordFromSupabase(keyword) {
+        if (this.supabase.isEnabled()) {
+            try {
+                console.log(`💾 Removing keyword "${keyword}" from Supabase...`);
+                const success = await this.supabase.removeGlobalKeyword(keyword);
+                if (success) {
+                    console.log(`✅ Keyword "${keyword}" removed from Supabase`);
+                } else {
+                    console.error(`❌ Failed to remove keyword "${keyword}" from Supabase`);
+                }
+            } catch (error) {
+                console.error(`Error removing keyword from Supabase:`, error.message);
+            }
         }
     }
 
