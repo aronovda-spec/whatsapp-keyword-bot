@@ -212,15 +212,25 @@ class WhatsAppConnection {
             this.phoneNumber = 'default';
         }
         
-        // Cache group names for better display
-        await this.cacheGroupNames();
+        // Cache group names for better display (with error handling)
+        try {
+            await this.cacheGroupNames();
+        } catch (error) {
+            console.error('Failed to cache group names:', error.message);
+            // Non-critical, continue anyway
+        }
         
         logBotEvent('whatsapp_connected');
         console.log('✅ WhatsApp connected successfully!');
         console.log('🤖 Bot is now monitoring for keywords...');
         
         // Discover all groups the bot is a member of
-        await this.discoverGroups();
+        try {
+            await this.discoverGroups();
+        } catch (error) {
+            console.error('Failed to discover groups:', error.message);
+            // Non-critical, continue anyway
+        }
         
         // Backup session to cloud
         if (this.supabase.isEnabled() && this.phoneNumber) {
