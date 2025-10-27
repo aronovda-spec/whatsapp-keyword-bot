@@ -5,6 +5,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const SupabaseManager = require('./supabase');
 
 class TelegramAuthorization {
     constructor() {
@@ -12,10 +13,11 @@ class TelegramAuthorization {
         this.adminUsers = new Set();
         this.pendingApprovals = new Map(); // userId -> timestamp
         this.configPath = path.join(__dirname, '../config/telegram-auth.json');
+        this.supabase = new SupabaseManager();
         this.loadAuthorizedUsers();
     }
 
-    loadAuthorizedUsers() {
+    async loadAuthorizedUsers() {
         try {
             // Set you as admin and authorized user by default
             this.authorizedUsers.add('1022850808'); // Your chat ID
@@ -40,7 +42,25 @@ class TelegramAuthorization {
                 envAdmins.split(',').map(id => id.trim()).forEach(id => this.adminUsers.add(id));
             }
 
-            // Load from file (for dynamic updates)
+            // Try Supabase first
+            if (this.supabase.isEnabled()) {
+                try {
+                    const users = await this.supabase.getAuthorizedUsers();
+                    if (users && users.length > 0) {
+                        users.forEach(user => {
+                            this.authorizedUsers.add(user.user_id);
+                            if (user.is_admin) {
+                                this.adminUsers.add(user.user_id);
+                            }
+                        });
+                        console.log(`📊 Loaded ${users.length} users from Supabase database`);
+                    }
+                } catch (error) {
+                    console.warn('⚠️ Failed to load from Supabase, falling back to files:', error.message);
+                }
+            }
+
+            // Load from file (fallback)
             if (fs.existsSync(this.configPath)) {
                 const config = JSON.parse(fs.readFileSync(this.configPath, 'utf8'));
                 config.authorizedUsers.forEach(id => this.authorizedUsers.add(id));
@@ -78,6 +98,12 @@ class TelegramAuthorization {
         
         console.log(`✅ User ${userId} (${userName || 'Unknown'}) authorized by ${addedBy || 'system'}`);
         this.saveConfig();
+        
+        // Save to Supabase if enabled
+        if (this.supabase.isEnabled()) {
+            this.supabase.addAuthorizedUser(userId, false); // Not admin by default
+        }
+        
         return true;
     }
 

@@ -5,6 +5,7 @@ const path = require('path');
 const { logError, logBotEvent } = require('./logger');
 const WhatsAppAntiBan = require('./anti-ban');
 const FileExtractor = require('./fileExtractor');
+const SupabaseManager = require('./supabase');
 
 class WhatsAppConnection {
     constructor() {
@@ -16,6 +17,8 @@ class WhatsAppConnection {
         this.antiBan = new WhatsAppAntiBan(); // Anti-ban protection
         this.monitoredGroups = new Set(); // Track monitored groups
         this.fileExtractor = new FileExtractor(); // File content extractor
+        this.supabase = new SupabaseManager(); // Supabase for session backup
+        this.phoneNumber = null; // Will be set when connected
         this.loadGroupConfig();
         this.init();
     }
@@ -122,8 +125,15 @@ class WhatsAppConnection {
             }
         });
 
-        // Save credentials when updated
-        this.sock.ev.on('creds.update', saveCreds);
+        // Save credentials when updated + backup to cloud
+        this.sock.ev.on('creds.update', async () => {
+            saveCreds();
+            
+            // Backup session to Supabase Storage
+            if (this.supabase.isEnabled() && this.phoneNumber) {
+                await this.backupSessionToCloud();
+            }
+        });
 
         // Message events
         this.sock.ev.on('messages.upsert', (m) => {
@@ -148,12 +158,28 @@ class WhatsAppConnection {
 
     async handleConnection() {
         this.isConnected = true;
+        
+        // Get phone number from connection
+        try {
+            const user = this.sock.user;
+            this.phoneNumber = user?.id || 'default';
+            console.log(`📱 Connected as: ${this.phoneNumber}`);
+        } catch (error) {
+            console.warn('Could not get phone number:', error.message);
+            this.phoneNumber = 'default';
+        }
+        
         logBotEvent('whatsapp_connected');
         console.log('✅ WhatsApp connected successfully!');
         console.log('🤖 Bot is now monitoring for keywords...');
         
         // Discover all groups the bot is a member of
         await this.discoverGroups();
+        
+        // Backup session to cloud
+        if (this.supabase.isEnabled() && this.phoneNumber) {
+            await this.backupSessionToCloud();
+        }
         
         // Emit connected event for bot to handle
         this.emit('connected');
@@ -563,6 +589,31 @@ class WhatsAppConnection {
             
         } catch (error) {
             console.error('❌ Error saving discovered groups:', error.message);
+        }
+    }
+
+    async backupSessionToCloud() {
+        if (!this.supabase.isEnabled() || !this.phoneNumber) {
+            return;
+        }
+
+        try {
+            // Read all session files
+            const sessionFiles = {};
+            const files = fs.readdirSync(this.sessionPath, { recursive: true });
+            
+            for (const file of files) {
+                const filePath = path.join(this.sessionPath, file);
+                if (fs.statSync(filePath).isFile()) {
+                    sessionFiles[file] = fs.readFileSync(filePath, 'utf8');
+                }
+            }
+
+            // Backup to Supabase Storage
+            await this.supabase.backupSession(this.phoneNumber, sessionFiles);
+            console.log(`💾 Session backed up to cloud storage`);
+        } catch (error) {
+            console.error('❌ Failed to backup session to cloud:', error.message);
         }
     }
 
