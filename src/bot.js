@@ -319,7 +319,9 @@ class WhatsAppKeywordBot {
                             phoneNumber,
                             keywordData.matchType,
                             keywordData.token,
-                            messageData.attachment
+                            messageData.attachment,
+                            false, // isReminder (first alert, not a reminder)
+                            0 // reminderCount (first alert)
                         );
 
                         if (success) {
