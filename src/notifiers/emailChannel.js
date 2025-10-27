@@ -33,7 +33,7 @@ class EmailChannel {
                 return;
             }
 
-            // Create transporter
+            // Create transporter with connection timeout options
             this.transporter = nodemailer.createTransport({
                 host: host,
                 port: port,
@@ -41,7 +41,13 @@ class EmailChannel {
                 auth: {
                     user: user,
                     pass: pass
-                }
+                },
+                connectionTimeout: 10000, // 10 seconds to establish connection
+                greetingTimeout: 10000, // 10 seconds for greeting
+                socketTimeout: 10000, // 10 seconds for socket operations
+                pool: true, // Use connection pooling
+                maxConnections: 5,
+                maxMessages: 100
             });
 
             // Parse recipients (comma-separated)
