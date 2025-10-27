@@ -471,6 +471,15 @@ class WhatsAppKeywordBot {
         try {
             console.log('🛡️ Anti-Ban Safety Check:');
             for (const [phoneNumber, connection] of this.connections) {
+                // Skip placeholder phone numbers in anti-ban check
+                if (phoneNumber && (
+                    phoneNumber.includes('YOUR_') || 
+                    phoneNumber.includes('PRIMARY') ||
+                    phoneNumber.includes('PHONE_NUMBER')
+                )) {
+                    continue; // Skip placeholder, not a real connection yet
+                }
+                
                 // Use actual WhatsApp phone if available, otherwise use config phone
                 const actualPhone = connection.phoneNumber || phoneNumber;
                 console.log(`📱 Phone ${actualPhone}:`);
