@@ -10,7 +10,7 @@ const { logBotEvent, logError } = require('./logger');
 class TelegramCommandHandler {
     constructor(token, authorization) {
         try {
-            this.bot = new TelegramBot(token, { polling: true });
+            this.bot = new TelegramBot(token, { polling: true, onlyFirstMatch: true });
             this.authorization = authorization;
             this.reminderManager = null; // Will be set by bot
             this.lastCommandTime = new Map(); // Track last command time per user
