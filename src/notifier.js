@@ -182,22 +182,39 @@ class Notifier {
      * Handle reminder event from ReminderManager
      */
     async handleReminder(reminder) {
-        console.log(`⏰ Sending reminder ${reminder.reminderCount} for user ${reminder.userId}`);
+        console.log(`⏰ Sending reminder ${reminder.reminderCount} for user ${reminder.userId} (global: ${reminder.isGlobal || false})`);
         
         try {
-            await this.sendPersonalKeywordAlert(
-                reminder.keyword,
-                reminder.message,
-                reminder.sender,
-                reminder.group,
-                reminder.messageId,
-                reminder.phoneNumber,
-                reminder.userId,
-                'exact',
-                null,
-                reminder.attachment,
-                true // Mark as reminder
-            );
+            // Use global alert for global keywords, personal alert otherwise
+            if (reminder.isGlobal) {
+                // Send to ALL authorized users (global keyword reminder)
+                await this.sendKeywordAlert(
+                    reminder.keyword,
+                    reminder.message,
+                    reminder.sender,
+                    reminder.group,
+                    reminder.messageId,
+                    reminder.phoneNumber,
+                    'exact',
+                    null,
+                    reminder.attachment
+                );
+            } else {
+                // Send to specific user (personal keyword reminder)
+                await this.sendPersonalKeywordAlert(
+                    reminder.keyword,
+                    reminder.message,
+                    reminder.sender,
+                    reminder.group,
+                    reminder.messageId,
+                    reminder.phoneNumber,
+                    reminder.userId,
+                    'exact',
+                    null,
+                    reminder.attachment,
+                    true // Mark as reminder
+                );
+            }
         } catch (error) {
             logError(error, {
                 context: 'handle_reminder',
