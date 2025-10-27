@@ -53,7 +53,8 @@ class WhatsAppConnection {
             // Try to restore session from Supabase (if enabled)
             if (this.supabase && this.supabase.isEnabled()) {
                 try {
-                    const restoredSession = await this.supabase.restoreSession('phone1'); // Try to restore from default session
+                    // Try to restore from default session path
+                    const restoredSession = await this.supabase.restoreSession('phone1');
                     if (restoredSession && Object.keys(restoredSession).length > 0) {
                         console.log('📥 Restored session from Supabase, writing to disk...');
                         // Write restored session files to disk
@@ -66,6 +67,8 @@ class WhatsAppConnection {
                             fs.writeFileSync(filePath, content, 'utf8');
                         }
                         console.log('✅ Session restored from cloud');
+                    } else {
+                        console.log('📭 No session found in Supabase storage');
                     }
                 } catch (error) {
                     console.log('⚠️ Could not restore session from Supabase:', error.message);
