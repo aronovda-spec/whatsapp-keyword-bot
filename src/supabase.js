@@ -16,13 +16,23 @@ class SupabaseManager {
         try {
             const url = process.env.SUPABASE_URL;
             const key = process.env.SUPABASE_KEY;
+            const serviceKey = process.env.SUPABASE_SERVICE_KEY;
 
             if (!url || !key) {
                 console.log('📊 Supabase: Not configured (optional). Using local file storage.');
                 return;
             }
 
+            // Use service key for storage forwarding, anon key for database queries
             this.client = createClient(url, key);
+            
+            // Create separate client for storage operations if service key is provided
+            if (serviceKey) {
+                this.storageClient = createClient(url, serviceKey);
+            } else {
+                this.storageClient = this.client; // Fallback to anon key
+            }
+            
             this.enabled = true;
 
             console.log('✅ Supabase: Connected to cloud database');
@@ -269,7 +279,10 @@ class SupabaseManager {
         try {
             const filename = `sessions/${phoneNumber}/session.json`;
             
-            const { error } = await this.client.storage
+            // Use storage client (with service key if available)
+            const client = this.storageClient || this.client;
+            
+            const { error } = await client.storage
                 .from('whatsapp-sessions')
                 .upload(filename, JSON.stringify(sessionData), {
                     contentType: 'application/json',
@@ -282,6 +295,14 @@ class SupabaseManager {
             return true;
         } catch (error) {
             console.error('Supabase backupSession error:', error.message);
+            
+            // If it's an RLS error, provide helpful message
+            if (error.message && error.message.includes('row-level security')) {
+                console.log('💡 Tip: To enable storage, either:');
+                console.log('   1. Add SUPABASE_SERVICE_KEY to your .env file (recommended)');
+                console.log('   2. Or disable RLS on whatsapp-sessions bucket in Supabase dashboard');
+            }
+            
             return false;
         }
     }
