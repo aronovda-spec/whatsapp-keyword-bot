@@ -19,13 +19,16 @@ class TelegramAuthorization {
 
     async loadAuthorizedUsers() {
         try {
-            // Set you as admin and authorized user by default
-            this.authorizedUsers.add('1022850808'); // Your chat ID
-            this.adminUsers.add('1022850808'); // Your chat ID
+            // Set you as admin and authorized user by default (from .env)
+            const primaryAdminId = process.env.TELEGRAM_CHAT_ID;
+            if (primaryAdminId) {
+                this.authorizedUsers.add(primaryAdminId);
+                this.adminUsers.add(primaryAdminId);
+            }
             
             // Add fallback admin from environment variable (for recovery)
             const fallbackAdmin = process.env.TELEGRAM_FALLBACK_ADMIN;
-            if (fallbackAdmin && fallbackAdmin !== '1022850808') {
+            if (fallbackAdmin && fallbackAdmin !== primaryAdminId) {
                 this.authorizedUsers.add(fallbackAdmin);
                 this.adminUsers.add(fallbackAdmin);
                 console.log(`🛡️ Fallback admin loaded: ${fallbackAdmin}`);
