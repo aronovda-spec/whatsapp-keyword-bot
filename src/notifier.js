@@ -268,7 +268,8 @@ class Notifier {
 💬 <b>Message:</b>
 "${this.escapeHtml(message.substring(0, 200))}${message.length > 200 ? '...' : ''}"
 
-${reminderCount > 0 ? 'Reply /ok to acknowledge and stop reminders.' : '🔑 <i>This is a personal keyword notification</i>'}`;
+${reminderCount > 0 ? '⏰ Reply /ok to acknowledge and stop reminders.' : '💡 Reply /ok to acknowledge and stop reminders.'}
+🔑 <i>This is a personal keyword notification</i>`;
     }
 
     /**
