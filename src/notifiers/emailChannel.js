@@ -309,6 +309,7 @@ Message ID: ${messageId || 'N/A'}`;
 
         for (let attempt = 1; attempt <= this.retryAttempts; attempt++) {
             try {
+                console.log(`📧 Attempting to send email (attempt ${attempt}/${this.retryAttempts}) to ${recipient}`);
                 await this.transporter.sendMail({
                     from: process.env.EMAIL_SMTP_USER,
                     to: recipient,
@@ -316,17 +317,20 @@ Message ID: ${messageId || 'N/A'}`;
                     html: emailContent.html,
                     text: emailContent.text
                 });
+                console.log(`✅ Email sent successfully to ${recipient}`);
                 return; // Success
             } catch (error) {
                 lastError = error;
+                console.error(`❌ Email send attempt ${attempt} to ${recipient} failed:`, error.message);
 
                 if (attempt < this.retryAttempts) {
-                    console.log(`📧 Email send attempt ${attempt} failed, retrying in ${this.retryDelay}ms...`);
+                    console.log(`📧 Retrying in ${this.retryDelay}ms...`);
                     await this.delay(this.retryDelay);
                 }
             }
         }
 
+        console.error(`❌ All ${this.retryAttempts} attempts failed for ${recipient}`);
         throw lastError;
     }
 
