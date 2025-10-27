@@ -226,7 +226,6 @@ class Notifier {
 
     formatPersonalAlertMessage(keyword, message, sender, group, messageId, phoneNumber = null, matchType = 'exact', matchedToken = null, attachment = null, reminderCount = 0) {
         const timestamp = new Date().toLocaleString();
-        const phoneInfo = phoneNumber ? ` (via ${phoneNumber})` : '';
         
         let matchInfo = '';
         if (matchType === 'fuzzy' && matchedToken) {
@@ -263,7 +262,7 @@ class Notifier {
 
 🚨 <b>Keyword:</b> ${this.escapeHtml(keyword)}${matchInfo}
 👤 <b>From:</b> ${this.escapeHtml(sender)}
-📱 <b>Group:</b> ${this.escapeHtml(group)}${phoneInfo}
+📱 <b>Group:</b> ${this.escapeHtml(group)}
 🕐 <b>Time:</b> ${timestamp}${reminderInfo}${attachmentInfo}
 
 💬 <b>Message:</b>
@@ -338,7 +337,6 @@ ${reminderCount > 0 ? 'Reply /ok to acknowledge and stop reminders.' : '🔑 <i>
 🔍 <b>Keyword:</b> ${keyword}${matchInfo}
 👤 <b>Sender:</b> ${sender || 'Unknown'}
 👥 <b>Group:</b> ${group || 'Unknown'}
-📱 <b>Detected by:</b> ${phoneNumber || 'Unknown Phone'}
 🕐 <b>Time:</b> ${timestamp}${attachmentInfo}
 
 💬 <b>Message:</b>
