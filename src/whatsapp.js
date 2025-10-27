@@ -50,6 +50,28 @@ class WhatsAppConnection {
                 fs.mkdirSync(this.sessionPath, { recursive: true });
             }
 
+            // Try to restore session from Supabase (if enabled)
+            if (this.supabase && this.supabase.isEnabled()) {
+                try {
+                    const restoredSession = await this.supabase.restoreSession('phone1'); // Try to restore from default session
+                    if (restoredSession && Object.keys(restoredSession).length > 0) {
+                        console.log('📥 Restored session from Supabase, writing to disk...');
+                        // Write restored session files to disk
+                        for (const [filename, content] of Object.entries(restoredSession)) {
+                            const filePath = path.join(this.sessionPath, filename);
+                            const dir = path.dirname(filePath);
+                            if (!fs.existsSync(dir)) {
+                                fs.mkdirSync(dir, { recursive: true });
+                            }
+                            fs.writeFileSync(filePath, content, 'utf8');
+                        }
+                        console.log('✅ Session restored from cloud');
+                    }
+                } catch (error) {
+                    console.log('⚠️ Could not restore session from Supabase:', error.message);
+                }
+            }
+
             await this.connect();
         } catch (error) {
             logError(error, { context: 'whatsapp_init' });
