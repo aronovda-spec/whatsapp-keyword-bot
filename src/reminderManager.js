@@ -22,15 +22,15 @@ class ReminderManager extends EventEmitter {
                 const data = fs.readFileSync(this.storagePath, 'utf8');
                 const savedReminders = JSON.parse(data);
                 
-                // Restore reminder timers
-                for (const [userId, reminders] of Object.entries(savedReminders)) {
-                    this.reminders.set(userId, reminders.map(reminder => ({
-                        ...reminder,
-                        nextReminderAt: new Date(reminder.nextReminderAt)
-                    })));
-                }
+                // Note: We don't restore old reminder timers on startup
+                // because the setTimeout IDs are lost after restart
+                // Users will need to re-trigger keyword alerts for new reminders
+                console.log(`📋 Found saved reminders but not restoring (timers lost on restart)`);
+                console.log(`📋 To prevent old reminders from spamming, clearing saved reminders...`);
                 
-                console.log(`📋 Loaded ${this.reminders.size} active reminder(s)`);
+                // Clear old reminders file to prevent confusion
+                fs.unlinkSync(this.storagePath);
+                console.log(`🗑️ Cleared old reminders file`);
             }
         } catch (error) {
             logError(error, { context: 'load_reminders' });
@@ -183,7 +183,6 @@ class ReminderManager extends EventEmitter {
      * Remove reminder for a user
      */
     removeReminder(userId) {
-**CHANGES**: Fixed `acknowledgeReminder()` in `src/reminderManager.js` to clear `setTimeout` timers.
         // Cancel any pending timers
         this.cancelReminderTimer(userId);
         
