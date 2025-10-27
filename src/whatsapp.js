@@ -223,7 +223,7 @@ class WhatsAppConnection {
             
             // Extract phone number without device ID for consistent backup path
             // e.g. "PHONE_PLACEHOLDER:4@s.whatsapp.net" → "PHONE_PLACEHOLDER"
-            const phoneMatch = fullId.match(/^(\d+)@/);
+            const phoneMatch = fullId.match(/^(\d+):/);
             this.phoneNumberForBackup = phoneMatch ? phoneMatch[1] : this.phoneNumber;
             
             console.log(`📱 Connected as: ${this.phoneNumber} (backup as: ${this.phoneNumberForBackup})`);
