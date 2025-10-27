@@ -98,42 +98,63 @@ class SupabaseManager {
         }
     }
 
-    // User Authorization Management
-    async getAuthorizedUsers() {
+    // User Management (Unified Users Table)
+    async getUsers() {
         if (!this.enabled) return null;
 
         try {
             const { data, error } = await this.client
-                .from('authorized_users')
-                .select('*');
+                .from('users')
+                .select('*')
+                .eq('active', true);
 
             if (error) throw error;
 
             return data;
         } catch (error) {
-            console.error('Supabase getAuthorizedUsers error:', error.message);
+            console.error('Supabase getUsers error:', error.message);
             return null;
         }
     }
 
-    async addAuthorizedUser(userId, isAdmin = false) {
+    // For backward compatibility
+    async getAuthorizedUsers() {
+        const users = await this.getUsers();
+        if (!users) return null;
+        
+        // Map to old format
+        return users.map(user => ({
+            user_id: user.user_id,
+            is_admin: user.is_admin || false
+        }));
+    }
+
+    async addUser(userId, username = null, firstName = null, isAdmin = false, email = null) {
         if (!this.enabled) return false;
 
         try {
             const { error } = await this.client
-                .from('authorized_users')
+                .from('users')
                 .upsert({
                     user_id: userId.toString(),
+                    username: username,
+                    first_name: firstName,
                     is_admin: isAdmin,
-                    created_at: new Date().toISOString()
+                    email: email,
+                    active: true,
+                    updated_at: new Date().toISOString()
                 });
 
             if (error) throw error;
             return true;
         } catch (error) {
-            console.error('Supabase addAuthorizedUser error:', error.message);
+            console.error('Supabase addUser error:', error.message);
             return false;
         }
+    }
+
+    async addAuthorizedUser(userId, isAdmin = false) {
+        return await this.addUser(userId, null, null, isAdmin, null);
     }
 
     async promoteToAdmin(userId) {
@@ -141,12 +162,12 @@ class SupabaseManager {
 
         try {
             const { error } = await this.client
-                .from('authorized_users')
-                .upsert({
-                    user_id: userId.toString(),
+                .from('users')
+                .update({
                     is_admin: true,
-                    created_at: new Date().toISOString()
-                });
+                    updated_at: new Date().toISOString()
+                })
+                .eq('user_id', userId.toString());
 
             if (error) throw error;
             return true;
@@ -161,9 +182,10 @@ class SupabaseManager {
 
         try {
             const { error } = await this.client
-                .from('authorized_users')
+                .from('users')
                 .update({
-                    is_admin: false
+                    is_admin: false,
+                    updated_at: new Date().toISOString()
                 })
                 .eq('user_id', userId.toString());
 
@@ -172,6 +194,28 @@ class SupabaseManager {
         } catch (error) {
             console.error('Supabase demoteFromAdmin error:', error.message);
             return false;
+        }
+    }
+
+    async getUserEmail(userId) {
+        if (!this.enabled) return null;
+
+        try {
+            const { data, error } = await this.client
+                .from('users')
+                .select('email')
+                .eq('user_id', userId.toString())
+                .single();
+
+            if (error) {
+                if (error.code === 'PGRST116') return null;
+                throw error;
+            }
+
+            return data?.email || null;
+        } catch (error) {
+            console.error('Supabase getUserEmail error:', error.message);
+            return null;
         }
     }
 
