@@ -59,17 +59,24 @@ class WhatsAppConnection {
                     let restored = false;
                     
                     for (const restorePath of restorePaths) {
-                        const restoredSession = await this.supabase.restoreSession(restorePath);
-                        if (restoredSession && Object.keys(restoredSession).length > 0) {
-                            console.log(`📥 Restored session from Supabase (${restorePath}), writing to disk...`);
-                            // Write restored session files to disk
-                            for (const [filename, content] of Object.entries(restoredSession)) {
-                                const filePath = path.join(this.sessionPath, filename);
-                                const dir = path.dirname(filePath);
-                                if (!fs.existsSync(dir)) {
-                                    fs.mkdirSync(dir, { recursive: true });
+                        console.log(`🔍 Trying to restore session from path: ${restorePath}`);
+                        const sessionFiles = await this.supabase.listSessionFiles(restorePath);
+                        
+                        if (sessionFiles && sessionFiles.length > 0) {
+                            console.log(`📥 Found ${sessionFiles.length} session files from Supabase (${restorePath}), restoring...`);
+                            
+                            // Download and write each file
+                            for (const filename of sessionFiles) {
+                                const content = await this.supabase.restoreSessionFile(restorePath, filename);
+                                if (content) {
+                                    const filePath = path.join(this.sessionPath, filename);
+                                    const dir = path.dirname(filePath);
+                                    if (!fs.existsSync(dir)) {
+                                        fs.mkdirSync(dir, { recursive: true });
+                                    }
+                                    fs.writeFileSync(filePath, content, 'utf8');
+                                    console.log(`✅ Restored: ${filename}`);
                                 }
-                                fs.writeFileSync(filePath, content, 'utf8');
                             }
                             console.log('✅ Session restored from cloud');
                             restored = true;
@@ -633,6 +640,8 @@ class WhatsAppConnection {
         }
 
         try {
+            console.log(`💾 Starting session backup for ${this.phoneNumber}...`);
+            
             // Read all session files
             const sessionFiles = {};
             const files = fs.readdirSync(this.sessionPath, { recursive: true });
@@ -644,9 +653,20 @@ class WhatsAppConnection {
                 }
             }
 
-            // Backup to Supabase Storage
-            await this.supabase.backupSession(this.phoneNumber, sessionFiles);
-            console.log(`💾 Session backed up to cloud storage`);
+            console.log(`📁 Found ${Object.keys(sessionFiles).length} session files to backup`);
+
+            // Backup each file individually to Supabase Storage
+            const backupPromises = Object.entries(sessionFiles).map(async ([filename, content]) => {
+                try {
+                    await this.supabase.backupSessionFile(this.phoneNumber, filename, content);
+                    console.log(`✅ Backed up: ${filename}`);
+                } catch (error) {
+                    console.error(`❌ Failed to backup ${filename}:`, error.message);
+                }
+            });
+
+            await Promise.allSettled(backupPromises);
+            console.log(`💾 Session backup completed for ${this.phoneNumber}`);
         } catch (error) {
             console.error('❌ Failed to backup session to cloud:', error.message);
         }

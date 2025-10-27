@@ -8,10 +8,11 @@ const TelegramAuthorization = require('./telegram-auth');
 const { logBotEvent, logError } = require('./logger');
 
 class TelegramCommandHandler {
-    constructor(token, authorization) {
+    constructor(token, authorization, keywordDetector) {
         try {
             this.bot = new TelegramBot(token, { polling: true, onlyFirstMatch: true });
             this.authorization = authorization;
+            this.keywordDetector = keywordDetector; // Store keywordDetector reference
             this.reminderManager = null; // Will be set by bot
             this.lastCommandTime = new Map(); // Track last command time per user
             this.setupCommandHandlers();
@@ -429,6 +430,11 @@ class TelegramCommandHandler {
             
             if (!this.authorization.isAuthorized(userId)) {
                 this.bot.sendMessage(chatId, '❌ You are not authorized to use this bot.');
+                return;
+            }
+
+            if (!this.keywordDetector) {
+                this.bot.sendMessage(chatId, '❌ Keyword detector is not initialized. Please restart the bot.');
                 return;
             }
 
@@ -1204,6 +1210,11 @@ class TelegramCommandHandler {
                 return;
             }
 
+            if (!this.keywordDetector) {
+                this.bot.sendMessage(chatId, '❌ Keyword detector is not initialized. Please restart the bot.');
+                return;
+            }
+
             const keywords = this.keywordDetector.getKeywords();
             if (keywords.includes(keyword)) {
                 this.bot.sendMessage(chatId, `❌ Keyword "${keyword}" already exists.`);
@@ -1229,6 +1240,11 @@ class TelegramCommandHandler {
 
             if (!this.authorization.isAdmin(userId)) {
                 this.bot.sendMessage(chatId, '❌ Admin access required to remove global keywords.');
+                return;
+            }
+
+            if (!this.keywordDetector) {
+                this.bot.sendMessage(chatId, '❌ Keyword detector is not initialized. Please restart the bot.');
                 return;
             }
 

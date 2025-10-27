@@ -412,63 +412,105 @@ class SupabaseManager {
         }
     }
 
-    // Session Backup (Supabase Storage)
-    async backupSession(phoneNumber, sessionData) {
+    // Session Backup - Backup individual file (NEW IMPROVED METHOD)
+    async backupSessionFile(phoneNumber, filename, content) {
         if (!this.enabled) return false;
 
         try {
-            const filename = `sessions/${phoneNumber}/session.json`;
+            const filePath = `sessions/${phoneNumber}/${filename}`;
             
             // Use storage client (with service key if available)
             const client = this.storageClient || this.client;
             
             const { error } = await client.storage
                 .from('whatsapp-sessions')
-                .upload(filename, JSON.stringify(sessionData), {
-                    contentType: 'application/json',
+                .upload(filePath, content, {
+                    contentType: 'text/plain',
                     upsert: true
                 });
 
-            if (error) throw error;
+            if (error) {
+                // If bucket doesn't exist, try to create it
+                if (error.message && error.message.includes('not found')) {
+                    console.log('📦 Storage bucket not found. Please create "whatsapp-sessions" bucket in Supabase.');
+                    return false;
+                }
+                throw error;
+            }
 
-            console.log(`💾 Session backed up to cloud: ${phoneNumber}`);
             return true;
         } catch (error) {
-            console.error('Supabase backupSession error:', error.message);
-            
-            // If it's an RLS error, provide helpful message
-            if (error.message && error.message.includes('row-level security')) {
-                console.log('💡 Tip: To enable storage, either:');
-                console.log('   1. Add SUPABASE_SERVICE_KEY to your .env file (recommended)');
-                console.log('   2. Or disable RLS on whatsapp-sessions bucket in Supabase dashboard');
-            }
-            
+            console.error(`Supabase backupSessionFile error for ${filename}:`, error.message);
             return false;
         }
     }
 
-    async restoreSession(phoneNumber) {
+    // Session Restore - Restore individual file (NEW IMPROVED METHOD)
+    async restoreSessionFile(phoneNumber, filename) {
         if (!this.enabled) return null;
 
         try {
-            const filename = `sessions/${phoneNumber}/session.json`;
+            const filePath = `sessions/${phoneNumber}/${filename}`;
             
             const { data, error } = await this.client.storage
                 .from('whatsapp-sessions')
-                .download(filename);
+                .download(filePath);
 
             if (error) {
                 if (error.message.includes('not found')) return null;
                 throw error;
             }
 
-            const sessionJson = await data.text();
-            const sessionData = JSON.parse(sessionJson);
-
-            console.log(`📥 Session restored from cloud: ${phoneNumber}`);
-            return sessionData;
+            const content = await data.text();
+            return content;
         } catch (error) {
-            console.error('Supabase restoreSession error:', error.message);
+            console.error(`Supabase restoreSessionFile error for ${filename}:`, error.message);
+            return null;
+        }
+    }
+
+    // Session List - List all files for a session (NEW METHOD)
+    async listSessionFiles(phoneNumber) {
+        if (!this.enabled) return [];
+
+        try {
+            const folderPath = `sessions/${phoneNumber}`;
+            
+            const { data, error } = await this.client.storage
+                .from('whatsapp-sessions')
+                .list(folderPath);
+
+            if (error) {
+                if (error.message.includes('not found')) return [];
+                throw error;
+            }
+
+            // Filter out directories, return only files
+            const files = data
+                .filter(item => !item.name.includes('/')) // Supabase lists with full path
+                .map(item => item.name);
+            
+            return files;
+        } catch (error) {
+            console.error('Supabase listSessionFiles error:', error.message);
+            return [];
+        }
+    }
+
+    // Legacy methods (kept for compatibility)
+    async backupSession(phoneNumber, sessionData) {
+        // Use new method - backup as single JSON
+        return await this.backupSessionFile(phoneNumber, 'session.json', JSON.stringify(sessionData));
+    }
+
+    async restoreSession(phoneNumber) {
+        // Use new method - restore as single JSON
+        const content = await this.restoreSessionFile(phoneNumber, 'session.json');
+        if (!content) return null;
+        
+        try {
+            return JSON.parse(content);
+        } catch (error) {
             return null;
         }
     }
