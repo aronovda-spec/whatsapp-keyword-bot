@@ -19,6 +19,7 @@ class WhatsAppConnection {
         this.fileExtractor = new FileExtractor(); // File content extractor
         this.supabase = new SupabaseManager(); // Supabase for session backup
         this.phoneNumber = null; // Will be set when connected
+        this.phoneNumberForBackup = null; // Phone number without device ID for consistent backup
         this.configPhoneNumber = sessionPath ? sessionPath.split(/[/\\]/).pop() : 'phone1'; // Extract phone identifier from path
         this.groupNames = new Map(); // Cache group names
         this.loadGroupConfig();
@@ -58,9 +59,10 @@ class WhatsAppConnection {
                 try {
                     // Try multiple possible paths where sessions might be stored
                     const restorePaths = [
-                        this.configPhoneNumber, // e.g. 'phone1'
-                        'PHONE_PLACEHOLDER:xx@s.whatsapp.net',
-                        'PHONE_PLACEHOLDER' // Without domain
+                        'PHONE_PLACEHOLDER', // Phone number without device ID (NEW - most likely)
+                        'PHONE_PLACEHOLDER:4@s.whatsapp.net', // With device ID
+                        'PHONE_PLACEHOLDER:1@s.whatsapp.net', // Another device ID
+                        this.configPhoneNumber // e.g. 'phone1' (fallback)
                     ];
                     
                     let restored = false;
@@ -183,8 +185,8 @@ class WhatsAppConnection {
         this.sock.ev.on('creds.update', async () => {
             saveCreds();
             
-            // Backup session to Supabase Storage
-            if (this.supabase.isEnabled() && this.phoneNumber) {
+            // Backup session to Supabase Storage (use consistent phone number without device ID)
+            if (this.supabase.isEnabled() && this.phoneNumberForBackup) {
                 await this.backupSessionToCloud();
             }
         });
@@ -216,11 +218,19 @@ class WhatsAppConnection {
         // Get phone number from connection
         try {
             const user = this.sock.user;
-            this.phoneNumber = user?.id || 'default';
-            console.log(`📱 Connected as: ${this.phoneNumber}`);
+            const fullId = user?.id || 'default';
+            this.phoneNumber = fullId;
+            
+            // Extract phone number without device ID for consistent backup path
+            // e.g. "PHONE_PLACEHOLDER:4@s.whatsapp.net" → "PHONE_PLACEHOLDER"
+            const phoneMatch = fullId.match(/^(\d+)@/);
+            this.phoneNumberForBackup = phoneMatch ? phoneMatch[1] : this.phoneNumber;
+            
+            console.log(`📱 Connected as: ${this.phoneNumber} (backup as: ${this.phoneNumberForBackup})`);
         } catch (error) {
             console.warn('Could not get phone number:', error.message);
             this.phoneNumber = 'default';
+            this.phoneNumberForBackup = 'default';
         }
         
         // Cache group names for better display (with error handling)
@@ -243,8 +253,8 @@ class WhatsAppConnection {
             // Non-critical, continue anyway
         }
         
-        // Backup session to cloud
-        if (this.supabase.isEnabled() && this.phoneNumber) {
+        // Backup session to cloud (use consistent phone number without device ID)
+        if (this.supabase.isEnabled() && this.phoneNumberForBackup) {
             await this.backupSessionToCloud();
         }
         
@@ -721,12 +731,12 @@ class WhatsAppConnection {
     }
 
     async backupSessionToCloud() {
-        if (!this.supabase.isEnabled() || !this.phoneNumber) {
+        if (!this.supabase.isEnabled() || !this.phoneNumberForBackup) {
             return;
         }
 
         try {
-            console.log(`💾 Starting session backup for ${this.phoneNumber}...`);
+            console.log(`💾 Starting session backup for ${this.phoneNumberForBackup} (device: ${this.phoneNumber})...`);
             
             // Read all session files
             const sessionFiles = {};
@@ -763,7 +773,8 @@ class WhatsAppConnection {
 
             for (const [filename, content] of essentialFiles) {
                 try {
-                    const success = await this.supabase.backupSessionFile(this.phoneNumber, filename, content);
+                    // Use phoneNumberForBackup for consistent storage path
+                    const success = await this.supabase.backupSessionFile(this.phoneNumberForBackup, filename, content);
                     if (success) {
                         successCount++;
                         if (successCount % 10 === 0) {
@@ -784,7 +795,7 @@ class WhatsAppConnection {
                 await new Promise(resolve => setTimeout(resolve, 100));
             }
 
-            console.log(`💾 Session backup completed: ${successCount} succeeded, ${failCount} failed for ${this.phoneNumber}`);
+            console.log(`💾 Session backup completed: ${successCount} succeeded, ${failCount} failed for ${this.phoneNumberForBackup}`);
         } catch (error) {
             console.error('❌ Failed to backup session to cloud:', error.message);
         }
