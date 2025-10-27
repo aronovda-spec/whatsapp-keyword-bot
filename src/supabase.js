@@ -41,6 +41,63 @@ class SupabaseManager {
         }
     }
 
+    // Global Keywords Management
+    async getGlobalKeywords() {
+        if (!this.enabled) return null;
+
+        try {
+            const { data, error } = await this.client
+                .from('global_keywords')
+                .select('keyword')
+                .eq('enabled', true);
+
+            if (error) throw error;
+
+            return data.map(row => row.keyword);
+        } catch (error) {
+            console.error('Supabase getGlobalKeywords error:', error.message);
+            return null;
+        }
+    }
+
+    async addGlobalKeyword(keyword, addedBy = 'system') {
+        if (!this.enabled) return false;
+
+        try {
+            const { error } = await this.client
+                .from('global_keywords')
+                .upsert({
+                    keyword: keyword,
+                    enabled: true,
+                    added_at: new Date().toISOString(),
+                    added_by: addedBy
+                });
+
+            if (error) throw error;
+            return true;
+        } catch (error) {
+            console.error('Supabase addGlobalKeyword error:', error.message);
+            return false;
+        }
+    }
+
+    async removeGlobalKeyword(keyword) {
+        if (!this.enabled) return false;
+
+        try {
+            const { error } = await this.client
+                .from('global_keywords')
+                .delete()
+                .eq('keyword', keyword);
+
+            if (error) throw error;
+            return true;
+        } catch (error) {
+            console.error('Supabase removeGlobalKeyword error:', error.message);
+            return false;
+        }
+    }
+
     // User Authorization Management
     async getAuthorizedUsers() {
         if (!this.enabled) return null;

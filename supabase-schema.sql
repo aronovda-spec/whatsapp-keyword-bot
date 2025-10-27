@@ -8,6 +8,16 @@ CREATE TABLE IF NOT EXISTS authorized_users (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Global Keywords Table
+CREATE TABLE IF NOT EXISTS global_keywords (
+    keyword TEXT PRIMARY KEY,
+    enabled BOOLEAN DEFAULT TRUE,
+    match_type TEXT DEFAULT 'exact',
+    fuzzy_threshold INTEGER DEFAULT 2,
+    added_at TIMESTAMPTZ DEFAULT NOW(),
+    added_by TEXT
+);
+
 -- Personal Keywords Table
 CREATE TABLE IF NOT EXISTS personal_keywords (
     user_id TEXT PRIMARY KEY,
