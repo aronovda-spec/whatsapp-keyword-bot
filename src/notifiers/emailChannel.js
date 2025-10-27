@@ -60,6 +60,7 @@ class EmailChannel {
 
             console.log('✅ Email notifications enabled');
             console.log(`📧 Email will be sent to ${this.recipients.length} global recipients`);
+            console.log(`📧 Global recipients: ${this.recipients.join(', ')}`);
             if (this.userEmailMap.size > 0) {
                 console.log(`📧 Per-user email mapping: ${this.userEmailMap.size} users`);
             }
@@ -97,8 +98,11 @@ class EmailChannel {
 
     async sendKeywordAlert(keyword, message, sender, group, messageId, phoneNumber = null, matchType = 'exact', matchedToken = null, attachment = null) {
         if (!this.enabled) {
+            console.log('📧 Email channel disabled, skipping email notification');
             return false;
         }
+
+        console.log(`📧 Preparing to send email for global keyword: "${keyword}" to ${this.recipients.length} recipients`);
 
         try {
             const emailContent = this.formatEmail(keyword, message, sender, group, messageId, phoneNumber, matchType, matchedToken, attachment);
@@ -111,9 +115,16 @@ class EmailChannel {
             const successCount = results.filter(result => result.status === 'fulfilled').length;
             const failureCount = results.filter(result => result.status === 'rejected').length;
 
-            console.log(`📧 Email sent to ${successCount}/${this.recipients.length} recipients`);
+            console.log(`📧 Email sent to ${successCount}/${this.recipients.length} recipients for keyword: "${keyword}"`);
             if (failureCount > 0) {
-                console.warn(`⚠️ Failed to send email to ${failureCount} recipients`);
+                console.warn(`⚠️ Failed to send email to ${failureCount} recipients for keyword: "${keyword}"`);
+                
+                // Log detailed failure reasons
+                results.forEach((result, index) => {
+                    if (result.status === 'rejected') {
+                        console.error(`❌ Email to ${this.recipients[index]} failed:`, result.reason?.message || result.reason);
+                    }
+                });
             }
 
             logBotEvent('email_alert_sent', {
