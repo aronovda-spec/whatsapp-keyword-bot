@@ -21,6 +21,13 @@ class WhatsAppKeywordBot {
         this.validateEnvironment();
         
         this.keywordDetector = new KeywordDetector();
+        
+        // Wait for async config loading to complete
+        this.keywordDetector.loadConfig().then(() => {
+            console.log('✅ Keywords loaded and ready');
+        }).catch(err => {
+            console.error('❌ Failed to load keywords:', err);
+        });
         this.notifier = new Notifier();
         this.connections = new Map(); // Store multiple WhatsApp connections
         this.keepAlive = new KeepAliveService(); // Anti-sleep mechanism
