@@ -1,6 +1,23 @@
 {
-  "TELEGRAM_USER_ID": "email@example.com",
-  "TELEGRAM_USER_ID_2": "another@example.com",
-  "TELEGRAM_USER_ID_3": ["primary@example.com", "secondary@gmail.com"]
+  "// _comment": "Per-user email mapping for personal keyword alerts",
+  "// _format": "TELEGRAM_USER_ID: email or array of emails",
+  "// _examples": [
+    "Single email:",
+    "{ \"123456789\": \"admin@company.com\" }",
+    "",
+    "Multiple emails for same user:",
+    "{ \"987654321\": [\"work@company.com\", \"personal@gmail.com\"] }"
+  ],
+  
+  "// Admin user (1 email)": "null",
+  "123456789": "admin@company.com",
+  
+  "// User 2 (multiple emails - receives at both addresses)": "null",
+  "987654321": [
+    "user.work@company.com",
+    "user.personal@gmail.com"
+  ],
+  
+  "// User 3 (single email)": "null",
+  "111222333": "john.doe@example.com"
 }
-
