@@ -93,9 +93,11 @@ A cloud-based bot that monitors WhatsApp group messages for specific keywords an
 - `/stats` - Bot statistics
 
 ### 👑 Admin Only
-- `/approve <user_id>` - Approve user
+- `/approve <user_idinformative` - Approve user
 - `/reject <user_id>` - Reject user
 - `/pending` - Show pending requests
+- `/remove <user_id>` - Remove user
+- `/setemail <user_id> <email>` - Set user email
 - `/addkeyword <word>` - Add global keyword
 - `/removekeyword <word>` - Remove global keyword
 - `/restart` - Restart bot (preserves all data)
