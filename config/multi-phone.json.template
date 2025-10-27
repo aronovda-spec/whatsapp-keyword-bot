@@ -1,0 +1,28 @@
+{
+  "phones": [
+    {
+      "number": "YOUR_PRIMARY_PHONE_NUMBER",
+      "sessionPath": "./sessions/phone1",
+      "enabled": true,
+      "description": "Primary monitoring phone"
+    },
+    {
+      "number": "YOUR_SECONDARY_PHONE_NUMBER",
+      "sessionPath": "./sessions/phone2", 
+      "enabled": false,
+      "description": "Secondary monitoring phone"
+    },
+    {
+      "number": "YOUR_THIRD_PHONE_NUMBER",
+      "sessionPath": "./sessions/phone3",
+      "enabled": false,
+      "description": "Backup monitoring phone"
+    }
+  ],
+  "settings": {
+    "maxConcurrentPhones": 5,
+    "reconnectDelay": 5000,
+    "healthCheckInterval": 30000,
+    "autoReconnect": true
+  }
+}
