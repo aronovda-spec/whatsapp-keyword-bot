@@ -505,9 +505,25 @@ class SupabaseManager {
             
             console.log(`🔍 Listing files from Supabase path: ${folderPath}`);
             
-            const { data, error } = await this.client.storage
+            // Try to list files - if this returns 0, try downloading directly to verify they exist
+            let { data, error } = await this.client.storage
                 .from('whatsapp-sessions')
                 .list(folderPath);
+            
+            console.log(`📊 List response: data=${data?.length || 0}, error=`, error);
+            
+            // If list returns 0 files, try direct download to verify files actually exist
+            if ((!data || data.length === 0) && !error) {
+                console.log(`⚠️ List returned 0 files, trying direct download to verify...`);
+                const testFiles = ['creds.json', 'device-list-PHONE_PLACEHOLDER.json'];
+                for (const testFile of testFiles) {
+                    const testPath = `${folderPath}/${testFile}`;
+                    const { data: testData, error: testError } = await this.client.storage
+                        .from('whatsapp-sessions')
+                        .download(testPath);
+                    console.log(`🔍 Test download ${testFile}: error=`, testError?.message || 'none', 'data=', testData ? 'EXISTS' : 'null');
+                }
+            }
 
             if (error) {
                 console.log(`❌ Error listing files: ${error.message}`);
