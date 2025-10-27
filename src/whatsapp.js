@@ -672,11 +672,18 @@ class WhatsAppConnection {
 
             console.log(`📁 Found ${Object.keys(sessionFiles).length} session files to backup`);
 
-            // IMPORTANT: Only backup essential session files, skip pre-keys (hundreds of files)
-            // Pre-keys are regenerated automatically and don't need backup
+            // IMPORTANT: Only backup essential session files for session restore
+            // These are the ONLY files needed to restore a WhatsApp session:
+            // 1. creds.json - Your WhatsApp credentials (REQUIRED)
+            // 2. device-list-*.json - Device information (REQUIRED)
+            // 3. lid-mapping-*.json - Contact/channel mappings (optional but useful)
+            // NOT needed: pre-key-* (hundreds of auto-generated encryption keys)
+            // NOT needed: app-state-* (application state, auto-created)
             const essentialFiles = Object.entries(sessionFiles).filter(([filename]) => {
-                // Skip pre-key files (they're auto-generated and not needed for session restore)
-                return !filename.includes('pre-key-') && !filename.includes('app-state');
+                // Skip files that are auto-generated:
+                // - pre-key-* files (encryption keys, auto-regenerated)
+                // - app-state-* files (application state, auto-synced)
+                return !filename.includes('pre-key-') && !filename.includes('app-state-');
             });
 
             console.log(`📦 Backing up ${essentialFiles.length} essential session files (skipped pre-keys)`);
