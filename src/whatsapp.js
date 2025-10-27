@@ -20,6 +20,7 @@ class WhatsAppConnection {
         this.supabase = new SupabaseManager(); // Supabase for session backup
         this.phoneNumber = null; // Will be set when connected
         this.configPhoneNumber = sessionPath ? sessionPath.split(/[/\\]/).pop() : 'phone1'; // Extract phone identifier from path
+        this.groupNames = new Map(); // Cache group names
         this.loadGroupConfig();
         this.init();
     }
@@ -210,6 +211,9 @@ class WhatsAppConnection {
             console.warn('Could not get phone number:', error.message);
             this.phoneNumber = 'default';
         }
+        
+        // Cache group names for better display
+        await this.cacheGroupNames();
         
         logBotEvent('whatsapp_connected');
         console.log('✅ WhatsApp connected successfully!');
@@ -520,10 +524,48 @@ class WhatsAppConnection {
 
     getGroupName(jid) {
         try {
-            // Extract group name from JID (simplified)
-            return jid.split('@')[0] || 'Unknown Group';
+            // Check if group name is cached
+            if (this.groupNames.has(jid)) {
+                return this.groupNames.get(jid);
+            }
+
+            // Try to get group metadata from socket
+            if (this.sock) {
+                const groupInfo = this.sock.metadata?.[jid];
+                if (groupInfo && groupInfo.subject) {
+                    this.groupNames.set(jid, groupInfo.subject);
+                    return groupInfo.subject;
+                }
+            }
+
+            // If cache doesn't exist, try to get from group fetch
+            // For now, return the JID without @g.us suffix as fallback
+            const groupId = jid.split('@')[0];
+            this.groupNames.set(jid, groupId);
+            return groupId;
         } catch (error) {
+            console.error('Error getting group name:', error.message);
             return 'Unknown Group';
+        }
+    }
+
+    async cacheGroupNames() {
+        try {
+            if (!this.sock) return;
+
+            // Fetch all groups the bot is in
+            const groups = await this.sock.groupFetchAllParticipating();
+            
+            // Cache group names
+            Object.values(groups).forEach(group => {
+                if (group.id && group.subject) {
+                    this.groupNames.set(group.id, group.subject);
+                }
+            });
+
+            console.log(`✅ Cached ${this.groupNames.size} group names`);
+        } catch (error) {
+            console.error('Error caching group names:', error.message);
         }
     }
 
