@@ -476,19 +476,30 @@ class SupabaseManager {
         try {
             const folderPath = `sessions/${phoneNumber}`;
             
+            console.log(`🔍 Listing files from Supabase path: ${folderPath}`);
+            
             const { data, error } = await this.client.storage
                 .from('whatsapp-sessions')
                 .list(folderPath);
 
             if (error) {
+                console.log(`❌ Error listing files: ${error.message}`);
                 if (error.message.includes('not found')) return [];
                 throw error;
             }
 
-            // Filter out directories, return only files
-            const files = data
-                .filter(item => !item.name.includes('/')) // Supabase lists with full path
-                .map(item => item.name);
+            console.log(`📋 Raw data from Supabase (${data?.length || 0} items):`, JSON.stringify(data, null, 2));
+
+            // Filter out directories, return only files (without the folder path prefix)
+            const files = (data || [])
+                .filter(item => item.metadata !== null) // Files have metadata, directories don't
+                .map(item => {
+                    // Remove the folder path prefix to get just the filename
+                    const name = item.name.replace(`${phoneNumber}/`, '');
+                    return name;
+                });
+            
+            console.log(`📄 Extracted ${files.length} files:`, files);
             
             return files;
         } catch (error) {
