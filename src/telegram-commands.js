@@ -1209,7 +1209,7 @@ class TelegramCommandHandler {
         });
 
         // Add keyword command - Admin only
-        this.bot.onText(/\/addkeyword (.+)/, (msg, match) => {
+        this.bot.onText(/\/addkeyword (.+)/, async (msg, match) => {
             const chatId = msg.chat.id;
             const userId = msg.from.id;
             const keyword = match[1].trim();
@@ -1249,7 +1249,7 @@ class TelegramCommandHandler {
         });
 
         // Remove keyword command - Admin only
-        this.bot.onText(/\/removekeyword (.+)/, (msg, match) => {
+        this.bot.onText(/\/removekeyword (.+)/, async (msg, match) => {
             const chatId = msg.chat.id;
             const userId = msg.from.id;
             const keyword = match[1].trim();
