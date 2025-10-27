@@ -57,14 +57,14 @@ class Notifier {
         }
     }
 
-    async sendKeywordAlert(keyword, message, sender, group, messageId, phoneNumber = null, matchType = 'exact', matchedToken = null, attachment = null) {
+    async sendKeywordAlert(keyword, message, sender, group, messageId, phoneNumber = null, matchType = 'exact', matchedToken = null, attachment = null, isReminder = false, reminderCount = 0) {
         let telegramSuccess = false;
         let emailSuccess = false;
 
         // Send Telegram notification
         if (this.enabled) {
             try {
-                const alertMessage = this.formatAlertMessage(keyword, message, sender, group, messageId, phoneNumber, matchType, matchedToken, attachment);
+                const alertMessage = this.formatAlertMessage(keyword, message, sender, group, messageId, phoneNumber, matchType, matchedToken, attachment, isReminder, reminderCount);
                 
                 // Send to all authorized chat IDs only
                 const authorizedChatIds = this.chatIds.filter(chatId => 
@@ -197,7 +197,9 @@ class Notifier {
                     reminder.phoneNumber,
                     'exact',
                     null,
-                    reminder.attachment
+                    reminder.attachment,
+                    true, // isReminder
+                    reminder.reminderCount // reminder count
                 );
             } else {
                 // Send to specific user (personal keyword reminder)
@@ -309,9 +311,21 @@ ${reminderCount > 0 ? '⏰ Reply /ok to acknowledge and stop reminders.' : '💡
         throw lastError;
     }
 
-    formatAlertMessage(keyword, message, sender, group, messageId, phoneNumber = null, matchType = 'exact', matchedToken = null, attachment = null) {
+    formatAlertMessage(keyword, message, sender, group, messageId, phoneNumber = null, matchType = 'exact', matchedToken = null, attachment = null, isReminder = false, reminderCount = 0) {
         const timestamp = new Date().toLocaleString();
         const truncatedMessage = message.length > 200 ? message.substring(0, 200) + '...' : message;
+        
+        // Set header based on reminder status
+        const header = isReminder 
+            ? '⏰ <b>Keyword Alert - Reminder</b>'
+            : '🚨 <b>Keyword Alert!</b>';
+        
+        // Add reminder info if applicable
+        let reminderInfo = '';
+        if (reminderCount > 0) {
+            const timeElapsed = this.getReminderTimeElapsed(reminderCount);
+            reminderInfo = `\n⏰ <b>Reminder</b> - ${timeElapsed}`;
+        }
         
         let matchInfo = '';
         if (matchType === 'fuzzy' && matchedToken) {
@@ -333,17 +347,28 @@ ${reminderCount > 0 ? '⏰ Reply /ok to acknowledge and stop reminders.' : '💡
             }
         }
         
-        return `🚨 <b>Keyword Alert!</b>
+        return `${header}
 
 🔍 <b>Keyword:</b> ${keyword}${matchInfo}
 👤 <b>Sender:</b> ${sender || 'Unknown'}
 👥 <b>Group:</b> ${group || 'Unknown'}
-🕐 <b>Time:</b> ${timestamp}${attachmentInfo}
+🕐 <b>Time:</b> ${timestamp}${attachmentInfo}${reminderInfo}
 
 💬 <b>Message:</b>
 ${this.escapeHtml(truncatedMessage)}
 
-📱 <b>Message ID:</b> ${messageId || 'N/A'}`;
+📱 <b>Message ID:</b> ${messageId || 'N/A'}
+${isReminder ? '💡 Reply /ok to acknowledge and stop reminders.' : ''}`;
+    }
+
+    getReminderTimeElapsed(reminderCount) {
+        const timeMap = {
+            1: '1 minute ago',
+            2: '2 minutes ago',
+            3: '15 minutes ago',
+            4: '1 hour ago'
+        };
+        return timeMap[reminderCount] || `${reminderCount} minutes ago`;
     }
 
     escapeHtml(text) {
