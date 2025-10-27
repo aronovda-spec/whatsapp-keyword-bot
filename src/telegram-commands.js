@@ -1776,7 +1776,13 @@ class TelegramCommandHandler {
     }
 
     stop() {
-        this.bot.stopPolling();
+        try {
+            console.log('🛑 Stopping Telegram polling...');
+            this.bot.stopPolling();
+            console.log('✅ Telegram polling stopped');
+        } catch (error) {
+            console.error('⚠️ Error stopping Telegram polling:', error.message);
+        }
     }
 }
 
