@@ -24,6 +24,19 @@ class TelegramCommandHandler {
         }
     }
 
+    /**
+     * Escape HTML special characters to prevent parsing errors
+     */
+    escapeHtml(text) {
+        if (!text) return '';
+        return String(text)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
     setupCommandHandlers() {
         // Setup reminder commands first
         this.setupReminderCommands(this.bot);
@@ -1224,12 +1237,14 @@ class TelegramCommandHandler {
 
             const keywords = this.keywordDetector.getKeywords();
             if (keywords.includes(keyword)) {
-                this.bot.sendMessage(chatId, `❌ Keyword "${keyword}" already exists.`);
+                const escapedKeyword = this.escapeHtml(keyword);
+                this.bot.sendMessage(chatId, `❌ Keyword "${escapedKeyword}" already exists.`);
                 return;
             }
 
             this.keywordDetector.addKeyword(keyword);
-            this.bot.sendMessage(chatId, `✅ Added global keyword: "${keyword}"`);
+            const escapedKeyword = this.escapeHtml(keyword);
+            this.bot.sendMessage(chatId, `✅ Added global keyword: "${escapedKeyword}"`);
             console.log(`🔑 Admin ${userId} added keyword: ${keyword}`);
         });
 
@@ -1257,12 +1272,14 @@ class TelegramCommandHandler {
 
             const keywords = this.keywordDetector.getKeywords();
             if (!keywords.includes(keyword)) {
-                this.bot.sendMessage(chatId, `❌ Keyword "${keyword}" not found.`);
+                const escapedKeyword = this.escapeHtml(keyword);
+                this.bot.sendMessage(chatId, `❌ Keyword "${escapedKeyword}" not found.`);
                 return;
             }
 
             this.keywordDetector.removeKeyword(keyword);
-            this.bot.sendMessage(chatId, `✅ Removed global keyword: "${keyword}"`);
+            const escapedKeyword = this.escapeHtml(keyword);
+            this.bot.sendMessage(chatId, `✅ Removed global keyword: "${escapedKeyword}"`);
             console.log(`🔑 Admin ${userId} removed keyword: ${keyword}`);
         });
 
@@ -1333,12 +1350,14 @@ class TelegramCommandHandler {
 
             const personalKeywords = this.getPersonalKeywords(userId);
             if (personalKeywords.includes(keyword)) {
-                this.bot.sendMessage(chatId, `❌ Personal keyword "${keyword}" already exists.`);
+                const escapedKeyword = this.escapeHtml(keyword);
+                this.bot.sendMessage(chatId, `❌ Personal keyword "${escapedKeyword}" already exists.`);
                 return;
             }
 
             this.addPersonalKeyword(userId, keyword);
-            this.bot.sendMessage(chatId, `✅ Added personal keyword: "${keyword}"`);
+            const escapedKeyword = this.escapeHtml(keyword);
+            this.bot.sendMessage(chatId, `✅ Added personal keyword: "${escapedKeyword}"`);
             console.log(`🔑 User ${userId} added personal keyword: ${keyword}`);
         });
 
@@ -1361,12 +1380,14 @@ class TelegramCommandHandler {
 
             const personalKeywords = this.getPersonalKeywords(userId);
             if (!personalKeywords.includes(keyword)) {
-                this.bot.sendMessage(chatId, `❌ Personal keyword "${keyword}" not found.`);
+                const escapedKeyword = this.escapeHtml(keyword);
+                this.bot.sendMessage(chatId, `❌ Personal keyword "${escapedKeyword}" not found.`);
                 return;
             }
 
             this.removePersonalKeyword(userId, keyword);
-            this.bot.sendMessage(chatId, `✅ Removed personal keyword: "${keyword}"`);
+            const escapedKeyword = this.escapeHtml(keyword);
+            this.bot.sendMessage(chatId, `✅ Removed personal keyword: "${escapedKeyword}"`);
             console.log(`🔑 User ${userId} removed personal keyword: ${keyword}`);
         });
 
