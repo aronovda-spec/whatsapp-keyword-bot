@@ -255,8 +255,8 @@ class Notifier {
         }
         
         const header = reminderCount === 0 
-            ? '🔑 <b>Personal Keyword Alert</b>'
-            : '⏰ <b>Reminder</b>';
+            ? '🚨 <b>Keyword Alert</b>'
+            : '⏰ <b>Keyword Alert - Reminder</b>';
         
         return `${header}
 
