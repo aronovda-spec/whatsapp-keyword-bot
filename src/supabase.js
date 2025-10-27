@@ -483,15 +483,15 @@ class SupabaseManager {
             console.log(`🔍 Listing ALL files in bucket to debug...`);
             const { data: allData, error: allError } = await this.client.storage
                 .from('whatsapp-sessions')
-                .list('sessions', {
-                    limit: 100,
+                .list('', {
+                    limit: 1000,
                     offset: 0,
                     sortBy: { column: 'name', order: 'asc' }
                 });
             
             if (!allError && allData) {
-                console.log(`📦 Total items in sessions folder: ${allData.length}`);
-                console.log(`📋 All items:`, allData.map(item => item.name).slice(0, 20));
+                console.log(`📦 Total items in bucket root: ${allData.length}`);
+                console.log(`📋 First 20 items:`, allData.map(item => item.name).slice(0, 20));
             }
             
             const folderPath = `sessions/${phoneNumber}`;
