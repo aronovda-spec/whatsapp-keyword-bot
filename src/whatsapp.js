@@ -260,7 +260,13 @@ class WhatsAppConnection {
             [DisconnectReason.multideviceMismatch]: 'Multi-device mismatch - Multiple devices connected'
         };
         
-        if (disconnectReasons[disconnectReason]) {
+        // Check for specific error messages that indicate different issues
+        const errorMessage = lastDisconnect?.error?.message || '';
+        
+        if (disconnectReason === 408 && errorMessage.includes('QR refs attempts ended')) {
+            disconnectMessage = 'QR connection timeout (408) - QR code expired, restarting to get new QR';
+            // Force reconnection to get a new QR code
+        } else if (disconnectReasons[disconnectReason]) {
             disconnectMessage = disconnectReasons[disconnectReason];
         } else if (disconnectReason === DisconnectReason.loggedOut) {
             disconnectMessage = 'WhatsApp logged out - Virtual number may have expired!';
