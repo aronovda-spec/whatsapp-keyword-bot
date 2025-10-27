@@ -62,7 +62,7 @@ class ReminderManager extends EventEmitter {
     /**
      * Add a new reminder for a user
      */
-    addReminder(userId, keyword, message, sender, group, messageId, phoneNumber, attachment) {
+    addReminder(userId, keyword, message, sender, group, messageId, phoneNumber, attachment, isGlobal = false) {
         // Remove any existing reminders for this user to prevent duplicates
         this.reminders.delete(userId);
 
@@ -75,6 +75,7 @@ class ReminderManager extends EventEmitter {
             messageId,
             phoneNumber,
             attachment,
+            isGlobal, // Flag to indicate if this is a global keyword reminder
             firstDetectedAt: new Date(),
             nextReminderAt: new Date(Date.now() + 60000), // 1 minute
             reminderCount: 0,
@@ -184,13 +185,13 @@ class ReminderManager extends EventEmitter {
     /**
      * Reset reminder for same keyword (restart timer)
      */
-    resetReminderForKeyword(userId, keyword, message, sender, group, messageId, phoneNumber, attachment) {
+    resetReminderForKeyword(userId, keyword, message, sender, group, messageId, phoneNumber, attachment, isGlobal = false) {
         const existingReminder = this.reminders.get(userId);
         
         // If same keyword detected again, restart the timer
         if (existingReminder && existingReminder.keyword === keyword) {
             console.log(`🔄 Restarting reminder for user ${userId} - same keyword detected again`);
-            this.addReminder(userId, keyword, message, sender, group, messageId, phoneNumber, attachment);
+            this.addReminder(userId, keyword, message, sender, group, messageId, phoneNumber, attachment, isGlobal);
             return true;
         }
         

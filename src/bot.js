@@ -342,10 +342,11 @@ class WhatsAppKeywordBot {
                                         messageData.group,
                                         messageData.id,
                                         phoneNumber,
-                                        messageData.attachment
+                                        messageData.attachment,
+                                        true // isGlobal
                                     );
                                 } else {
-                                    // New reminder
+                                    // New reminder - mark as global keyword reminder
                                     this.notifier.reminderManager.addReminder(
                                         userId,
                                         keywordData.keyword,
@@ -354,7 +355,8 @@ class WhatsAppKeywordBot {
                                         messageData.group,
                                         messageData.id,
                                         phoneNumber,
-                                        messageData.attachment
+                                        messageData.attachment,
+                                        true // isGlobal
                                     );
                                 }
                             }
