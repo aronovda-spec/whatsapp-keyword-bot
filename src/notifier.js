@@ -239,7 +239,7 @@ class Notifier {
         // Add reminder indicator
         let reminderInfo = '';
         if (reminderCount > 0) {
-            const timeElapsed = this.getTimeElapsed(reminderCount);
+            const timeElapsed = this.getReminderTimeElapsed(reminderCount);
             reminderInfo = `\n⏰ <b>Reminder</b> - ${timeElapsed}`;
         }
         
@@ -272,19 +272,6 @@ class Notifier {
 
 ${reminderCount > 0 ? '⏰ Reply /ok to acknowledge and stop reminders.' : '💡 Reply /ok to acknowledge and stop reminders.'}
 🔑 <i>This is a personal keyword notification</i>`;
-    }
-
-    /**
-     * Get human-readable time elapsed based on reminder count
-     */
-    getTimeElapsed(reminderCount) {
-        const timeMap = {
-            1: '1 minute ago',
-            2: '2 minutes ago',
-            3: '15 minutes ago',
-            4: '1 hour ago'
-        };
-        return timeMap[reminderCount] || `${reminderCount} minutes ago`;
     }
 
     async sendWithRetry(message, chatId = null) {
@@ -358,7 +345,7 @@ ${reminderCount > 0 ? '⏰ Reply /ok to acknowledge and stop reminders.' : '💡
 ${this.escapeHtml(truncatedMessage)}
 
 📱 <b>Message ID:</b> ${messageId || 'N/A'}
-${isReminder ? '💡 Reply /ok to acknowledge and stop reminders.' : ''}`;
+${reminderCount > 0 ? '⏰ Reply /ok to acknowledge and stop reminders.' : '💡 Reply /ok to acknowledge and stop reminders.'}`;
     }
 
     getReminderTimeElapsed(reminderCount) {
