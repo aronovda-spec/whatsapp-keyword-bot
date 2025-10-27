@@ -59,10 +59,13 @@ class WhatsAppConnection {
                 try {
                     // Try multiple possible paths where sessions might be stored
                     const restorePaths = [
-                        '972502092886', // Phone number without device ID (NEW - most likely)
-                        '972502092886:4@s.whatsapp.net', // With device ID
-                        '972502092886:1@s.whatsapp.net', // Another device ID
-                        this.configPhoneNumber // e.g. 'phone1' (fallback)
+                        '972502092886', // Phone number without device ID (NEW consistent path - first priority)
+                        'phone1', // Config default
+                        '972502092886:12@s.whatsapp.net', // Most recent old backup with device ID 12
+                        '972502092886:11@s.whatsapp.net', // Another old backup
+                        '972502092886:4@s.whatsapp.net', // Another old backup
+                        '972502092886:1@s.whatsapp.net', // First old backup
+                        this.configPhoneNumber // Fallback
                     ];
                     
                     let restored = false;
