@@ -1415,6 +1415,27 @@ class TelegramCommandHandler {
                     console.log('⚠️ Telegram polling: 401 Unauthorized (suppressing repeated messages)');
                     this.last401Error = Date.now();
                 }
+            } else if (error.message.includes('409 Conflict')) {
+                // CRITICAL: Multiple bot instances running
+                console.error('\n🚨 =============================================');
+                console.error('🚨 CRITICAL: TELEGRAM 409 CONFLICT DETECTED');
+                console.error('🚨 =============================================');
+                console.error('❌ Error: Another bot instance is polling Telegram!');
+                console.error('');
+                console.error('🔍 This means:');
+                console.error('  1. Bot is running LOCALLY on your computer');
+                console.error('  2. AND also running on Render (or another server)');
+                console.error('  3. Both are trying to poll Telegram with the same bot token');
+                console.error('');
+                console.error('✅ SOLUTION:');
+                console.error('  1. Stop the bot running locally (press Ctrl+C)');
+                console.error('  2. OR stop the Render deployment temporarily');
+                console.error('  3. Only ONE instance should run at a time');
+                console.error('');
+                console.error('💡 To find if bot is running locally:');
+                console.error('  - Windows: Task Manager → node.exe');
+                console.error('  - Or check: npm start is NOT running in any terminal');
+                console.error('=============================================\n');
             } else {
                 console.error('❌ Polling error:', error.message);
             }
