@@ -431,6 +431,8 @@ class SupabaseManager {
                     upsert: true
                 });
 
+            console.log(`📊 Upload response for ${filename}:`, { data, error });
+
             if (error) {
                 console.error(`❌ Upload ERROR for ${filename}:`, error);
                 // If bucket doesn't exist, try to create it
@@ -438,7 +440,12 @@ class SupabaseManager {
                     console.log('📦 Storage bucket not found. Please create "whatsapp-sessions" bucket in Supabase.');
                     return false;
                 }
-                throw error;
+                return false;
+            }
+
+            if (!data) {
+                console.error(`⚠️ Upload reported success but no data returned for ${filename}`);
+                return false;
             }
 
             console.log(`✅ Upload SUCCESS for ${filename}:`, data);
