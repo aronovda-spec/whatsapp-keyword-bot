@@ -451,7 +451,7 @@ class WhatsAppKeywordBot {
     }
 
     start() {
-        this.app.listen(this.port, () => {
+        this.app.listen(this.port, '0.0.0.0', () => {
             console.log('🚀 WhatsApp Keyword Bot started!');
             console.log(`📊 Server running on port ${this.port}`);
             console.log(`🔗 Health check: http://localhost:${this.port}/health`);
