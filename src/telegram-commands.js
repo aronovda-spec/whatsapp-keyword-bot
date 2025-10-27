@@ -274,7 +274,8 @@ class TelegramCommandHandler {
                     '/approve <user_id> - Approve user\n' +
                     '/reject <user_id> - Reject user\n' +
                     '/pending - Show pending requests\n' +
-                    '/remove <user_id> - Remove user (with confirmation)';
+                    '/remove <user_id> - Remove user (with confirmation)\n' +
+                    '/setemail <user_id> <email> - Set user email';
             this.bot.sendMessage(chatId, helpText);
         });
 
@@ -323,7 +324,8 @@ class TelegramCommandHandler {
                 '/approve <user_id> - Approve user\n' +
                 '/reject <user_id> - Reject user\n' +
                 '/remove <user_id> - Remove user (with confirmation)\n' +
-                '/pending - Show pending requests';
+                '/pending - Show pending requests\n' +
+                '/setemail <user_id> <email> - Set user email';
             this.bot.sendMessage(chatId, adminText);
         });
 
@@ -982,6 +984,41 @@ class TelegramCommandHandler {
                 this.bot.sendMessage(userIdToReject, '❌ Your access request has been rejected.');
             } else {
                 this.bot.sendMessage(chatId, `❌ Failed to reject user ${userIdToReject}.`);
+            }
+        });
+
+        // Set email command - Admin only
+        this.bot.onText(/\/setemail (.+) (.+)/, (msg, match) => {
+            const chatId = msg.chat.id;
+            const adminId = msg.from.id;
+            const userId = match[1];
+            const email = match[2];
+            
+            if (!this.authorization.isAdmin(adminId)) {
+                this.bot.sendMessage(chatId, '❌ Admin access required.');
+                return;
+            }
+            
+            console.log(`📧 Admin ${adminId} setting email for user ${userId}: ${email}`);
+            
+            // Update email in Supabase
+            if (this.authorization.supabase && this.authorization.supabase.isEnabled()) {
+                this.authorization.supabase.client.from('users')
+                    .update({ 
+                        email: email,
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('user_id', userId)
+                    .then(({ error }) => {
+                        if (error) throw error;
+                        this.bot.sendMessage(chatId, `✅ Email set for user ${userId}: ${email}`);
+                    })
+                    .catch(err => {
+                        console.error('Error setting email:', err);
+                        this.bot.sendMessage(chatId, `❌ Failed to set email: ${err.message}`);
+                    });
+            } else {
+                this.bot.sendMessage(chatId, '❌ Supabase not configured. Cannot update email.');
             }
         });
 
