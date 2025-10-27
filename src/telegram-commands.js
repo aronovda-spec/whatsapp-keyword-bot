@@ -1327,7 +1327,7 @@ class TelegramCommandHandler {
         });
 
         // Add personal keyword command
-        this.bot.onText(/\/addmykeyword (.+)/, (msg, match) => {
+        this.bot.onText(/\/addmykeyword (.+)/, async (msg, match) => {
             const chatId = msg.chat.id;
             const userId = msg.from.id;
             const keyword = match[1].trim();
@@ -1355,14 +1355,14 @@ class TelegramCommandHandler {
                 return;
             }
 
-            this.addPersonalKeyword(userId, keyword);
+            await this.addPersonalKeyword(userId, keyword);
             const escapedKeyword = this.escapeHtml(keyword);
             this.bot.sendMessage(chatId, `✅ Added personal keyword: "${escapedKeyword}"`);
             console.log(`🔑 User ${userId} added personal keyword: ${keyword}`);
         });
 
         // Remove personal keyword command
-        this.bot.onText(/\/removemykeyword (.+)/, (msg, match) => {
+        this.bot.onText(/\/removemykeyword (.+)/, async (msg, match) => {
             const chatId = msg.chat.id;
             const userId = msg.from.id;
             const keyword = match[1].trim();
@@ -1385,7 +1385,7 @@ class TelegramCommandHandler {
                 return;
             }
 
-            this.removePersonalKeyword(userId, keyword);
+            await this.removePersonalKeyword(userId, keyword);
             const escapedKeyword = this.escapeHtml(keyword);
             this.bot.sendMessage(chatId, `✅ Removed personal keyword: "${escapedKeyword}"`);
             console.log(`🔑 User ${userId} removed personal keyword: ${keyword}`);
@@ -1728,7 +1728,7 @@ class TelegramCommandHandler {
         }
     }
 
-    addPersonalKeyword(userId, keyword) {
+    async addPersonalKeyword(userId, keyword) {
         try {
             const fs = require('fs');
             const path = require('path');
@@ -1746,13 +1746,20 @@ class TelegramCommandHandler {
             if (!data[userId].includes(keyword)) {
                 data[userId].push(keyword);
                 fs.writeFileSync(personalKeywordsPath, JSON.stringify(data, null, 2));
+                
+                // Also save to Supabase
+                if (this.keywordDetector && this.keywordDetector.supabase && this.keywordDetector.supabase.isEnabled()) {
+                    console.log(`💾 Saving personal keyword "${keyword}" to Supabase for user ${userId}...`);
+                    await this.keywordDetector.supabase.setPersonalKeywords(userId.toString(), data[userId]);
+                    console.log(`✅ Personal keyword saved to Supabase`);
+                }
             }
         } catch (error) {
             console.error('Error adding personal keyword:', error.message);
         }
     }
 
-    removePersonalKeyword(userId, keyword) {
+    async removePersonalKeyword(userId, keyword) {
         try {
             const fs = require('fs');
             const path = require('path');
@@ -1768,6 +1775,13 @@ class TelegramCommandHandler {
                 if (index > -1) {
                     data[userId].splice(index, 1);
                     fs.writeFileSync(personalKeywordsPath, JSON.stringify(data, null, 2));
+                    
+                    // Also update Supabase
+                    if (this.keywordDetector && this.keywordDetector.supabase && this.keywordDetector.supabase.isEnabled()) {
+                        console.log(`💾 Removing personal keyword "${keyword}" from Supabase for user ${userId}...`);
+                        await this.keywordDetector.supabase.setPersonalKeywords(userId.toString(), data[userId]);
+                        console.log(`✅ Personal keyword removed from Supabase`);
+                    }
                 }
             }
         } catch (error) {
