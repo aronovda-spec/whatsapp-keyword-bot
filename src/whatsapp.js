@@ -8,10 +8,10 @@ const FileExtractor = require('./fileExtractor');
 const SupabaseManager = require('./supabase');
 
 class WhatsAppConnection {
-    constructor() {
+    constructor(sessionPath) {
         this.sock = null;
         this.isConnected = false;
-        this.sessionPath = process.env.WHATSAPP_SESSION_PATH || './sessions';
+        this.sessionPath = sessionPath || process.env.WHATSAPP_SESSION_PATH || './sessions';
         this.reconnectDelay = 5000;
         this.qrTimeout = 60000;
         this.antiBan = new WhatsAppAntiBan(); // Anti-ban protection
@@ -19,6 +19,7 @@ class WhatsAppConnection {
         this.fileExtractor = new FileExtractor(); // File content extractor
         this.supabase = new SupabaseManager(); // Supabase for session backup
         this.phoneNumber = null; // Will be set when connected
+        this.configPhoneNumber = sessionPath ? sessionPath.split(/[/\\]/).pop() : 'phone1'; // Extract phone identifier from path
         this.loadGroupConfig();
         this.init();
     }
@@ -53,8 +54,8 @@ class WhatsAppConnection {
             // Try to restore session from Supabase (if enabled)
             if (this.supabase && this.supabase.isEnabled()) {
                 try {
-                    // Try to restore from default session path
-                    const restoredSession = await this.supabase.restoreSession('phone1');
+                    // Try to restore from session path (matches backup path)
+                    const restoredSession = await this.supabase.restoreSession(this.configPhoneNumber);
                     if (restoredSession && Object.keys(restoredSession).length > 0) {
                         console.log('📥 Restored session from Supabase, writing to disk...');
                         // Write restored session files to disk
