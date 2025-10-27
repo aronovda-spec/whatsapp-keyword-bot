@@ -56,33 +56,46 @@ class WhatsAppConnection {
             if (this.supabase && this.supabase.isEnabled()) {
                 console.log('🔍 Supabase enabled, attempting session restore...');
                 try {
-                    // Use configPhoneNumber as the primary path (e.g. 'phone1')
-                    const restorePath = this.configPhoneNumber;
-                    console.log(`🔍 Trying to restore session from path: ${restorePath}`);
+                    // Try multiple possible paths where sessions might be stored
+                    const restorePaths = [
+                        this.configPhoneNumber, // e.g. 'phone1'
+                        'PHONE_PLACEHOLDER:xx@s.whatsapp.net',
+                        'PHONE_PLACEHOLDER' // Without domain
+                    ];
                     
-                    const sessionFiles = await this.supabase.listSessionFiles(restorePath);
+                    let restored = false;
                     
-                    console.log(`📋 Session files found for ${restorePath}:`, sessionFiles?.length || 0);
-                    
-                    if (sessionFiles && sessionFiles.length > 0) {
-                        console.log(`📥 Found ${sessionFiles.length} session files from Supabase (${restorePath}), restoring...`);
+                    for (const restorePath of restorePaths) {
+                        console.log(`🔍 Trying to restore session from path: ${restorePath}`);
                         
-                        // Download and write each file
-                        for (const filename of sessionFiles) {
-                            const content = await this.supabase.restoreSessionFile(restorePath, filename);
-                            if (content) {
-                                const filePath = path.join(this.sessionPath, filename);
-                                const dir = path.dirname(filePath);
-                                if (!fs.existsSync(dir)) {
-                                    fs.mkdirSync(dir, { recursive: true });
+                        const sessionFiles = await this.supabase.listSessionFiles(restorePath);
+                        
+                        console.log(`📋 Session files found for ${restorePath}:`, sessionFiles?.length || 0);
+                        
+                        if (sessionFiles && sessionFiles.length > 0) {
+                            console.log(`📥 Found ${sessionFiles.length} session files from Supabase (${restorePath}), restoring...`);
+                            
+                            // Download and write each file
+                            for (const filename of sessionFiles) {
+                                const content = await this.supabase.restoreSessionFile(restorePath, filename);
+                                if (content) {
+                                    const filePath = path.join(this.sessionPath, filename);
+                                    const dir = path.dirname(filePath);
+                                    if (!fs.existsSync(dir)) {
+                                        fs.mkdirSync(dir, { recursive: true });
+                                    }
+                                    fs.writeFileSync(filePath, content, 'utf8');
+                                    console.log(`✅ Restored: ${filename}`);
                                 }
-                                fs.writeFileSync(filePath, content, 'utf8');
-                                console.log(`✅ Restored: ${filename}`);
                             }
+                            console.log('✅ Session restored from cloud');
+                            restored = true;
+                            break; // Stop once we find and restore sessions
                         }
-                        console.log('✅ Session restored from cloud');
-                    } else {
-                        console.log('📭 No session files found in Supabase storage - QR code will be required');
+                    }
+                    
+                    if (!restored) {
+                        console.log('📭 No session files found in any of the checked paths - QR code will be required');
                     }
                 } catch (error) {
                     console.log('⚠️ Could not restore session from Supabase:', error.message);
