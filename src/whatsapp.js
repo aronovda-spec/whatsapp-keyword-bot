@@ -54,21 +54,30 @@ class WhatsAppConnection {
             // Try to restore session from Supabase (if enabled)
             if (this.supabase && this.supabase.isEnabled()) {
                 try {
-                    // Try to restore from session path (matches backup path)
-                    const restoredSession = await this.supabase.restoreSession(this.configPhoneNumber);
-                    if (restoredSession && Object.keys(restoredSession).length > 0) {
-                        console.log('📥 Restored session from Supabase, writing to disk...');
-                        // Write restored session files to disk
-                        for (const [filename, content] of Object.entries(restoredSession)) {
-                            const filePath = path.join(this.sessionPath, filename);
-                            const dir = path.dirname(filePath);
-                            if (!fs.existsSync(dir)) {
-                                fs.mkdirSync(dir, { recursive: true });
+                    // Try multiple possible restore paths
+                    const restorePaths = [this.configPhoneNumber, 'phone1', 'PHONE_PLACEHOLDER:4@s.whatsapp.net'];
+                    let restored = false;
+                    
+                    for (const restorePath of restorePaths) {
+                        const restoredSession = await this.supabase.restoreSession(restorePath);
+                        if (restoredSession && Object.keys(restoredSession).length > 0) {
+                            console.log(`📥 Restored session from Supabase (${restorePath}), writing to disk...`);
+                            // Write restored session files to disk
+                            for (const [filename, content] of Object.entries(restoredSession)) {
+                                const filePath = path.join(this.sessionPath, filename);
+                                const dir = path.dirname(filePath);
+                                if (!fs.existsSync(dir)) {
+                                    fs.mkdirSync(dir, { recursive: true });
+                                }
+                                fs.writeFileSync(filePath, content, 'utf8');
                             }
-                            fs.writeFileSync(filePath, content, 'utf8');
+                            console.log('✅ Session restored from cloud');
+                            restored = true;
+                            break; // Stop trying once we restore successfully
                         }
-                        console.log('✅ Session restored from cloud');
-                    } else {
+                    }
+                    
+                    if (!restored) {
                         console.log('📭 No session found in Supabase storage');
                     }
                 } catch (error) {
