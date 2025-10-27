@@ -672,18 +672,43 @@ class WhatsAppConnection {
 
             console.log(`📁 Found ${Object.keys(sessionFiles).length} session files to backup`);
 
-            // Backup each file individually to Supabase Storage
-            const backupPromises = Object.entries(sessionFiles).map(async ([filename, content]) => {
-                try {
-                    await this.supabase.backupSessionFile(this.phoneNumber, filename, content);
-                    console.log(`✅ Backed up: ${filename}`);
-                } catch (error) {
-                    console.error(`❌ Failed to backup ${filename}:`, error.message);
-                }
+            // IMPORTANT: Only backup essential session files, skip pre-keys (hundreds of files)
+            // Pre-keys are regenerated automatically and don't need backup
+            const essentialFiles = Object.entries(sessionFiles).filter(([filename]) => {
+                // Skip pre-key files (they're auto-generated and not needed for session restore)
+                return !filename.includes('pre-key-') && !filename.includes('app-state');
             });
 
-            await Promise.allSettled(backupPromises);
-            console.log(`💾 Session backup completed for ${this.phoneNumber}`);
+            console.log(`📦 Backing up ${essentialFiles.length} essential session files (skipped pre-keys)`);
+
+            // Backup each essential file individually with rate limiting
+            let successCount = 0;
+            let failCount = 0;
+
+            for (const [filename, content] of essentialFiles) {
+                try {
+                    const success = await this.supabase.backupSessionFile(this.phoneNumber, filename, content);
+                    if (success) {
+                        successCount++;
+                        if (successCount % 10 === 0) {
+                            console.log(`📦 Progress: ${successCount}/${essentialFiles.length} files backed up`);
+                        }
+                    } else {
+                        failCount++;
+                    }
+                } catch (error) {
+                    failCount++;
+                    // Only log first few failures to avoid spam
+                    if (failCount <= 3) {
+                        console.error(`❌ Failed to backup ${filename}:`, error.message);
+                    }
+                }
+                
+                // Add small delay to avoid rate limiting
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
+
+            console.log(`💾 Session backup completed: ${successCount} succeeded, ${failCount} failed for ${this.phoneNumber}`);
         } catch (error) {
             console.error('❌ Failed to backup session to cloud:', error.message);
         }
