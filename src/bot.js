@@ -502,18 +502,25 @@ class WhatsAppKeywordBot {
             console.log('🔄 Anti-sleep mechanism activated');
 
             // Initialize Telegram command handler for authorization
+            // IMPORTANT: Only create if not already exists to prevent 409 conflicts
             if (this.notifier.isEnabled()) {
                 try {
-                    this.commandHandler = new TelegramCommandHandler(
-                        process.env.TELEGRAM_BOT_TOKEN,
-                        this.notifier.authorization,
-                        this.keywordDetector // Pass keywordDetector to command handler
-                    );
-                    // Inject reminder manager into command handler
-                    if (this.commandHandler) {
-                        this.commandHandler.reminderManager = this.notifier.reminderManager;
+                    // Check if command handler already exists
+                    if (!this.commandHandler) {
+                        console.log('🔐 Initializing Telegram command handler...');
+                        this.commandHandler = new TelegramCommandHandler(
+                            process.env.TELEGRAM_BOT_TOKEN,
+                            this.notifier.authorization,
+                            this.keywordDetector // Pass keywordDetector to command handler
+                        );
+                        // Inject reminder manager into command handler
+                        if (this.commandHandler) {
+                            this.commandHandler.reminderManager = this.notifier.reminderManager;
+                        }
+                        console.log('✅ Telegram authorization system activated');
+                    } else {
+                        console.log('⚠️ Telegram command handler already exists - skipping re-initialization');
                     }
-                    console.log('🔐 Telegram authorization system activated');
                 } catch (error) {
                     console.log('⚠️ Telegram command handler failed to initialize:', error.message);
                     console.log('📱 Notifications will still work, but commands are disabled');
@@ -532,6 +539,9 @@ class WhatsAppKeywordBot {
         process.on('SIGINT', () => {
             console.log('\n🛑 Shutting down bot...');
             this.keepAlive.stop();
+            if (this.commandHandler) {
+                this.commandHandler.stop(); // Stop Telegram polling
+            }
             this.notifier.sendBotStatus('Shutting Down', 'Bot is being stopped');
             process.exit(0);
         });
@@ -539,6 +549,9 @@ class WhatsAppKeywordBot {
         process.on('SIGTERM', () => {
             console.log('\n🛑 Received SIGTERM, shutting down...');
             this.keepAlive.stop();
+            if (this.commandHandler) {
+                this.commandHandler.stop(); // Stop Telegram polling
+            }
             this.notifier.sendBotStatus('Shutting Down', 'Bot received termination signal');
             process.exit(0);
         });
