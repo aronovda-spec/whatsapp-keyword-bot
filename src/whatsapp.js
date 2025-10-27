@@ -235,6 +235,12 @@ class WhatsAppConnection {
             this.phoneNumberForBackup = phoneMatch ? phoneMatch[1] : this.phoneNumber;
             
             console.log(`📱 Connected as: ${this.phoneNumber} (backup as: ${this.phoneNumberForBackup})`);
+            
+            // Force backup immediately after getting phone number
+            console.log('🔄 Triggering immediate session backup...');
+            if (this.supabase.isEnabled()) {
+                await this.backupSessionToCloud();
+            }
         } catch (error) {
             console.warn('Could not get phone number:', error.message);
             this.phoneNumber = 'default';
@@ -739,17 +745,14 @@ class WhatsAppConnection {
     }
 
     async backupSessionToCloud() {
-        console.log(`🔍 backupSessionToCloud check: enabled=${this.supabase.isEnabled()}, phoneNumberForBackup=${this.phoneNumberForBackup}`);
-        
         if (!this.supabase.isEnabled()) {
             console.log('⚠️ Supabase not enabled, skipping backup');
             return;
         }
         
-        if (!this.phoneNumberForBackup) {
-            console.log('⚠️ phoneNumberForBackup not set yet, skipping backup');
-            return;
-        }
+        // Use phoneNumberForBackup or fallback to phoneNumber or default
+        const backupPath = this.phoneNumberForBackup || this.phoneNumber || 'default';
+        console.log(`🔍 backupSessionToCloud: enabled=${this.supabase.isEnabled()}, backupPath=${backupPath}`);
 
         try {
             console.log(`💾 Starting session backup for ${this.phoneNumberForBackup} (device: ${this.phoneNumber})...`);
@@ -789,8 +792,8 @@ class WhatsAppConnection {
 
             for (const [filename, content] of essentialFiles) {
                 try {
-                    // Use phoneNumberForBackup for consistent storage path
-                    const success = await this.supabase.backupSessionFile(this.phoneNumberForBackup, filename, content);
+                    // Use backupPath for storage
+                    const success = await this.supabase.backupSessionFile(backupPath, filename, content);
                     if (success) {
                         successCount++;
                         if (successCount % 10 === 0) {
@@ -811,7 +814,7 @@ class WhatsAppConnection {
                 await new Promise(resolve => setTimeout(resolve, 100));
             }
 
-            console.log(`💾 Session backup completed: ${successCount} succeeded, ${failCount} failed for ${this.phoneNumberForBackup}`);
+            console.log(`💾 Session backup completed: ${successCount} succeeded, ${failCount} failed for ${backupPath}`);
         } catch (error) {
             console.error('❌ Failed to backup session to cloud:', error.message);
         }
