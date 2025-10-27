@@ -420,6 +420,7 @@ class SupabaseManager {
             const filePath = `sessions/${phoneNumber}/${filename}`;
             
             console.log(`📤 Uploading to Supabase: ${filePath} (${content.length} bytes)`);
+            console.log(`🔑 Using ${this.storageClient ? 'SERVICE_KEY' : 'ANON_KEY'} for upload`);
             
             // Use storage client (with service key if available)
             const client = this.storageClient || this.client;
