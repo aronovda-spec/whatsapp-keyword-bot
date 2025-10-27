@@ -324,6 +324,40 @@ class WhatsAppKeywordBot {
 
                         if (success) {
                             this.stats.notificationsSent++;
+                            
+                            // Start reminder system for global keywords for ALL authorized users
+                            const authorizedUsers = this.notifier.authorization.getAuthorizedUsers();
+                            
+                            for (const userId of authorizedUsers) {
+                                // Check if reminder already exists for this user
+                                const existingReminder = this.notifier.reminderManager.getReminders(userId);
+                                
+                                if (existingReminder && existingReminder.keyword === keywordData.keyword) {
+                                    // Same keyword detected again - restart timer
+                                    this.notifier.reminderManager.resetReminderForKeyword(
+                                        userId,
+                                        keywordData.keyword,
+                                        messageData.text,
+                                        messageData.sender,
+                                        messageData.group,
+                                        messageData.id,
+                                        phoneNumber,
+                                        messageData.attachment
+                                    );
+                                } else {
+                                    // New reminder
+                                    this.notifier.reminderManager.addReminder(
+                                        userId,
+                                        keywordData.keyword,
+                                        messageData.text,
+                                        messageData.sender,
+                                        messageData.group,
+                                        messageData.id,
+                                        phoneNumber,
+                                        messageData.attachment
+                                    );
+                                }
+                            }
                         }
                     } catch (notificationError) {
                         logError(notificationError, {
@@ -472,7 +506,8 @@ class WhatsAppKeywordBot {
                 try {
                     this.commandHandler = new TelegramCommandHandler(
                         process.env.TELEGRAM_BOT_TOKEN,
-                        this.notifier.authorization
+                        this.notifier.authorization,
+                        this.keywordDetector // Pass keywordDetector to command handler
                     );
                     // Inject reminder manager into command handler
                     if (this.commandHandler) {

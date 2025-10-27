@@ -100,10 +100,13 @@ class Notifier {
         // Send Email notification
         if (this.emailChannel && this.emailChannel.enabled) {
             try {
+                console.log(`📧 Attempting to send email for global keyword: "${keyword}"`);
                 emailSuccess = await this.emailChannel.sendKeywordAlert(
                     keyword, message, sender, group, messageId, phoneNumber, matchType, matchedToken, attachment
                 );
+                console.log(`📧 Email notification ${emailSuccess ? 'sent successfully' : 'failed'} for keyword: "${keyword}"`);
             } catch (error) {
+                console.error(`❌ Email notification error for keyword "${keyword}":`, error.message);
                 logError(error, {
                     context: 'send_keyword_alert_email',
                     keyword,
@@ -111,6 +114,8 @@ class Notifier {
                     group
                 });
             }
+        } else {
+            console.log(`📧 Email channel not enabled (channel: ${this.emailChannel ? 'exists' : 'null'}, enabled: ${this.emailChannel?.enabled})`);
         }
 
         // Log combined results
@@ -153,16 +158,21 @@ class Notifier {
         // Send Email notification
         if (this.emailChannel && this.emailChannel.enabled) {
             try {
+                console.log(`📧 Attempting to send email for personal keyword: "${keyword}" to user ${targetUserId}`);
                 emailSuccess = await this.emailChannel.sendPersonalKeywordAlert(
                     keyword, message, sender, group, messageId, phoneNumber, targetUserId, matchType, matchedToken, attachment
                 );
+                console.log(`📧 Email notification ${emailSuccess ? 'sent successfully' : 'failed'} for personal keyword: "${keyword}" to user ${targetUserId}`);
             } catch (error) {
+                console.error(`❌ Email notification error for personal keyword "${keyword}" to user ${targetUserId}:`, error.message);
                 logError(error, {
                     context: 'send_personal_keyword_alert_email',
                     keyword,
                     targetUserId
                 });
             }
+        } else {
+            console.log(`📧 Email channel not enabled (channel: ${this.emailChannel ? 'exists' : 'null'}, enabled: ${this.emailChannel?.enabled})`);
         }
 
         return telegramSuccess || emailSuccess;
