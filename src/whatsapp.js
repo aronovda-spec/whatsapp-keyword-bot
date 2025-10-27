@@ -54,6 +54,7 @@ class WhatsAppConnection {
 
             // Try to restore session from Supabase (if enabled)
             if (this.supabase && this.supabase.isEnabled()) {
+                console.log('🔍 Supabase enabled, attempting session restore...');
                 try {
                     // Try multiple possible restore paths
                     const restorePaths = [this.configPhoneNumber, 'phone1', 'PHONE_PLACEHOLDER:4@s.whatsapp.net'];
@@ -62,6 +63,8 @@ class WhatsAppConnection {
                     for (const restorePath of restorePaths) {
                         console.log(`🔍 Trying to restore session from path: ${restorePath}`);
                         const sessionFiles = await this.supabase.listSessionFiles(restorePath);
+                        
+                        console.log(`📋 Session files found for ${restorePath}:`, sessionFiles?.length || 0);
                         
                         if (sessionFiles && sessionFiles.length > 0) {
                             console.log(`📥 Found ${sessionFiles.length} session files from Supabase (${restorePath}), restoring...`);
@@ -86,11 +89,14 @@ class WhatsAppConnection {
                     }
                     
                     if (!restored) {
-                        console.log('📭 No session found in Supabase storage');
+                        console.log('📭 No session found in Supabase storage - QR code will be required');
+                        console.log('💡 Check Render logs to see which paths were tried');
                     }
                 } catch (error) {
                     console.log('⚠️ Could not restore session from Supabase:', error.message);
                 }
+            } else {
+                console.log('⚠️ Supabase not enabled - session restore skipped');
             }
 
             await this.connect();
