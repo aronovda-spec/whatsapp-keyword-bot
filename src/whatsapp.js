@@ -84,12 +84,12 @@ class WhatsAppConnection {
                             for (const filename of sessionFiles) {
                                 const content = await this.supabase.restoreSessionFile(restorePath, filename);
                                 if (content) {
-                                    const filePath = path.join(this.sessionPath, filename);
-                                    const dir = path.dirname(filePath);
-                                    if (!fs.existsSync(dir)) {
-                                        fs.mkdirSync(dir, { recursive: true });
-                                    }
-                                    fs.writeFileSync(filePath, content, 'utf8');
+                                const filePath = path.join(this.sessionPath, filename);
+                                const dir = path.dirname(filePath);
+                                if (!fs.existsSync(dir)) {
+                                    fs.mkdirSync(dir, { recursive: true });
+                                }
+                                fs.writeFileSync(filePath, content, 'utf8');
                                     console.log(`✅ Restored: ${filename}`);
                                 }
                             }
@@ -187,10 +187,15 @@ class WhatsAppConnection {
         // Save credentials when updated + backup to cloud
         this.sock.ev.on('creds.update', async () => {
             saveCreds();
+            console.log('🔍 creds.update event fired, attempting backup...');
+            console.log(`📱 Current phoneNumberForBackup: ${this.phoneNumberForBackup}`);
             
             // Backup session to Supabase Storage (use consistent phone number without device ID)
             if (this.supabase.isEnabled() && this.phoneNumberForBackup) {
+                console.log('✅ Conditions met, calling backupSessionToCloud()...');
                 await this.backupSessionToCloud();
+            } else {
+                console.log('⚠️ Backup conditions not met, skipping...');
             }
         });
 
@@ -734,7 +739,15 @@ class WhatsAppConnection {
     }
 
     async backupSessionToCloud() {
-        if (!this.supabase.isEnabled() || !this.phoneNumberForBackup) {
+        console.log(`🔍 backupSessionToCloud check: enabled=${this.supabase.isEnabled()}, phoneNumberForBackup=${this.phoneNumberForBackup}`);
+        
+        if (!this.supabase.isEnabled()) {
+            console.log('⚠️ Supabase not enabled, skipping backup');
+            return;
+        }
+        
+        if (!this.phoneNumberForBackup) {
+            console.log('⚠️ phoneNumberForBackup not set yet, skipping backup');
             return;
         }
 
