@@ -136,6 +136,45 @@ class SupabaseManager {
         }
     }
 
+    async promoteToAdmin(userId) {
+        if (!this.enabled) return false;
+
+        try {
+            const { error } = await this.client
+                .from('authorized_users')
+                .upsert({
+                    user_id: userId.toString(),
+                    is_admin: true,
+                    created_at: new Date().toISOString()
+                });
+
+            if (error) throw error;
+            return true;
+        } catch (error) {
+            console.error('Supabase promoteToAdmin error:', error.message);
+            return false;
+        }
+    }
+
+    async demoteFromAdmin(userId) {
+        if (!this.enabled) return false;
+
+        try {
+            const { error } = await this.client
+                .from('authorized_users')
+                .update({
+                    is_admin: false
+                })
+                .eq('user_id', userId.toString());
+
+            if (error) throw error;
+            return true;
+        } catch (error) {
+            console.error('Supabase demoteFromAdmin error:', error.message);
+            return false;
+        }
+    }
+
     // Personal Keywords
     async getPersonalKeywords(userId) {
         if (!this.enabled) return null;
