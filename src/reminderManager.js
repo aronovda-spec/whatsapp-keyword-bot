@@ -172,7 +172,9 @@ class ReminderManager extends EventEmitter {
             this.cancelReminderTimer(userId);
             // Mark as acknowledged to prevent scheduled timers from firing
             reminder.acknowledged = true;
-            this.removeReminder(userId);
+            // DON'T remove the reminder - just mark it as acknowledged
+            // This way if the same keyword is detected again, it won't restart reminders
+            this.saveReminders();
             return true;
         }
         return false;
