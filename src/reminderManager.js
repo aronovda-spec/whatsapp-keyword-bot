@@ -12,6 +12,7 @@ class ReminderManager extends EventEmitter {
         this.activeReminders = new Map(); // userId → Set of reminderIds (supports multiple reminders per user)
         this.acknowledgedKeywords = new Map(); // userId → Set of acknowledged keywords
         this.acknowledgedTime = new Map(); // userId → timestamp when /ok was pressed
+        this.lastAcknowledgedTime = new Map(); // userId → timestamp of last /ok (for summary)
         this.reminderIdCounter = 0; // Counter for unique reminder IDs
         this.storagePath = path.join(__dirname, '../config/active-reminders.json');
         this.maxReminders = 5; // 0 min, 1 min, 2 min, 15 min, 1 hour
@@ -298,6 +299,9 @@ class ReminderManager extends EventEmitter {
                 }
             }
         }
+        
+        // Store when user acknowledged for history tracking
+        this.lastAcknowledgedTime.set(userId, Date.now());
         
         this.saveReminders();
         
