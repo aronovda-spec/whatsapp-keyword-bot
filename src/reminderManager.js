@@ -90,18 +90,23 @@ class ReminderManager extends EventEmitter {
             }
         }
         
-        // Check if there's an existing reminder for this user using the new system
-        const existingReminderId = this.activeReminders.get(userId);
-        if (existingReminderId) {
-            const existingReminder = this.reminders.get(existingReminderId);
+        // Check if there's an existing reminder for this user/keyword using the new Set-based system
+        const reminderIds = this.activeReminders.get(userId) || new Set();
+        for (const reminderId of reminderIds) {
+            const existingReminder = this.reminders.get(reminderId);
             // If existing reminder is for same keyword and acknowledged, skip
             if (existingReminder && existingReminder.keyword === keyword && existingReminder.status === 'acknowledged') {
                 console.log(`⏰ User ${userId} already acknowledged reminder for keyword: "${keyword}" - not starting new reminder`);
                 return;
             }
-            // Cancel the existing reminder to prevent duplicates
-            this.cancelReminderTimer(existingReminderId);
-            this.activeReminders.delete(userId);
+            // If existing reminder is for same keyword and still active, mark as overridden
+            if (existingReminder && existingReminder.keyword === keyword && existingReminder.status === 'active') {
+                console.log(`⏰ Replacing active reminder for keyword: "${keyword}" - mark as overridden`);
+                existingReminder.status = 'overridden';
+                this.cancelReminderTimer(reminderId);
+                reminderIds.delete(reminderId);
+                break;
+            }
         }
 
         // Generate unique reminder ID
@@ -188,7 +193,7 @@ class ReminderManager extends EventEmitter {
                 // CRITICAL: Check status BEFORE doing anything
                 if (currentReminder.status !== 'active') {
                     console.log(`⏰ Reminder ${reminder.reminderId} status is "${currentReminder.status}" - stopping`);
-                    this.removeReminderByUserId(currentReminder.userId);
+                    this.removeReminderByUserId(currentReminder.userId, reminder.reminderId);
                     return;
                 }
 
@@ -200,7 +205,7 @@ class ReminderManager extends EventEmitter {
                     console.log(`⏰ Maximum reminders reached for ${reminder.reminderId} - marking completed`);
                     currentReminder.status = 'completed';
                     this.saveReminders();
-                    this.removeReminderByUserId(currentReminder.userId);
+                    this.removeReminderByUserId(currentReminder.userId, reminder.reminderId);
                     return;
                 }
 
