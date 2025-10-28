@@ -334,9 +334,9 @@ class WhatsAppKeywordBot {
                                 // Check if reminder already exists for this user
                                 const existingReminder = this.notifier.reminderManager.getReminders(userId);
                                 
-                                // STATE-DRIVEN: Check if reminder state is active
-                                if (!this.notifier.reminderManager.isReminderActive(userId)) {
-                                    console.log(`⏰ User ${userId} reminder not active - skipping reminder for keyword: "${keywordData.keyword}"`);
+                                // Skip if user recently pressed /ok (within last 60 seconds)
+                                if (this.notifier.reminderManager.hasRecentlyAcknowledged(userId, 60)) {
+                                    console.log(`⏰ User ${userId} recently pressed /ok - skipping reminder for keyword: "${keywordData.keyword}"`);
                                     continue;
                                 }
                                 
@@ -408,9 +408,9 @@ class WhatsAppKeywordBot {
                             // Check if reminder already exists for this user
                             const existingReminder = this.notifier.reminderManager.getReminders(keywordData.userId);
                             
-                            // STATE-DRIVEN: Check if reminder state is active
-                            if (!this.notifier.reminderManager.isReminderActive(keywordData.userId)) {
-                                console.log(`⏰ User ${keywordData.userId} reminder not active - skipping reminder for keyword: "${keywordData.keyword}"`);
+                            // Skip if user recently pressed /ok (within last 60 seconds)
+                            if (this.notifier.reminderManager.hasRecentlyAcknowledged(keywordData.userId, 60)) {
+                                console.log(`⏰ User ${keywordData.userId} recently pressed /ok - skipping reminder for keyword: "${keywordData.keyword}"`);
                                 continue;
                             }
                             
