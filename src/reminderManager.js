@@ -247,18 +247,15 @@ class ReminderManager extends EventEmitter {
         
         if (reminder) {
             console.log(`✅ User ${userId} acknowledged reminder - stopping all reminders`);
-            // Mark as acknowledged to prevent scheduled timers from firing
-            reminder.acknowledged = true;
-            // DON'T remove the reminder - just mark it as acknowledged
-            // This way if the same keyword is detected again, it won't restart reminders
-            this.saveReminders();
             
-            // Also store the keyword in acknowledgedKeywords Set to prevent new reminders
-            // being added even before they exist in the reminders Map (race condition fix)
+            // Store the keyword in acknowledgedKeywords Set to prevent new reminders
             if (!this.acknowledgedKeywords.has(userId)) {
                 this.acknowledgedKeywords.set(userId, new Set());
             }
             this.acknowledgedKeywords.get(userId).add(reminder.keyword);
+            
+            // REMOVE the reminder completely to prevent any future timers
+            this.removeReminder(userId);
             
             return true;
         }
