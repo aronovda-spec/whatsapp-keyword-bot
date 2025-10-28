@@ -91,6 +91,13 @@ class EmailChannel {
         }
     }
 
+    // Reload user email mapping from config file (for manual refresh)
+    reloadUserEmailMap() {
+        console.log('📧 Reloading user email mappings...');
+        this.loadUserEmailMap();
+        console.log('✅ User email mappings reloaded');
+    }
+
     getEmailForUser(userId) {
         if (!userId) return null;
         const userEmails = this.userEmailMap.get(userId.toString());

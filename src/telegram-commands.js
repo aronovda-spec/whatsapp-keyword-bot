@@ -1040,7 +1040,7 @@ class TelegramCommandHandler {
                     .eq('user_id', userId)
                     .then(({ error }) => {
                         if (error) throw error;
-                        this.bot.sendMessage(chatId, `✅ Email set for user ${userId}: ${email}`);
+                        this.bot.sendMessage(chatId, `✅ Email set for user ${userId}: ${email}\n⚠️ Note: Bot restart required for email changes to take effect.`);
                     })
                     .catch(err => {
                         console.error('Error setting email:', err);
@@ -1074,7 +1074,7 @@ class TelegramCommandHandler {
                     .eq('user_id', userId)
                     .then(({ error }) => {
                         if (error) throw error;
-                        this.bot.sendMessage(chatId, `✅ Email removed for user ${userId}. User will no longer receive email notifications.`);
+                        this.bot.sendMessage(chatId, `✅ Email removed for user ${userId}.\n⚠️ Note: Bot restart required for email changes to take effect.`);
                     })
                     .catch(err => {
                         console.error('Error removing email:', err);
