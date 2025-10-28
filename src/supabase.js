@@ -513,9 +513,6 @@ class SupabaseManager {
             
             console.log(`🔍 Listing files from Supabase path: ${folderPath}`);
             
-            // Use storage client (with service key if available)
-            const client = this.storageClient || this.client;
-            
             // Try to list files - if this returns 0, try downloading directly to verify they exist
             let { data, error } = await client.storage
                 .from('whatsapp-sessions')
