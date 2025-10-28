@@ -88,18 +88,19 @@ class ReminderManager extends EventEmitter {
             }
         }
         
-        // Check if there's an existing reminder for this user
-        const existingReminder = this.reminders.get(userId);
-        
-        // If there's an existing reminder for the same keyword and it's acknowledged, 
-        // respect the user's choice and don't start a new reminder sequence
-        if (existingReminder && existingReminder.keyword === keyword && existingReminder.acknowledged) {
-            console.log(`⏰ User ${userId} already acknowledged reminder for keyword: "${keyword}" - not starting new reminder`);
-            return;
+        // Check if there's an existing reminder for this user using the new system
+        const existingReminderId = this.activeReminders.get(userId);
+        if (existingReminderId) {
+            const existingReminder = this.reminders.get(existingReminderId);
+            // If existing reminder is for same keyword and acknowledged, skip
+            if (existingReminder && existingReminder.keyword === keyword && existingReminder.status === 'acknowledged') {
+                console.log(`⏰ User ${userId} already acknowledged reminder for keyword: "${keyword}" - not starting new reminder`);
+                return;
+            }
+            // Cancel the existing reminder to prevent duplicates
+            this.cancelReminderTimer(existingReminderId);
+            this.activeReminders.delete(userId);
         }
-        
-        // Remove any existing reminders for this user to prevent duplicates
-        this.reminders.delete(userId);
 
         // Generate unique reminder ID
         const reminderId = `reminder_${++this.reminderIdCounter}_${userId}_${Date.now()}`;
