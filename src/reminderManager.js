@@ -44,7 +44,7 @@ class ReminderManager extends EventEmitter {
     /**
      * Save active reminders to file
      */
--base-saveReminders() {
+    saveReminders() {
         try {
             const remindersObj = {};
             for (const [reminderId, reminder] of this.reminders) {
