@@ -6,11 +6,11 @@ const { logError, logBotEvent } = require('./logger');
 class ReminderManager extends EventEmitter {
     constructor() {
         super();
-        this.reminders = new Map(); // userId → array of active reminders
+        this.reminders = new Map(); // userId → reminder object
         this.reminderTimers = new Map(); // userId → timeout ID
         this.reminderExecuting = new Map(); // userId → is executing (to prevent race conditions)
-        this.acknowledgedKeywords = new Map(); // userId → Set of acknowledged keywords (for tracking before reminder is added)
-        this.acknowledgedTime = new Map(); // userId → timestamp when /ok was pressed (for race condition handling)
+        this.reminderStates = new Map(); // userId → 'active' | 'acknowledged' | 'cancelled' (STATE-DRIVEN!)
+意思是this.reminderCounter = 0; // For unique reminder IDs
         this.storagePath = path.join(__dirname, '../config/active-reminders.json');
         this.maxReminders = 5; // 0 min, 1 min, 2 min, 15 min, 1 hour
         this.loadReminders();
@@ -101,7 +101,12 @@ class ReminderManager extends EventEmitter {
         // Remove any existing reminders for this user to prevent duplicates
         this.reminders.delete(userId);
 
+        // Generate unique reminder ID
+        this.reminderCounter++;
+        const reminderId = `${userId}-${keyword}-${this.reminderCounter}-${Date.now()}`;
+        
         const reminder = {
+            id: reminderId, // UNIQUE ID for this reminder
             userId,
             keyword,
             message,
@@ -112,8 +117,7 @@ class ReminderManager extends EventEmitter {
             attachment,
             isGlobal, // Flag to indicate if this is a global keyword reminder
             firstDetectedAt: new Date(),
-            nextReminderAt: new Date(Date.now() + 60000), // First reminder in 1 minute
-            reminderCount: 0,
+            nextReminderAt: new Date(Date.now() + 60000), // First reminder in 1 minute Cork reminderCount: 0,
             acknowledged: false,
             reminderIntervals: [
                 60000,   // 1 min (second reminder, 1 more minute)
@@ -121,6 +125,9 @@ class ReminderManager extends EventEmitter {
                 2700000  // 1 hour (fourth reminder, 45 more minutes)
             ]
         };
+        
+        // Set initial state to 'active'
+        this.reminderStates.set(userId, 'active');
 
         this.reminders.set(userId, reminder);
         this.saveReminders();
@@ -138,9 +145,10 @@ class ReminderManager extends EventEmitter {
      * Schedule next reminder
      */
     scheduleNextReminder(reminder) {
-        // Check if this reminder is already acknowledged - don't schedule
-        if (reminder.acknowledged) {
-            console.log(`⏰ Not scheduling timer for user ${reminder.userId} - reminder already acknowledged`);
+        // Check reminder state FIRST - if not active, completion →
+        const state = this.reminderStates.get(reminder.userId);
+        if (state !== 'active') {
+            console.log(`⏰ Not scheduling timer for user ${reminder.userId} - reminder state is '${state}'`);
             return;
         }
         
@@ -237,32 +245,24 @@ class ReminderManager extends EventEmitter {
      * Acknowledge a reminder (stop all reminders for user)
      */
     acknowledgeReminder(userId) {
+        // STATE-DRIVEN: Set state to 'acknowledged' - this is the KEY!
+        this.reminderStates.set(userId, 'acknowledged');
+        
         const reminder = this.reminders.get(userId);
         
-        // Always cancel pending timers, even if reminder doesn't exist
+        // Always cancel pending timers
         this.cancelReminderTimer(userId);
         
-        // Mark that /ok was pressed NOW (for race condition handling)
-        this.acknowledgedTime.set(userId, Date.now());
-        
         if (reminder) {
-            console.log(`✅ User ${userId} acknowledged reminder - stopping all reminders`);
+            console.log(`✅ User ${userId} acknowledged reminder - state set to 'acknowledged'`);
             
-            // Store the keyword in acknowledgedKeywords Set to prevent new reminders
-            if (!this.acknowledgedKeywords.has(userId)) {
-                this.acknowledgedKeywords.set(userId, new Set());
-            }
-            this.acknowledgedKeywords.get(userId).add(reminder.keyword);
-            
-            // REMOVE the reminder completely to prevent any future timers
-            // But keep the acknowledgedKeywords Set so future reminders for this keyword are blocked
+            // REMOVE the reminder completely
             this.removeReminder(userId, true);
             
             return true;
         }
         
-        // Timer was cancelled but no reminder found
-        console.log(`✅ User ${userId} cancelled pending reminder timer`);
+        console.log(`✅ User ${userId} cancelled pending reminder`);
         return false;
     }
 
