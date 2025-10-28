@@ -71,11 +71,7 @@ class WhatsAppConnection {
                     let restored = false;
                     
                     for (const restorePath of restorePaths) {
-                        console.log(`🔍 Trying to restore session from path: ${restorePath}`);
-                        
                         const sessionFiles = await this.supabase.listSessionFiles(restorePath);
-                        
-                        console.log(`📋 Session files found for ${restorePath}:`, sessionFiles?.length || 0);
                         
                         if (sessionFiles && sessionFiles.length > 0) {
                             console.log(`📥 Found ${sessionFiles.length} session files from Supabase (${restorePath}), restoring...`);

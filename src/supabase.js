@@ -490,56 +490,20 @@ class SupabaseManager {
         if (!this.enabled) return [];
 
         try {
-            // First, try listing ALL files in the bucket to see what's actually there
-            console.log(`🔍 Listing ALL files in bucket to debug...`);
+            const folderPath = `sessions/${phoneNumber}`;
             
             // Use storage client (with service key if available)
             const client = this.storageClient || this.client;
             
-            const { data: allData, error: allError } = await client.storage
-                .from('whatsapp-sessions')
-                .list('', {
-                    limit: 1000,
-                    offset: 0,
-                    sortBy: { column: 'name', order: 'asc' }
-                });
-            
-            if (!allError && allData) {
-                console.log(`📦 Total items in bucket root: ${allData.length}`);
-                console.log(`📋 First 20 items:`, allData.map(item => item.name).slice(0, 20));
-            }
-            
-            const folderPath = `sessions/${phoneNumber}`;
-            
-            console.log(`🔍 Listing files from Supabase path: ${folderPath}`);
-            
-            // Try to list files - if this returns 0, try downloading directly to verify they exist
-            let { data, error } = await client.storage
+            const { data, error } = await client.storage
                 .from('whatsapp-sessions')
                 .list(folderPath);
-            
-            console.log(`📊 List response: data=${data?.length || 0}, error=`, error);
-            
-            // If list returns 0 files, try direct download to verify files actually exist
-            if ((!data || data.length === 0) && !error) {
-                console.log(`⚠️ List returned 0 files, trying direct download to verify...`);
-                const testFiles = ['creds.json', 'device-list-PHONE_PLACEHOLDER.json'];
-                for (const testFile of testFiles) {
-                    const testPath = `${folderPath}/${testFile}`;
-                    const { data: testData, error: testError } = await client.storage
-                        .from('whatsapp-sessions')
-                        .download(testPath);
-                    console.log(`🔍 Test download ${testFile}: error=`, testError?.message || 'none', 'data=', testData ? 'EXISTS' : 'null');
-                }
-            }
 
             if (error) {
-                console.log(`❌ Error listing files: ${error.message}`);
+                console.error(`Supabase list error: ${error.message}`);
                 if (error.message.includes('not found')) return [];
                 throw error;
             }
-
-            console.log(`📋 Raw data from Supabase (${data?.length || 0} items):`, JSON.stringify(data, null, 2));
 
             // Filter out directories, return only files (without the folder path prefix)
             const files = (data || [])
@@ -550,7 +514,7 @@ class SupabaseManager {
                     return name;
                 });
             
-            console.log(`📄 Extracted ${files.length} files:`, files);
+            console.log(`📋 Found ${files.length} session files for ${phoneNumber}`);
             
             return files;
         } catch (error) {
