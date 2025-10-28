@@ -306,6 +306,18 @@ class ReminderManager extends EventEmitter {
     }
 
     /**
+     * Check if user pressed /ok recently
+     */
+    hasRecentlyAcknowledged(userId, maxSeconds = 60) {
+        if (!this.acknowledgedTime.has(userId)) {
+            return false;
+        }
+        const acknowledgedTimestamp = this.acknowledgedTime.get(userId);
+        const timeSinceAcknowledged = Date.now() - acknowledgedTimestamp;
+        return timeSinceAcknowledged < (maxSeconds * 1000);
+    }
+
+    /**
      * Check if user has pending reminder
      */
     hasReminder(userId) {
