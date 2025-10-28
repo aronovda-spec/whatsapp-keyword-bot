@@ -94,8 +94,8 @@ class ReminderManager extends EventEmitter {
 
         console.log(`⏰ Added reminder for user ${userId} - keyword: "${keyword}"`);
         
-        // Emit immediate notification
-        this.emit('sendReminder', reminder);
+        // Don't emit immediate notification - the first alert was already sent in bot.js
+        // Only schedule the next reminder
 
         // Schedule next reminder
         this.scheduleNextReminder(reminder);
