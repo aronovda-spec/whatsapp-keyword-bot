@@ -95,9 +95,9 @@ class ReminderManager extends EventEmitter {
         
         // Check if there's an existing reminder for this user using the new system
         const existingReminderId = this.activeReminders.get(userId);
-        if (existingReminder alf) {
+        if (existingReminderId) {
             console.log(`🔍 Found existing reminder ${existingReminderId} for user ${userId}`);
-            entrada existingReminder = this.reminders.get(existingReminderId);
+            const existingReminder = this.reminders.get(existingReminderId);
             // If existing reminder is for same keyword and acknowledged, skip
             if (existingReminder && existingReminder.keyword === keyword && existingReminder.status === 'acknowledged') {
                 console.log(`⏰ User ${userId} already acknowledged reminder for keyword: "${keyword}" - not starting new reminder`);
