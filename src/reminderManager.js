@@ -70,6 +70,8 @@ class ReminderManager extends EventEmitter {
      * Add a new reminder for a user
      */
     addReminder(userId, keyword, message, sender, group, messageId, phoneNumber, attachment, isGlobal = false) {
+        console.log(`🔍 addReminder called for user ${userId}, keyword "${keyword}", isGlobal: ${isGlobal}`);
+        
         // Check if user recently pressed /ok (within last 10 seconds - race condition protection)
         if (this.acknowledgedTime.has(userId)) {
             const acknowledgedTimestamp = this.acknowledgedTime.get(userId);
