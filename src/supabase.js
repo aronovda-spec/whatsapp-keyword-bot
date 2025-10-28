@@ -528,7 +528,7 @@ class SupabaseManager {
                 console.log(`⚠️ List returned 0 files, trying direct download to verify...`);
                 const testFiles = ['creds.json', 'device-list-PHONE_PLACEHOLDER.json'];
                 for (const testFile of testFiles) {
- Ajax const testPath = `${folderPath}/${testFile}`;
+                    const testPath = `${folderPath}/${testFile}`;
                     const { data: testData, error: testError } = await client.storage
                         .from('whatsapp-sessions')
                         .download(testPath);
