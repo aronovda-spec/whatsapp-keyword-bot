@@ -343,11 +343,14 @@ class ReminderManager extends EventEmitter {
     /**
      * Remove reminder by userId (clears the activeReminders mapping)
      */
-    removeReminderByUserId(userId) {
-        const reminderId = this.activeReminders.get(userId);
-        if (reminderId) {
-            this.activeReminders.delete(userId);
-            // Note: Don't delete from reminders Map, let it expire
+    removeReminderByUserId(userId, reminderId) {
+        const reminderIds = this.activeReminders.get(userId);
+        if (reminderIds && reminderId) {
+            reminderIds.delete(reminderId);
+            // Clean up empty Set
+            if (reminderIds.size === 0) {
+                this.activeReminders.delete(userId);
+            }
         }
     }
 
@@ -377,14 +380,37 @@ class ReminderManager extends EventEmitter {
     }
 
     /**
-     * Get active reminder for a user
+     * Get active reminders for a user (returns first active, or all)
      */
     getReminders(userId) {
-        const reminderId = this.activeReminders.get(userId);
-        if (reminderId) {
-            return this.reminders.get(reminderId);
+        const reminderIds = this.activeReminders.get(userId);
+        if (reminderIds && reminderIds.size > 0) {
+            // Return the first active reminder (for backward compatibility)
+            for (const reminderId of reminderIds) {
+                const reminder = this.reminders.get(reminderId);
+                if (reminder && reminder.status === 'active') {
+                    return reminder;
+                }
+            }
         }
         return null;
+    }
+    
+    /**
+     * Get all active reminders for a user
+     */
+    getAllRemindersForUser(userId) {
+        const reminderIds = this.activeReminders.get(userId);
+        if (!reminderIds) return [];
+        
+        const reminders = [];
+        for (const reminderId of reminderIds) {
+            const reminder = this.reminders.get(reminderId);
+            if (reminder) {
+                reminders.push(reminder);
+            }
+        }
+        return reminders;
     }
 
     /**
