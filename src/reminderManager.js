@@ -9,6 +9,8 @@ class ReminderManager extends EventEmitter {
         this.reminders = new Map(); // userId → array of active reminders
         this.reminderTimers = new Map(); // userId → timeout ID
         this.reminderExecuting = new Map(); // userId → is executing (to prevent race conditions)
+        this.acknowledgedKeywords = new Map(); // userId → Set of acknowledged keywords (for tracking before reminder is added)
+        this.acknowledgedTime = new Map(); // userId → timestamp when /ok was pressed (for race condition handling)
         this.storagePath = path.join(__dirname, '../config/active-reminders.json');
         this.maxReminders = 5; // 0 min, 1 min, 2 min, 15 min, 1 hour
         this.loadReminders();
@@ -65,6 +67,27 @@ class ReminderManager extends EventEmitter {
      * Add a new reminder for a user
      */
     addReminder(userId, keyword, message, sender, group, messageId, phoneNumber, attachment, isGlobal = false) {
+        // Check if user recently pressed /ok (within last 10 seconds - race condition protection)
+        if (this.acknowledgedTime.has(userId)) {
+            const acknowledgedTimestamp = this.acknowledgedTime.get(userId);
+            const timeSinceAcknowledged = Date.now() - acknowledgedTimestamp;
+            if (timeSinceAcknowledged < 10000) { // 10 seconds
+                console.log(`⏰ User ${userId} recently pressed /ok (${Math.round(timeSinceAcknowledged/1000)}s ago) - not starting new reminder`);
+                return;
+            }
+            // Clean up old acknowledgments
+            this.acknowledgedTime.delete(userId);
+        }
+        
+        // Check if user has acknowledged this keyword (even before reminder was added)
+        if (this.acknowledgedKeywords.has(userId)) {
+            const userAcknowledgedKeywords = this.acknowledgedKeywords.get(userId);
+            if (userAcknowledgedKeywords.has(keyword)) {
+                console.log(`⏰ User ${userId} already acknowledged keyword: "${keyword}" - not starting new reminder`);
+                return;
+            }
+        }
+        
         // Check if there's an existing reminder for this user
         const existingReminder = this.reminders.get(userId);
         
@@ -208,6 +231,9 @@ class ReminderManager extends EventEmitter {
         // Always cancel pending timers, even if reminder doesn't exist
         this.cancelReminderTimer(userId);
         
+        // Mark that /ok was pressed NOW (for race condition handling)
+        this.acknowledgedTime.set(userId, Date.now());
+        
         if (reminder) {
             console.log(`✅ User ${userId} acknowledged reminder - stopping all reminders`);
             // Mark as acknowledged to prevent scheduled timers from firing
@@ -215,6 +241,14 @@ class ReminderManager extends EventEmitter {
             // DON'T remove the reminder - just mark it as acknowledged
             // This way if the same keyword is detected again, it won't restart reminders
             this.saveReminders();
+            
+            // Also store the keyword in acknowledgedKeywords Set to prevent new reminders
+            // being added even before they exist in the reminders Map (race condition fix)
+            if (!this.acknowledgedKeywords.has(userId)) {
+                this.acknowledgedKeywords.set(userId, new Set());
+            }
+            this.acknowledgedKeywords.get(userId).add(reminder.keyword);
+            
             return true;
         }
         
@@ -231,6 +265,16 @@ class ReminderManager extends EventEmitter {
         this.cancelReminderTimer(userId);
         
         if (this.reminders.has(userId)) {
+            const reminder = this.reminders.get(userId);
+            // Clear acknowledged keyword tracking for this specific keyword
+            if (this.acknowledgedKeywords.has(userId)) {
+                this.acknowledgedKeywords.get(userId).delete(reminder.keyword);
+                // Clean up empty Set
+                if (this.acknowledgedKeywords.get(userId).size === 0) {
+                    this.acknowledgedKeywords.delete(userId);
+                }
+            }
+            
             this.reminders.delete(userId);
             this.saveReminders();
         }
