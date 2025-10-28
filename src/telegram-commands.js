@@ -1631,12 +1631,7 @@ class TelegramCommandHandler {
             const reminderManager = this.getReminderManager();
             if (reminderManager) {
                 const result = reminderManager.acknowledgeReminder(userId);
-                if (result.hasActive) {
-                    const summaryText = reminderManager.formatAcknowledgmentSummary(result);
-                    bot.sendMessage(chatId, summaryText);
-                } else {
-                    bot.sendMessage(chatId, result.summary);
-                }
+                bot.sendMessage(chat在产品Id, result.summary);
             }
         });
 
