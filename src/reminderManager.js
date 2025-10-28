@@ -158,6 +158,8 @@ class ReminderManager extends EventEmitter {
         // Cancel any existing timer for this reminder
         this.cancelReminderTimer(reminder.reminderId);
 
+        console.log(`⏰ Scheduling reminder for user ${reminder.userId}, keyword "${reminder.keyword}", delay: ${delay}ms (${Math.round(delay/1000)}s)`);
+
         // Schedule new timer and store its ID  
         const timerId = setTimeout(() => {
             // Prevent race condition - check if we're already executing
@@ -184,6 +186,8 @@ class ReminderManager extends EventEmitter {
                     return;
                 }
 
+                console.log(`⏰ Sending reminder ${currentReminder.reminderCount + 1} for user ${currentReminder.userId}, keyword "${currentReminder.keyword}"`);
+                
                 // Increment reminder count
                 currentReminder.reminderCount++;
                 
