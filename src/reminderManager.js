@@ -10,6 +10,8 @@ class ReminderManager extends EventEmitter {
         this.reminderTimers = new Map(); // reminderId → timeout ID
         this.reminderExecuting = new Map(); // reminderId → is executing (to prevent race conditions)
         this.activeReminders = new Map(); // userId → reminderId (for fast lookup)
+        this.acknowledgedKeywords = new Map(); // userId → Set of acknowledged keywords
+        this.acknowledgedTime = new Map(); // userId → timestamp when /ok was pressed
         this.reminderIdCounter = 0; // Counter for unique reminder IDs
         this.storagePath = path.join(__dirname, '../config/active-reminders.json');
         this.maxReminders = 5; // 0 min, 1 min, 2 min, 15 min, 1 hour
