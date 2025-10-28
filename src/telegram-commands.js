@@ -342,6 +342,7 @@ class TelegramCommandHandler {
                 '/remove <user_id> - Remove user (with confirmation)\n' +
                 '/pending - Show pending requests\n' +
                 '/setemail <user_id> <email> - Set user email\n' +
+                '/removeemail <user_id> - Remove user email\n' +
                 '/makeadmin <user_id> - Promote user to admin';
             this.bot.sendMessage(chatId, adminText);
         });
