@@ -126,8 +126,16 @@ class ReminderManager extends EventEmitter {
             try {
                 // Check if still active
                 const currentReminder = this.reminders.get(reminder.userId);
-                if (!currentReminder || currentReminder.acknowledged) {
-                    console.log(`⏰ Reminder cancelled or acknowledged for user ${reminder.userId}`);
+                if (!currentReminder) {
+                    console.log(`⏰ Reminder not found for user ${reminder.userId} - stopping`);
+                    return;
+                }
+                
+                // Check if acknowledged
+                if (currentReminder.acknowledged) {
+                    console.log(`⏰ Reminder already acknowledged for user ${reminder.userId} - stopping`);
+                    // Clean up the acknowledged reminder
+                    this.removeReminder(reminder.userId);
                     return;
                 }
 
@@ -144,12 +152,14 @@ class ReminderManager extends EventEmitter {
                 // Send reminder
                 this.emit('sendReminder', currentReminder);
                 
-                // Schedule next reminder
-                const nextInterval = currentReminder.reminderIntervals[currentReminder.reminderCount - 1];
-                if (nextInterval) {
-                    currentReminder.nextReminderAt = new Date(Date.now() + nextInterval);
-                    this.saveReminders();
-                    this.scheduleNextReminder(currentReminder);
+                // Schedule next reminder (only if not acknowledged)
+                if (!currentReminder.acknowledged) {
+                    const nextInterval = currentReminder.reminderIntervals[currentReminder.reminderCount - 1];
+                    if (nextInterval) {
+                        currentReminder.nextReminderAt = new Date(Date.now() + nextInterval);
+                        this.saveReminders();
+                        this.scheduleNextReminder(currentReminder);
+                    }
                 }
             } finally {
                 // Always clear the executing flag
