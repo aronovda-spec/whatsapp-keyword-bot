@@ -163,6 +163,17 @@ class ReminderManager extends EventEmitter {
             this.reminderExecuting.set(reminder.userId, true);
             
             try {
+                // Check if user pressed /ok recently (within last 60 seconds)
+                const acknowledgedTime = this.acknowledgedTime.get(reminder.userId);
+                if (acknowledgedTime) {
+                    const timeSinceAcknowledged = Date.now() - acknowledgedTime;
+                    if (timeSinceAcknowledged < 60000) { // 60 seconds
+                        console.log(`⏰ User ${reminder.userId} pressed /ok ${Math.round(timeSinceAcknowledged/1000)}s ago - stopping reminder`);
+                        this.removeReminder(reminder.userId);
+                        return;
+                    }
+                }
+                
                 // Check if still active
                 const currentReminder = this.reminders.get(reminder.userId);
                 if (!currentReminder) {
