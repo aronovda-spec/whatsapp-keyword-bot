@@ -465,7 +465,10 @@ class SupabaseManager {
         try {
             const filePath = `sessions/${phoneNumber}/${filename}`;
             
-            const { data, error } = await this.client.storage
+            // Use storage client (with service key if available)
+            const client = this.storageClient || this.client;
+            
+            const { data, error } = await client.storage
                 .from('whatsapp-sessions')
                 .download(filePath);
 
@@ -489,7 +492,11 @@ class SupabaseManager {
         try {
             // First, try listing ALL files in the bucket to see what's actually there
             console.log(`🔍 Listing ALL files in bucket to debug...`);
-            const { data: allData, error: allError } = await this.client.storage
+            
+            // Use storage client (with service key if available)
+            const client = this.storageClient || this.client;
+            
+            const { data: allData, error: allError } = await client.storage
                 .from('whatsapp-sessions')
                 .list('', {
                     limit: 1000,
@@ -506,8 +513,11 @@ class SupabaseManager {
             
             console.log(`🔍 Listing files from Supabase path: ${folderPath}`);
             
+            // Use storage client (with service key if available)
+            const client = this.storageClient || this.client;
+            
             // Try to list files - if this returns 0, try downloading directly to verify they exist
-            let { data, error } = await this.client.storage
+            let { data, error } = await client.storage
                 .from('whatsapp-sessions')
                 .list(folderPath);
             
@@ -518,8 +528,8 @@ class SupabaseManager {
                 console.log(`⚠️ List returned 0 files, trying direct download to verify...`);
                 const testFiles = ['creds.json', 'device-list-PHONE_PLACEHOLDER.json'];
                 for (const testFile of testFiles) {
-                    const testPath = `${folderPath}/${testFile}`;
-                    const { data: testData, error: testError } = await this.client.storage
+ Ajax const testPath = `${folderPath}/${testFile}`;
+                    const { data: testData, error: testError } = await client.storage
                         .from('whatsapp-sessions')
                         .download(testPath);
                     console.log(`🔍 Test download ${testFile}: error=`, testError?.message || 'none', 'data=', testData ? 'EXISTS' : 'null');
