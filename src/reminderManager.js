@@ -265,44 +265,61 @@ class ReminderManager extends EventEmitter {
             expired: []
         };
         
-        // Process all active reminders
-        for (const reminderId of reminderIds) {
-            const reminder = this.reminders.get(reminderId);
+        // Find ALL reminders for this user since last acknowledgment
+        const lastAckTime = this.lastAcknowledgedTime.get(userId) || 0;
+        const now = Date.now();
         
-        if (reminder) {
-                if (reminder.status === 'active') {
-                    // Acknowledge the active reminder
-                    reminder.status = 'acknowledged';
-                    this.cancelReminderTimer(reminderId);
-                    summary.active.push({
-                        type: reminder.isGlobal ? 'Global' : 'Personal',
-                        keyword: reminder.keyword
-                    });
-                    
-                    // Store the keyword to prevent future reminders
-                    if (!this.acknowledgedKeywords.has(userId)) {
-                        this.acknowledgedKeywords.set(userId, new Set());
-                    }
-                    this.acknowledgedKeywords.get(userId).add(reminder.keyword);
-                } else if (reminder.status === 'overridden') {
-                    // Already overridden by another keyword
-                    summary.overridden.push({
-                        type: reminder.isGlobal ? 'Global' : 'Personal',
-                        keyword: reminder.keyword
-                    });
-                } else if (reminder.status === 'completed') {
-                    // Already expired (completed all reminders)
-                    summary.expired.push({
-                        type: reminder.isGlobal ? 'Global' : 'Personal',
-                        keyword: reminder.keyword
-                    });
+        for (const [reminderId, reminder] of this.reminders.entries()) {
+            // Only process reminders for this user
+            if (reminder.userId !== userId) continue;
+            
+            // Only include reminders created since last acknowledgment
+            const reminderTime = reminder.firstDetectedAt.getTime();
+            if (reminderTime < lastAckTime) continue;
+            
+            // Categorize by status
+            if (reminder.status === 'active') {
+                // Acknowledge active reminders
+                reminder.status = 'acknowledged';
+                this.cancelReminderTimer(reminderId);
+                summary.active.push({
+                    type: reminder.isGlobal ? 'Global' : 'Personal',
+                    keyword: reminder.keyword
+                });
+                summary.hasActive = true;
+                
+                // Store the keyword to prevent future reminders
+                if (!this.acknowledgedKeywords.has(userId)) {
+                    this.acknowledgedKeywords.set(userId, new Set());
                 }
+                this.acknowledgedKeywords.get(userId).add(reminder.keyword);
+            } else if (reminder.status === 'overridden') {
+                // Include in summary but don't change status
+                summary.overridden.push({
+                    type: reminder.isGlobal ? 'Global' : 'Personal',
+                    keyword: reminder.keyword
+                });
+            } else if (reminder.status === 'completed') {
+                // Include in summary but don't change status
+                summary.expired.push({
+                    type: reminder.isGlobal ? 'Global' : 'Personal',
+                    keyword: reminder.keyword
+                });
             }
         }
         
-            this.saveReminders();
+        // Update last acknowledged time
+        this.lastAcknowledgedTime.set(userId, now);
+        this.saveReminders();
         
         // Generate summary message
+        if (!summary.hasActive && summary.overridden.length === 0 && summary.expired.length === 0) {
+            return {
+                hasActive: false,
+                summary: "✅ No active reminders to acknowledge"
+            };
+        }
+        
         const summaryText = this.formatAcknowledgmentSummary(summary);
         console.log(`✅ User ${userId} acknowledged: ${summaryText}`);
         
