@@ -1594,11 +1594,12 @@ class TelegramCommandHandler {
             // Get active reminder
             const reminderManager = this.getReminderManager();
             if (reminderManager) {
-                const acknowledged = reminderManager.acknowledgeReminder(userId);
-                if (acknowledged) {
-                    bot.sendMessage(chatId, '✅ Reminder acknowledged and stopped.');
+                const result = reminderManager.acknowledgeReminder(userId);
+                if (result.hasActive) {
+                    const summaryText = reminderManager.formatAcknowledgmentSummary(result);
+                    bot.sendMessage(chatId, summaryText);
                 } else {
-                    bot.sendMessage(chatId, 'ℹ️ No active reminders to acknowledge.');
+                    bot.sendMessage(chatId, result.summary);
                 }
             }
         });
