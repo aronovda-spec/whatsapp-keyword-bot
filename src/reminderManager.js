@@ -67,6 +67,8 @@ class ReminderManager extends EventEmitter {
      * Add a new reminder for a user
      */
     addReminder(userId, keyword, message, sender, group, messageId, phoneNumber, attachment, isGlobal = false) {
+        console.log(`🔍 addReminder START for user ${userId}, keyword "${keyword}"`);
+        
         // Check if user recently pressed /ok (within last 10 seconds - race condition protection)
         if (this.acknowledgedTime.has(userId)) {
             const acknowledgedTimestamp = this.acknowledgedTime.get(userId);
@@ -91,6 +93,7 @@ class ReminderManager extends EventEmitter {
         // Check if there's an existing reminder for this user using the new system
         const existingReminderId = this.activeReminders.get(userId);
         if (existingReminderId) {
+            console.log(`🔍 Found existing reminder ${existingReminderId} for user ${userId}`);
             const existingReminder = this.reminders.get(existingReminderId);
             // If existing reminder is for same keyword and acknowledged, skip
             if (existingReminder && existingReminder.keyword === keyword && existingReminder.status === 'acknowledged') {
@@ -98,6 +101,7 @@ class ReminderManager extends EventEmitter {
                 return;
             }
             // Cancel the existing reminder to prevent duplicates
+            console.log(`🔍 Canceling existing reminder and replacing`);
             this.cancelReminderTimer(existingReminderId);
             this.activeReminders.delete(userId);
         }
