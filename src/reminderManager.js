@@ -8,6 +8,7 @@ class ReminderManager extends EventEmitter {
         super();
         this.reminders = new Map(); // userId → array of active reminders
         this.reminderTimers = new Map(); // userId → timeout ID
+        this.reminderExecuting = new Map(); // userId → is executing (to prevent race conditions)
         this.storagePath = path.join(__dirname, '../config/active-reminders.json');
         this.maxReminders = 5; // 0 min, 1 min, 2 min, 15 min, 1 hour
         this.loadReminders();
@@ -113,36 +114,46 @@ class ReminderManager extends EventEmitter {
 
         // Schedule new timer and store its ID
         const timerId = setTimeout(() => {
-            // Check if still active
-            const currentReminder = this.reminders.get(reminder.userId);
-            if (!currentReminder || currentReminder.acknowledged) {
-                console.log(`⏰ Reminder cancelled or acknowledged for user ${reminder.userId}`);
-                this.reminderTimers.delete(reminder.userId);
+            // Prevent race condition - check if we're already executing
+            if (this.reminderExecuting.get(reminder.userId)) {
+                console.log(`⏰ Reminder already executing for user ${reminder.userId}, skipping`);
                 return;
             }
 
-            // Increment reminder count
-            currentReminder.reminderCount++;
+            // Mark as executing
+            this.reminderExecuting.set(reminder.userId, true);
             
-            // Check if we've hit the max
-            if (currentReminder.reminderCount >= this.maxReminders) {
-                console.log(`⏰ Maximum reminders reached for user ${reminder.userId} - stopping`);
-                this.reminderTimers.delete(reminder.userId);
-                this.removeReminder(reminder.userId);
-                return;
-            }
+            try {
+                // Check if still active
+                const currentReminder = this.reminders.get(reminder.userId);
+                if (!currentReminder || currentReminder.acknowledged) {
+                    console.log(`⏰ Reminder cancelled or acknowledged for user ${reminder.userId}`);
+                    return;
+                }
 
-            // Send reminder
-            this.emit('sendReminder', currentReminder);
-            
-            // Schedule next reminder
-            const nextInterval = currentReminder.reminderIntervals[currentReminder.reminderCount - 1];
-            if (nextInterval) {
-                currentReminder.nextReminderAt = new Date(Date.now() + nextInterval);
-                this.saveReminders();
-                this.scheduleNextReminder(currentReminder);
-            } else {
-                this.reminderTimers.delete(reminder.userId);
+                // Increment reminder count
+                currentReminder.reminderCount++;
+                
+                // Check if we've hit the max
+                if (currentReminder.reminderCount >= this.maxReminders) {
+                    console.log(`⏰ Maximum reminders reached for user ${reminder.userId} - stopping`);
+                    this.removeReminder(reminder.userId);
+                    return;
+                }
+
+                // Send reminder
+                this.emit('sendReminder', currentReminder);
+                
+                // Schedule next reminder
+                const nextInterval = currentReminder.reminderIntervals[currentReminder.reminderCount - 1];
+                if (nextInterval) {
+                    currentReminder.nextReminderAt = new Date(Date.now() + nextInterval);
+                    this.saveReminders();
+                    this.scheduleNextReminder(currentReminder);
+                }
+            } finally {
+                // Always clear the executing flag
+                this.reminderExecuting.delete(reminder.userId);
             }
         }, delay);
 
@@ -157,6 +168,7 @@ class ReminderManager extends EventEmitter {
         if (timerId) {
             clearTimeout(timerId);
             this.reminderTimers.delete(userId);
+            this.reminderExecuting.delete(userId); // Also clear executing flag
             console.log(`⏰ Cancelled reminder timer for user ${userId}`);
         }
     }
