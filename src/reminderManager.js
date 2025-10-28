@@ -247,10 +247,16 @@ class ReminderManager extends EventEmitter {
      * Acknowledge a reminder (stop all reminders for user)
      */
     acknowledgeReminder(userId) {
+        console.log(`🔍 acknowledgeReminder START for user ${userId}`);
         const reminderId = this.activeReminders.get(userId);
+        console.log(`🔍 activeReminders.get(${userId}) = ${reminderId}`);
         
         if (reminderId) {
             const reminder = this.reminders.get(reminderId);
+            console.log(`🔍 reminders.get(${reminderId}) = ${reminder ? 'found' : 'NOT FOUND'}`);
+            if (reminder) {
+                console.log(`🔍 Reminder status: ${reminder.status}`);
+            }
             
             if (reminder) {
                 console.log(`✅ User ${userId} acknowledged reminder ${reminderId} - stopping all reminders`);
