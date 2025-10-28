@@ -2,6 +2,7 @@ const nodemailer = require('nodemailer');
 const fs = require('fs');
 const path = require('path');
 const { logError, logBotEvent } = require('../logger');
+const SupabaseManager = require('../supabase');
 
 class EmailChannel {
     constructor() {
@@ -11,6 +12,7 @@ class EmailChannel {
         this.userEmailMap = new Map(); // userId -> email
         this.retryAttempts = 3;
         this.retryDelay = 1000;
+        this.supabase = new SupabaseManager(); // Lazy load Supabase
         this.init();
     }
 
@@ -98,9 +100,30 @@ class EmailChannel {
         console.log('✅ User email mappings reloaded');
     }
 
-    getEmailForUser(userId) {
+    async getEmailForUser(userId) {
         if (!userId) return null;
-        const userEmails = this.userEmailMap.get(userId.toString());
+        const userIdStr = userId.toString();
+        
+        // Check local map first (fast)
+        let userEmails = this.userEmailMap.get(userIdStr);
+        
+        // If not found in local map, query Supabase (runtime sync)
+        if (!userEmails && this.supabase && this.supabase.isEnabled()) {
+            try {
+                const email = await this.supabase.getUserEmail(userIdStr);
+                if (email) {
+                    // Cache in local map for next time
+                    this.userEmailMap.set(userIdStr, email);
+                    userEmails = email;
+                    console.log(`📧 Loaded email from Supabase for user ${userIdStr}`);
+                } else {
+                    // User has no email in Supabase
+                    this.userEmailMap.set(userIdStr, null); // Cache negative result
+                }
+            } catch (error) {
+                console.error(`❌ Error querying Supabase for user ${userIdStr} email:`, error.message);
+            }
+        }
         
         // Support both single email (string) and multiple emails (array)
         if (Array.isArray(userEmails)) {
@@ -167,7 +190,7 @@ class EmailChannel {
         }
 
         // If per-user email mapping exists, use it
-        const userEmails = this.getEmailForUser(targetUserId);
+        const userEmails = await this.getEmailForUser(targetUserId);
         
         if (userEmails && userEmails.length > 0) {
             // Send to all user's emails
