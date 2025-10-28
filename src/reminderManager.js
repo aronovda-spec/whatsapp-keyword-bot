@@ -255,12 +255,19 @@ class ReminderManager extends EventEmitter {
                 }
                 this.acknowledgedKeywords.get(userId).add(reminder.keyword);
                 
-                return true;
+                // Return object format expected by telegram-commands.js
+                return {
+                    hasActive: true,
+                    summary: `✅ Reminder acknowledged and stopped. Keyword: "${reminder.keyword}"`
+                };
             }
         }
         
         console.log(`✅ User ${userId} pressed /ok but no active reminder found`);
-        return false;
+        return {
+            hasActive: false,
+            summary: "✅ No active reminders to acknowledge"
+        };
     }
     
     /**
