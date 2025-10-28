@@ -341,7 +341,7 @@ class WhatsAppKeywordBot {
                                 }
                                 
                                 // Skip if user already acknowledged a reminder for this keyword
-                                if (existingReminder && existingReminder.keyword === keywordData.keyword && existingReminder.acknowledged) {
+                                if (existingReminder && existingReminder.keyword === keywordData.keyword && existingReminder.status === 'acknowledged') {
                                     console.log(`⏰ User ${userId} already acknowledged reminder for keyword: "${keywordData.keyword}" - skipping`);
                                     continue;
                                 }
