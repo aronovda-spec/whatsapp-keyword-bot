@@ -65,6 +65,16 @@ class ReminderManager extends EventEmitter {
      * Add a new reminder for a user
      */
     addReminder(userId, keyword, message, sender, group, messageId, phoneNumber, attachment, isGlobal = false) {
+        // Check if there's an existing reminder for this user
+        const existingReminder = this.reminders.get(userId);
+        
+        // If there's an existing reminder for the same keyword and it's acknowledged, 
+        // respect the user's choice and don't start a new reminder sequence
+        if (existingReminder && existingReminder.keyword === keyword && existingReminder.acknowledged) {
+            console.log(`⏰ User ${userId} already acknowledged reminder for keyword: "${keyword}" - not starting new reminder`);
+            return;
+        }
+        
         // Remove any existing reminders for this user to prevent duplicates
         this.reminders.delete(userId);
 
@@ -105,6 +115,12 @@ class ReminderManager extends EventEmitter {
      * Schedule next reminder
      */
     scheduleNextReminder(reminder) {
+        // Check if this reminder is already acknowledged - don't schedule
+        if (reminder.acknowledged) {
+            console.log(`⏰ Not scheduling timer for user ${reminder.userId} - reminder already acknowledged`);
+            return;
+        }
+        
         const now = Date.now();
         const nextReminderTime = reminder.nextReminderAt.getTime();
         const delay = Math.max(0, nextReminderTime - now);
@@ -247,11 +263,17 @@ class ReminderManager extends EventEmitter {
     resetReminderForKeyword(userId, keyword, message, sender, group, messageId, phoneNumber, attachment, isGlobal = false) {
         const existingReminder = this.reminders.get(userId);
         
-        // If same keyword detected again, restart the timer
-        if (existingReminder && existingReminder.keyword === keyword) {
+        // If same keyword detected again AND not acknowledged, restart the timer
+        if (existingReminder && existingReminder.keyword === keyword && !existingReminder.acknowledged) {
             console.log(`🔄 Restarting reminder for user ${userId} - same keyword detected again`);
             this.addReminder(userId, keyword, message, sender, group, messageId, phoneNumber, attachment, isGlobal);
             return true;
+        }
+        
+        // If same keyword is acknowledged, respect the user's choice and don't restart
+        if (existingReminder && existingReminder.keyword === keyword && existingReminder.acknowledged) {
+            console.log(`⏰ User ${userId} already acknowledged reminder for keyword: "${keyword}" - not restarting`);
+            return false;
         }
         
         return false;
