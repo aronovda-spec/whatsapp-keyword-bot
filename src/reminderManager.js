@@ -402,23 +402,28 @@ class ReminderManager extends EventEmitter {
      * Remove reminder for a user
      */
     removeReminder(userId, keepAcknowledgedKeyword = false) {
-        // Cancel any pending timers
-        this.cancelReminderTimer(userId);
-        
-        if (this.reminders.has(userId)) {
-            const reminder = this.reminders.get(userId);
-            
-            // Only clear acknowledged keyword tracking if we want to (default is clear it)
-            // When called from acknowledgeReminder, we want to KEEP the keyword so future reminders are blocked
-            if (!keepAcknowledgedKeyword && this.acknowledgedKeywords.has(userId)) {
-                this.acknowledgedKeywords.get(userId).delete(reminder.keyword);
-                // Clean up empty Set
-                if (this.acknowledgedKeywords.get(userId).size === 0) {
-                    this.acknowledgedKeywords.delete(userId);
+        // Legacy method - now deprecated since we use reminderId instead
+        // This is kept for backward compatibility
+        const reminderIds = this.activeReminders.get(userId);
+        if (reminderIds && reminderIds.size > 0) {
+            // Remove all reminders for this user
+            for (const reminderId of reminderIds) {
+                this.cancelReminderTimer(reminderId);
+                const reminder = this.reminders.get(reminderId);
+                if (reminder) {
+                    // Only clear acknowledged keyword tracking if we want to (default is clear it)
+                    // When called from acknowledgeReminder, we want to KEEP the keyword so future reminders are blocked
+                    if (!keepAcknowledgedKeyword && this.acknowledgedKeywords.has(userId)) {
+                        this.acknowledgedKeywords.get(userId).delete(reminder.keyword);
+                        // Clean up empty Set
+                        if (this.acknowledgedKeywords.get(userId).size === 0) {
+                            this.acknowledgedKeywords.delete(userId);
+                        }
+                    }
+                    this.reminders.delete(reminderId);
                 }
             }
-            
-            this.reminders.delete(userId);
+            this.activeReminders.delete(userId);
             this.saveReminders();
         }
     }
