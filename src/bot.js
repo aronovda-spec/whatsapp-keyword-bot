@@ -334,6 +334,16 @@ class WhatsAppKeywordBot {
                                 // Check if reminder already exists for this user
                                 const existingReminder = this.notifier.reminderManager.getReminders(userId);
                                 
+                                // Skip if user recently pressed /ok (within last 60 seconds)
+                                const acknowledgedTime = this.notifier.reminderManager.acknowledgedTime.get(userId);
+                                if (acknowledgedTime) {
+                                    const timeSinceAcknowledged = Date.now() - acknowledgedTime;
+                                    if (timeSinceAcknowledged < 60000) { // 60 seconds
+                                        console.log(`⏰ User ${userId} recently pressed /ok (${Math.round(timeSinceAcknowledged/1000)}s ago) - skipping reminder for keyword: "${keywordData.keyword}"`);
+                                        continue;
+                                    }
+                                }
+                                
                                 // Skip if user already acknowledged a reminder for this keyword
                                 if (existingReminder && existingReminder.keyword === keywordData.keyword && existingReminder.acknowledged) {
                                     console.log(`⏰ User ${userId} already acknowledged reminder for keyword: "${keywordData.keyword}" - skipping`);
@@ -401,6 +411,16 @@ class WhatsAppKeywordBot {
                             // Start reminder system for personal keywords
                             // Check if reminder already exists for this user
                             const existingReminder = this.notifier.reminderManager.getReminders(keywordData.userId);
+                            
+                            // Skip if user recently pressed /ok (within last 60 seconds)
+                            const acknowledgedTime = this.notifier.reminderManager.acknowledgedTime.get(keywordData.userId);
+                            if (acknowledgedTime) {
+                                const timeSinceAcknowledged = Date.now() - acknowledgedTime;
+                                if (timeSinceAcknowledged < 60000) { // 60 seconds
+                                    console.log(`⏰ User ${keywordData.userId} recently pressed /ok (${Math.round(timeSinceAcknowledged/1000)}s ago) - skipping reminder for keyword: "${keywordData.keyword}"`);
+                                    continue;
+                                }
+                            }
                             
                             // Skip if user already acknowledged a reminder for this keyword
                             if (existingReminder && existingReminder.keyword === keywordData.keyword && existingReminder.acknowledged) {
