@@ -255,7 +255,8 @@ class ReminderManager extends EventEmitter {
             this.acknowledgedKeywords.get(userId).add(reminder.keyword);
             
             // REMOVE the reminder completely to prevent any future timers
-            this.removeReminder(userId);
+            // But keep the acknowledgedKeywords Set so future reminders for this keyword are blocked
+            this.removeReminder(userId, true);
             
             return true;
         }
@@ -268,14 +269,16 @@ class ReminderManager extends EventEmitter {
     /**
      * Remove reminder for a user
      */
-    removeReminder(userId) {
+    removeReminder(userId, keepAcknowledgedKeyword = false) {
         // Cancel any pending timers
         this.cancelReminderTimer(userId);
         
         if (this.reminders.has(userId)) {
             const reminder = this.reminders.get(userId);
-            // Clear acknowledged keyword tracking for this specific keyword
-            if (this.acknowledgedKeywords.has(userId)) {
+            
+            // Only clear acknowledged keyword tracking if we want to (default is clear it)
+            // When called from acknowledgeReminder, we want to KEEP the keyword so future reminders are blocked
+            if (!keepAcknowledgedKeyword && this.acknowledgedKeywords.has(userId)) {
                 this.acknowledgedKeywords.get(userId).delete(reminder.keyword);
                 // Clean up empty Set
                 if (this.acknowledgedKeywords.get(userId).size === 0) {
