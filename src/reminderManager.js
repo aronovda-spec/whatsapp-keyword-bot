@@ -78,14 +78,13 @@ class ReminderManager extends EventEmitter {
             attachment,
             isGlobal, // Flag to indicate if this is a global keyword reminder
             firstDetectedAt: new Date(),
-            nextReminderAt: new Date(Date.now() + 60000), // 1 minute
+            nextReminderAt: new Date(Date.now() + 60000), // First reminder in 1 minute
             reminderCount: 0,
             acknowledged: false,
             reminderIntervals: [
-                60000,   // 1 min
-                60000,   // 2 min (1 more minute)
-                780000,  // 15 min (13 more minutes)
-                2700000  // 1 hour (45 more minutes)
+                60000,   // 1 min (second reminder, 1 more minute)
+                780000,  // 15 min (third reminder, 13 more minutes)
+                2700000  // 1 hour (fourth reminder, 45 more minutes)
             ]
         };
 
