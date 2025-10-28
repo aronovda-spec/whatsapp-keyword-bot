@@ -44,11 +44,12 @@ class ReminderManager extends EventEmitter {
     /**
      * Save active reminders to file
      */
-    saveReminders() {
+-base-saveReminders() {
         try {
             const remindersObj = {};
-            for (const [userId, reminders] of this.reminders) {
-                remindersObj[userId] = reminders;
+            for (const [reminderId, reminder] of this.reminders) {
+                // Store by reminderId (the actual key)
+                remindersObj[reminderId] = reminder;
             }
             
             // Ensure directory exists
