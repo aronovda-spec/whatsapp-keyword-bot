@@ -178,10 +178,12 @@ class ReminderManager extends EventEmitter {
      */
     acknowledgeReminder(userId) {
         const reminder = this.reminders.get(userId);
+        
+        // Always cancel pending timers, even if reminder doesn't exist
+        this.cancelReminderTimer(userId);
+        
         if (reminder) {
             console.log(`✅ User ${userId} acknowledged reminder - stopping all reminders`);
-            // Cancel any pending timers
-            this.cancelReminderTimer(userId);
             // Mark as acknowledged to prevent scheduled timers from firing
             reminder.acknowledged = true;
             // DON'T remove the reminder - just mark it as acknowledged
@@ -189,6 +191,9 @@ class ReminderManager extends EventEmitter {
             this.saveReminders();
             return true;
         }
+        
+        // Timer was cancelled but no reminder found
+        console.log(`✅ User ${userId} cancelled pending reminder timer`);
         return false;
     }
 
