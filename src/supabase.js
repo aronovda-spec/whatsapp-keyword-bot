@@ -419,9 +419,6 @@ class SupabaseManager {
         try {
             const filePath = `sessions/${phoneNumber}/${filename}`;
             
-            console.log(`📤 Uploading to Supabase: ${filePath} (${content.length} bytes)`);
-            console.log(`🔑 Using ${this.storageClient ? 'SERVICE_KEY' : 'ANON_KEY'} for upload`);
-            
             // Use storage client (with service key if available)
             const client = this.storageClient || this.client;
             
@@ -432,13 +429,11 @@ class SupabaseManager {
                     upsert: true
                 });
 
-            console.log(`📊 Upload response for ${filename}:`, { data, error });
-
             if (error) {
-                console.error(`❌ Upload ERROR for ${filename}:`, error);
+                console.error(`❌ Upload failed for ${filename}:`, error.message);
                 // If bucket doesn't exist, try to create it
                 if (error.message && error.message.includes('not found')) {
-                    console.log('📦 Storage bucket not found. Please create "whatsapp-sessions" bucket in Supabase.');
+                    console.error('📦 Storage bucket not found. Please create "whatsapp-sessions" bucket in Supabase.');
                     return false;
                 }
                 return false;
@@ -448,12 +443,9 @@ class SupabaseManager {
                 console.error(`⚠️ Upload reported success but no data returned for ${filename}`);
                 return false;
             }
-
-            console.log(`✅ Upload SUCCESS for ${filename}:`, data);
             return true;
         } catch (error) {
             console.error(`Supabase backupSessionFile error for ${filename}:`, error.message);
-            console.error(`Full error:`, error);
             return false;
         }
     }
