@@ -269,9 +269,33 @@ class ReminderManager extends EventEmitter {
         const lastAckTime = this.lastAcknowledgedTime.get(userId) || 0;
         const now = Date.now();
         
+        console.log(`🔍 Searching for reminders for user ${userId}, lastAckTime: ${lastAckTime}, now: ${now}`);
+        console.log(`📋 Total reminders in Map: ${this.reminders.size}`);
+        console.log(`📋 Active reminders for user: ${(this.activeReminders.get(userId) || new Set()).size}`);
+        
+        // Process reminders from activeReminders Set first (current active reminders)
+        const activeReminderIds = this.activeReminders.get(userId) || new Set();
+        
+        // Also check ALL reminders in the Map to find overridden/completed ones
+        const allRemindersForUser = new Set();
+        
+        // Add active reminders
+        activeReminderIds.forEach(reminderId => {
+            allRemindersForUser.add(reminderId);
+        });
+        
+        // Add any other reminders for this user from the reminders Map
         for (const [reminderId, reminder] of this.reminders.entries()) {
-            // Only process reminders for this user
             if (reminder.userId !== userId) continue;
+            allRemindersForUser.add(reminderId);
+        }
+        
+        console.log(`📋 Total unique reminders for user: ${allRemindersForUser.size}`);
+        
+        // Process all reminders for this user
+        for (const reminderId of allRemindersForUser) {
+            const reminder = this.reminders.get(reminderId);
+            if (!reminder) continue;
             
             // Only include reminders created since last acknowledgment
             const reminderTime = reminder.firstDetectedAt.getTime();
