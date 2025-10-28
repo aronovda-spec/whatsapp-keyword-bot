@@ -171,29 +171,18 @@ class ReminderManager extends EventEmitter {
             this.reminderExecuting.set(reminder.userId, true);
             
             try {
-                // Check if user pressed /ok recently (within last 60 seconds)
-                const acknowledgedTime = this.acknowledgedTime.get(reminder.userId);
-                if (acknowledgedTime) {
-                    const timeSinceAcknowledged = Date.now() - acknowledgedTime;
-                    if (timeSinceAcknowledged < 60000) { // 60 seconds
-                        console.log(`⏰ User ${reminder.userId} pressed /ok ${Math.round(timeSinceAcknowledged/1000)}s ago - stopping reminder`);
-                        this.removeReminder(reminder.userId);
-                        return;
-                    }
-                }
-                
-                // Check if still active
-                const currentReminder = this.reminders.get(reminder.userId);
-                if (!currentReminder) {
-                    console.log(`⏰ Reminder not found for user ${reminder.userId} - stopping`);
+                // STATE-DRIVEN CHECK: Check reminder state BEFORE doing anything
+                const state = this.reminderStates.get(reminder.userId);
+                if (state !== 'active') {
+                    console.log(`⏰ Reminder state is '${state}' for user ${reminder.userId} - stopping`);
+                    this.removeReminder(reminder.userId);
                     return;
                 }
                 
-                // Check if acknowledged
-                if (currentReminder.acknowledged) {
-                    console.log(`⏰ Reminder already acknowledged for user ${reminder.userId} - stopping`);
-                    // Clean up the acknowledged reminder
-                    this.removeReminder(reminder.userId);
+                // Check if still active
+                const currentReminder = this.reminders.get step.userId);
+                if (!currentReminder) {
+                    console.log(`⏰ Reminder not found for user ${reminder.userId} - stopping`);
                     return;
                 }
 
