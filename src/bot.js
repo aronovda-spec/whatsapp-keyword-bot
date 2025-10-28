@@ -396,7 +396,8 @@ class WhatsAppKeywordBot {
                             // Check if reminder already exists for this user
                             const existingReminder = this.notifier.reminderManager.getReminders(keywordData.userId);
                             
-                            if (existingReminder && existingReminder.keyword === keywordData.keyword) {
+                            // Only restart if reminder exists AND is not acknowledged
+                            if (existingReminder && existingReminder.keyword === keywordData.keyword && !existingReminder.acknowledged) {
                                 // Same keyword detected again - restart timer
                                 this.notifier.reminderManager.resetReminderForKeyword(
                                     keywordData.userId,
@@ -408,8 +409,8 @@ class WhatsAppKeywordBot {
                                     phoneNumber,
                                     messageData.attachment
                                 );
-                            } else {
-                                // New reminder
+                            } else if (!existingReminder || existingReminder.keyword !== keywordData.keyword || existingReminder.acknowledged) {
+                                // New reminder OR different keyword OR acknowledged - add/restart reminder
                                 this.notifier.reminderManager.addReminder(
                                     keywordData.userId,
                                     keywordData.keyword,
