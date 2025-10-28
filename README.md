@@ -97,7 +97,8 @@ A cloud-based bot that monitors WhatsApp group messages for specific keywords an
 - `/reject <user_id>` - Reject user
 - `/pending` - Show pending requests
 - `/remove <user_id>` - Remove user
-- `/setemail <user_id> <email>` - Set user email
+- `/setemail <user_id> <email>` - Set user email for notifications
+- `/removeemail <user_id>` - Remove user email from notifications
 - `/addkeyword <word>` - Add global keyword
 - `/removekeyword <word>` - Remove global keyword
 - `/restart` - Restart bot (preserves all data)
