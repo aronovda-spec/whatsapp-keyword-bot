@@ -12,7 +12,7 @@ class ReminderManager extends EventEmitter {
         this.activeReminders = new Map(); // userId → Set of reminderIds (supports multiple reminders per user)
         this.acknowledgedKeywords = new Map(); // userId → Set of acknowledged keywords
         this.acknowledgedTime = new Map(); // userId → timestamp when /ok was pressed
-        this.lastAcknowledgedTime = new Map(); // userId → timestamp of last /ok (for summary)
+        this.lastAcknowledgedTime = new Map(); // userId → timestamp of last acknowledgment (for historical tracking)
         this.reminderIdCounter = 0; // Counter for unique reminder IDs
         this.storagePath = path.join(__dirname, '../config/active-reminders.json');
         this.maxReminders = 5; // 0 min, 1 min, 2 min, 15 min, 1 hour
@@ -172,7 +172,7 @@ class ReminderManager extends EventEmitter {
         // Cancel any existing timer for this reminder
         this.cancelReminderTimer(reminder.reminderId);
 
-        // Schedule new timer and store its ID  
+        // Schedule new timer and store its ID
         const timerId = setTimeout(() => {
             // Prevent race condition - check if we're already executing
             if (this.reminderExecuting.get(reminder.reminderId)) {
@@ -268,8 +268,8 @@ class ReminderManager extends EventEmitter {
         // Process all active reminders
         for (const reminderId of reminderIds) {
             const reminder = this.reminders.get(reminderId);
-            
-            if (reminder) {
+        
+        if (reminder) {
                 if (reminder.status === 'active') {
                     // Acknowledge the active reminder
                     reminder.status = 'acknowledged';
@@ -300,10 +300,7 @@ class ReminderManager extends EventEmitter {
             }
         }
         
-        // Store when user acknowledged for history tracking
-        this.lastAcknowledgedTime.set(userId, Date.now());
-        
-        this.saveReminders();
+            this.saveReminders();
         
         // Generate summary message
         const summaryText = this.formatAcknowledgmentSummary(summary);
