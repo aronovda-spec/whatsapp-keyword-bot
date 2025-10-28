@@ -290,6 +290,7 @@ class TelegramCommandHandler {
                     '/pending - Show pending requests\n' +
                     '/remove <user_id> - Remove user (with confirmation)\n' +
                     '/setemail <user_id> <email> - Set user email\n' +
+                    '/removeemail <user_id> - Remove user email\n' +
                     '/makeadmin <user_id> - Promote user to admin';
             this.bot.sendMessage(chatId, helpText);
         });
@@ -1047,6 +1048,40 @@ class TelegramCommandHandler {
                     });
             } else {
                 this.bot.sendMessage(chatId, '❌ Supabase not configured. Cannot update email.');
+            }
+        });
+
+        // Remove email command - Admin only
+        this.bot.onText(/\/removeemail (.+)/, (msg, match) => {
+            const chatId = msg.chat.id;
+            const adminId = msg.from.id;
+            const userId = match[1];
+            
+            if (!this.authorization.isAdmin(adminId)) {
+                this.bot.sendMessage(chatId, '❌ Admin access required.');
+                return;
+            }
+            
+            console.log(`📧 Admin ${adminId} removing email for user ${userId}`);
+            
+            // Update email in Supabase to null
+            if (this.authorization.supabase && this.authorization.supabase.isEnabled()) {
+                this.authorization.supabase.client.from('users')
+                    .update({ 
+                        email: null,
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('user_id', userId)
+                    .then(({ error }) => {
+                        if (error) throw error;
+                        this.bot.sendMessage(chatId, `✅ Email removed for user ${userId}. User will no longer receive email notifications.`);
+                    })
+                    .catch(err => {
+                        console.error('Error removing email:', err);
+                        this.bot.sendMessage(chatId, `❌ Failed to remove email: ${err.message}`);
+                    });
+            } else {
+                this.bot.sendMessage(chatId, '❌ Supabase not configured. Cannot remove email.');
             }
         });
 
