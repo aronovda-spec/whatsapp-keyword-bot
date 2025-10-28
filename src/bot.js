@@ -329,8 +329,10 @@ class WhatsAppKeywordBot {
                             
                             // Start reminder system for global keywords for ALL authorized users
                             const authorizedUsers = this.notifier.authorization.getAuthorizedUsers();
+                            console.log(`🔍 Global keyword "${keywordData.keyword}" - Found ${authorizedUsers.length} authorized users:`, authorizedUsers);
                             
                             for (const userId of authorizedUsers) {
+                                console.log(`🔍 Processing reminder for userId: ${userId} (type: ${typeof userId})`);
                                 // Check if reminder already exists for this user
                                 const existingReminder = this.notifier.reminderManager.getReminders(userId);
                                 
