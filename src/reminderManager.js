@@ -357,7 +357,9 @@ class ReminderManager extends EventEmitter {
      * Reset reminder for same keyword (restart timer)
      */
     resetReminderForKeyword(userId, keyword, message, sender, group, messageId, phoneNumber, attachment, isGlobal = false) {
-        const existingReminder = this.reminders.get(userId);
+        console.log(`🔍 resetReminderForKeyword called for user ${userId}, keyword "${keyword}"`);
+        const existingReminderId = this.activeReminders.get(userId);
+        const existingReminder = existingReminderId ? this.reminders.get(existingReminderId) : null;
         
         // If same keyword detected again AND not acknowledged, restart the timer
         if (existingReminder && existingReminder.keyword === keyword && !existingReminder.acknowledged) {
