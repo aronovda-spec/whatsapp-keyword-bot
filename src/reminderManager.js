@@ -359,7 +359,7 @@ class ReminderManager extends EventEmitter {
         const reminderId = this.activeReminders.get(userId);
         if (!reminderId) return false;
         const reminder = this.reminders.get(reminderId);
-        return reminder && !reminder.acknowledged;
+        return reminder && reminder.status === 'active';
     }
 
     /**
