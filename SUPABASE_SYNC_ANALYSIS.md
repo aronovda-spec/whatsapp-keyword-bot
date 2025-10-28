@@ -52,23 +52,25 @@ Analysis of commands that modify Supabase but may have local vs Supabase sync is
   - Loaded from file on-demand in `getPersonalKeywords()`
 - **Status**: ✅ **NO RESTART NEEDED** - Changes take effect immediately (loaded from file on each call)
 
-## ⚠️ Commands that require RESTART (Supabase only)
+## ✅ Commands that work IMMEDIATELY (Fixed with runtime Supabase query)
 
-### 1. `/setemail <user_id> <email>` ⚠️
+### 1. `/setemail <user_id> <email>` ✅ **FIXED**
 - **Location**: `src/telegram-commands.js:1020`
 - **How it works**:
   - Updates Supabase `users` table
-  - ❌ Does NOT update in-memory `EmailChannel.userEmailMap`
-- **Status**: ⚠️ **RESTART REQUIRED** - Email map is loaded at startup from file
-- **Fix Applied**: ✅ Added restart warning message to bot response
+  - ✅ `EmailChannel.getEmailForUser()` now queries Supabase at runtime if not cached
+  - ✅ Changes take effect immediately on next notification
+- **Status**: ✅ **NO RESTART REQUIRED** - Runtime Supabase query implemented
+- **Fix Applied**: ✅ EmailChannel queries Supabase at runtime and caches results
 
-### 2. `/removeemail <user_id>` ⚠️
+### 2. `/removeemail <user_id>` ✅ **FIXED**
 - **Location**: `src/telegram-commands.js:1055`
 - **How it works**:
   - Updates Supabase `users` table (sets email to null)
-  - ❌ Does NOT update in-memory `EmailChannel.userEmailMap`
-- **Status**: ⚠️ **RESTART REQUIRED** - Email map is loaded at startup from file
-- **Fix Applied**: ✅ Added restart warning message to bot response
+  - ✅ `EmailChannel.getEmailForUser()` now queries Supabase at runtime if not cached
+  - ✅ Changes take effect immediately on next notification
+- **Status**: ✅ **NO RESTART REQUIRED** - Runtime Supabase query implemented
+- **Fix Applied**: ✅ EmailChannel queries Supabase at runtime and caches results
 
 ## 📊 Root Cause Analysis
 
@@ -129,10 +131,10 @@ Combine both:
 
 ## 📝 Recommendations
 
-1. ✅ **Keep current implementation** for `/setemail` and `/removeemail` with restart warnings (already done)
+1. ✅ **COMPLETE** - Email commands now work immediately without restart
 2. ✅ **Continue as-is** for other commands (all working correctly)
-3. 💡 **Future enhancement**: Implement runtime Supabase query for emails as fallback
-4. 💡 **Optional**: Add `/reloademails` admin command for manual refresh
+3. ✅ **DONE** - Runtime Supabase query implemented for immediate email updates
+4. 💡 **Optional**: Add `/reloademails` admin command for manual refresh (Fix completed above)
 
 ## ✅ Current Status
 
