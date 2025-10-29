@@ -1612,61 +1612,124 @@ class TelegramCommandHandler {
     // Setup reminder commands
     setupReminderCommands(bot) {
         // /ok command - acknowledge and stop reminders
-        bot.onText(/\/ok/, (msg) => {
+        bot.onText(/\/ok/, async (msg) => {
             const chatId = msg.chat.id;
             const userId = msg.from.id;
             
-            console.log('📨 Received /ok from user', userId);
+            console.log(`📨 Received /ok from user ${userId} (chatId: ${chatId})`);
             
-            if (!this.authorization.isAuthorized(userId)) {
-                bot.sendMessage(chatId, '❌ You are not authorized to use this bot.');
-                return;
-            }
+            try {
+                if (!this.authorization.isAuthorized(userId)) {
+                    await bot.sendMessage(chatId, '❌ You are not authorized to use this bot.');
+                    return;
+                }
 
-            if (this.isDuplicateCommand(userId, 'ok')) {
-                return;
-            }
+                if (this.isDuplicateCommand(userId, 'ok')) {
+                    console.log(`⚠️ Duplicate /ok command from user ${userId} - ignoring`);
+                    return;
+                }
 
-            // Get active reminder
-            const reminderManager = this.getReminderManager();
-            if (reminderManager) {
-                const result = reminderManager.acknowledgeReminder(userId);
-                bot.sendMessage(chatId, result.summary, { parse_mode: 'HTML' });
+                // Get reminder manager with error handling
+                const reminderManager = this.getReminderManager();
+                if (!reminderManager) {
+                    console.error(`❌ ReminderManager is null for user ${userId}`);
+                    await bot.sendMessage(chatId, '❌ Reminder system is not available. Please contact an administrator.');
+                    return;
+                }
+
+                // Acknowledge reminder with error handling
+                let result;
+                try {
+                    result = reminderManager.acknowledgeReminder(userId);
+                    console.log(`✅ Successfully acknowledged reminders for user ${userId}`);
+                } catch (error) {
+                    console.error(`❌ Error acknowledging reminder for user ${userId}:`, error.message);
+                    console.error('Stack trace:', error.stack);
+                    await bot.sendMessage(chatId, '❌ Error processing reminder acknowledgment. Check bot logs.');
+                    return;
+                }
+
+                // Validate result before sending
+                if (!result || !result.summary) {
+                    console.error(`❌ Invalid result from acknowledgeReminder for user ${userId}:`, result);
+                    await bot.sendMessage(chatId, '❌ Error: Invalid reminder data received.');
+                    return;
+                }
+
+                // Send summary message with error handling
+                try {
+                    await bot.sendMessage(chatId, result.summary, { parse_mode: 'HTML' });
+                    console.log(`✅ Successfully sent reminder summary to user ${userId}`);
+                } catch (error) {
+                    console.error(`❌ Failed to send reminder summary to user ${userId}:`, error.message);
+                    // Don't throw - acknowledgement was successful, just couldn't send message
+                    // User can check /reminders command if needed
+                }
+            } catch (error) {
+                console.error(`❌ Unexpected error in /ok command handler for user ${userId}:`, error.message);
+                console.error('Stack trace:', error.stack);
+                try {
+                    await bot.sendMessage(chatId, '❌ An unexpected error occurred. Please try again or contact an administrator.');
+                } catch (sendError) {
+                    console.error(`❌ Failed to send error message to user ${userId}:`, sendError.message);
+                }
             }
         });
 
         // /reminders command - show active reminders
-        bot.onText(/\/reminders/, (msg) => {
+        bot.onText(/\/reminders/, async (msg) => {
             const chatId = msg.chat.id;
             const userId = msg.from.id;
             
-            console.log('📨 Received /reminders from user', userId);
+            console.log(`📨 Received /reminders from user ${userId} (chatId: ${chatId})`);
             
-            if (!this.authorization.isAuthorized(userId)) {
-                bot.sendMessage(chatId, '❌ You are not authorized to use this bot.');
-                return;
-            }
+            try {
+                if (!this.authorization.isAuthorized(userId)) {
+                    await bot.sendMessage(chatId, '❌ You are not authorized to use this bot.');
+                    return;
+                }
 
-            if (this.isDuplicateCommand(userId, 'reminders')) {
-                return;
-            }
+                if (this.isDuplicateCommand(userId, 'reminders')) {
+                    console.log(`⚠️ Duplicate /reminders command from user ${userId} - ignoring`);
+                    return;
+                }
 
-            const reminderManager = this.getReminderManager();
-            if (reminderManager) {
-                const reminder = reminderManager.getReminders(userId);
-                if (reminder) {
-                    const timeElapsed = this.calculateTimeElapsed(reminder.firstDetectedAt);
-                    const response = `⏰ Active Reminder\n\n` +
-                        `Keyword: ${reminder.keyword}\n` +
-                        `From: ${reminder.sender}\n` +
-                        `Group: ${reminder.group}\n` +
-                        `Detected: ${timeElapsed}\n` +
-                        `Reminders sent: ${reminder.reminderCount}/4\n\n` +
-                        `Message:\n"${reminder.message.substring(0, 100)}${reminder.message.length > 100 ? '...' : ''}"\n\n` +
-                        `Reply /ok to acknowledge and stop.`;
-                    bot.sendMessage(chatId, response);
-                } else {
-                    bot.sendMessage(chatId, 'ℹ️ No active reminders.');
+                const reminderManager = this.getReminderManager();
+                if (!reminderManager) {
+                    console.error(`❌ ReminderManager is null for user ${userId}`);
+                    await bot.sendMessage(chatId, '❌ Reminder system is not available. Please contact an administrator.');
+                    return;
+                }
+
+                try {
+                    const reminder = reminderManager.getReminders(userId);
+                    if (reminder) {
+                        const timeElapsed = this.calculateTimeElapsed(reminder.firstDetectedAt);
+                        const response = `⏰ Active Reminder\n\n` +
+                            `Keyword: ${reminder.keyword}\n` +
+                            `From: ${reminder.sender}\n` +
+                            `Group: ${reminder.group}\n` +
+                            `Detected: ${timeElapsed}\n` +
+                            `Reminders sent: ${reminder.reminderCount}/4\n\n` +
+                            `Message:\n"${reminder.message.substring(0, 100)}${reminder.message.length > 100 ? '...' : ''}"\n\n` +
+                            `Reply /ok to acknowledge and stop.`;
+                        await bot.sendMessage(chatId, response);
+                        console.log(`✅ Successfully sent reminder info to user ${userId}`);
+                    } else {
+                        await bot.sendMessage(chatId, 'ℹ️ No active reminders.');
+                    }
+                } catch (error) {
+                    console.error(`❌ Error getting reminders for user ${userId}:`, error.message);
+                    console.error('Stack trace:', error.stack);
+                    await bot.sendMessage(chatId, '❌ Error retrieving reminder information. Check bot logs.');
+                }
+            } catch (error) {
+                console.error(`❌ Unexpected error in /reminders command handler for user ${userId}:`, error.message);
+                console.error('Stack trace:', error.stack);
+                try {
+                    await bot.sendMessage(chatId, '❌ An unexpected error occurred. Please try again or contact an administrator.');
+                } catch (sendError) {
+                    console.error(`❌ Failed to send error message to user ${userId}:`, sendError.message);
                 }
             }
         });
