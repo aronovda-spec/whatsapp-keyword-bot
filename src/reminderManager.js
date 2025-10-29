@@ -15,7 +15,7 @@ class ReminderManager extends EventEmitter {
         // NOTE: acknowledgedKeywords Set removed - we check reminders Map directly for acknowledged status (saves memory)
         this.reminderIdCounter = 0; // Counter for unique reminder IDs
         this.storagePath = path.join(__dirname, '../config/active-reminders.json');
-        this.maxReminders = 5; // 0 min, 1 min, 2 min, 15 min, 1 hour
+        this.maxReminders = 7; // 0 min, 1 min, 2 min, 5 min, 15 min, 60 min, 90 min
         this.weeklyResetTimer = null; // Timer for weekly acknowledged reminders reset
         this.loadReminders();
         this.scheduleWeeklyReset(); // Start weekly reset schedule
@@ -143,9 +143,11 @@ class ReminderManager extends EventEmitter {
             nextReminderAt: new Date(Date.now() + 60000), // First reminder in 1 minute
             reminderCount: 0,
             reminderIntervals: [
-                60000,   // 1 min (second reminder, 1 more minute)
-                780000,  // 15 min (third reminder, 13 more minutes)
-                2700000  // 1 hour (fourth reminder, 45 more minutes)
+                60000,    // R1→R2: +1 min (2 min total)
+                180000,   // R2→R3: +3 min (5 min total)
+                600000,   // R3→R4: +10 min (15 min total)
+                2700000,  // R4→R5: +45 min (60 min total)
+                1800000   // R5→R6: +30 min (90 min total)
             ]
         };
 
