@@ -358,8 +358,6 @@ class ReminderManager extends EventEmitter {
             // Cancel any pending timers (shouldn't have any, but be safe)
             this.cancelReminderTimer(r.reminderId);
             
-            // Keyword is now permanently blocked (status='acknowledged' checked in addReminder)
-            
             // Collect for summary (deduplicate)
             if (!cancelledKeywords.includes(`"${r.keyword}"`)) {
                 cancelledKeywords.push(`"${r.keyword}"`);
@@ -377,40 +375,13 @@ class ReminderManager extends EventEmitter {
             // Cancel any pending timers (shouldn't have any, but be safe)
             this.cancelReminderTimer(r.reminderId);
             
-            // Keyword is now permanently blocked (status='acknowledged' checked in addReminder)
-            
             // Collect for summary (deduplicate)
             if (!completedKeywords.includes(`"${r.keyword}"`)) {
                 completedKeywords.push(`"${r.keyword}"`);
             }
         });
         
-        // Save all changes (always save if we processed any reminders)
-        // Track if we modified any reminder
-        let remindersModified = false;
-        
-        // Check if reminderId was acknowledged
-        if (reminderId) {
-            const reminder = this.reminders.get(reminderId);
-            if (reminder && reminder.status === 'acknowledged') {
-                remindersModified = true;
-            }
-        }
-        
-        // Check if activeReminder was processed (defensive check)
-        if (activeReminder && (!reminderId || activeReminder.reminderId !== reminderId)) {
-            if (activeReminder.status === 'acknowledged') {
-                remindersModified = true;
-            }
-        }
-        
-        // Save if we processed any reminders (if any keywords were added to summary, we modified reminders)
-        // Also save if remindersModified flag is set (for edge cases like defensive activeReminder check)
-        if (activeKeywords.length > 0 || cancelledKeywords.length > 0 || completedKeywords.length > 0 || remindersModified) {
-            this.saveReminders();
-        }
-        
-        // Build the summary message
+        // Build the summary message BEFORE deleting reminders
         if (activeKeywords.length > 0 || cancelledKeywords.length > 0 || completedKeywords.length > 0) {
             summary = '✅ <b>Reminder acknowledged and stopped.</b>\n\n';
             
@@ -430,11 +401,53 @@ class ReminderManager extends EventEmitter {
             summary = '✅ <b>No active reminders to acknowledge</b>';
         }
         
+        // IMPORTANT: Delete ALL acknowledged reminders immediately after building summary
+        // This prevents permanent keyword blocking - keywords can trigger again immediately
+        const acknowledgedReminderIdsToDelete = [];
+        
+        // Collect all acknowledged reminders from allUserReminders
+        for (const r of allUserReminders) {
+            if (r.status === 'acknowledged') {
+                acknowledgedReminderIdsToDelete.push(r.reminderId);
+            }
+        }
+        
+        // Also check reminderId directly (if processed via safety check)
+        if (reminderId) {
+            const reminder = this.reminders.get(reminderId);
+            if (reminder && reminder.status === 'acknowledged') {
+                if (!acknowledgedReminderIdsToDelete.includes(reminderId)) {
+                    acknowledgedReminderIdsToDelete.push(reminderId);
+                }
+            }
+        }
+        
+        // Delete all acknowledged reminders from Map
+        let deletedCount = 0;
+        for (const reminderIdToDelete of acknowledgedReminderIdsToDelete) {
+            this.reminders.delete(reminderIdToDelete);
+            
+            // Also remove from activeReminders if it's the current active reminder
+            if (reminderIdToDelete === reminderId) {
+                this.activeReminders.delete(userIdStr);
+            }
+            
+            deletedCount++;
+            console.log(`🗑️ Deleted acknowledged reminder ${reminderIdToDelete} - keyword can trigger again`);
+        }
+        
+        // Save changes (reminders deleted from memory)
+        if (deletedCount > 0 || activeKeywords.length > 0 || cancelledKeywords.length > 0 || completedKeywords.length > 0) {
+            this.saveReminders();
+        }
+        
         // Update lastOkAt timestamp
         this.lastOkAt.set(userIdStr, now);
         
         // Also update acknowledgedTime for race condition protection (existing functionality)
         this.acknowledgedTime.set(userIdStr, now);
+        
+        console.log(`✅ Acknowledged ${deletedCount} reminders and deleted them - keywords are no longer blocked`);
         
         return {
             hasActive: activeKeywords.length > 0,
