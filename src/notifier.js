@@ -349,11 +349,21 @@ ${reminderCount > 0 ? '⏰ Reply /ok to acknowledge and stop reminders.' : '💡
     }
 
     getReminderTimeElapsed(reminderCount) {
+        // Map reminderCount to actual time elapsed based on schedule: 0, 1, 2, 5, 15, 60, 90 minutes
+        // reminderCount 0 = immediate alert (0 minutes)
+        // reminderCount 1 = R1 at 1 minute
+        // reminderCount 2 = R2 at 2 minutes
+        // reminderCount 3 = R3 at 5 minutes
+        // reminderCount 4 = R4 at 15 minutes
+        // reminderCount 5 = R5 at 60 minutes
+        // reminderCount 6 = R6 at 90 minutes
         const timeMap = {
             1: '1 minute ago',
             2: '2 minutes ago',
-            3: '15 minutes ago',
-            4: '1 hour ago'
+            3: '5 minutes ago',
+            4: '15 minutes ago',
+            5: '1 hour ago',
+            6: '1.5 hours ago'
         };
         return timeMap[reminderCount] || `${reminderCount} minutes ago`;
     }
