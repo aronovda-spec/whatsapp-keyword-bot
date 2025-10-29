@@ -11,11 +11,14 @@ class ReminderManager extends EventEmitter {
         this.reminderExecuting = new Map(); // reminderId → is executing (to prevent race conditions)
         this.activeReminders = new Map(); // userId → reminderId (for fast lookup)
         this.acknowledgedTime = new Map(); // userId → timestamp when /ok was pressed
-        this.acknowledgedKeywords = new Map(); // userId → Set of acknowledged keywords
+        this.lastOkAt = new Map(); // userId → timestamp when /ok was last pressed (for tracking history)
+        // NOTE: acknowledgedKeywords Set removed - we check reminders Map directly for acknowledged status (saves memory)
         this.reminderIdCounter = 0; // Counter for unique reminder IDs
         this.storagePath = path.join(__dirname, '../config/active-reminders.json');
         this.maxReminders = 5; // 0 min, 1 min, 2 min, 15 min, 1 hour
+        this.weeklyResetTimer = null; // Timer for weekly acknowledged reminders reset
         this.loadReminders();
+        this.scheduleWeeklyReset(); // Start weekly reset schedule
     }
 
     /**
@@ -73,28 +76,32 @@ class ReminderManager extends EventEmitter {
         console.log(`🔍 addReminder START for user ${userId}, keyword "${keyword}"`);
         
         // Check if user recently pressed /ok (within last 10 seconds - race condition protection)
-        if (this.acknowledgedTime.has(userId)) {
-            const acknowledgedTimestamp = this.acknowledgedTime.get(userId);
+        const userIdStr = userId.toString();
+        if (this.acknowledgedTime.has(userIdStr)) {
+            const acknowledgedTimestamp = this.acknowledgedTime.get(userIdStr);
             const timeSinceAcknowledged = Date.now() - acknowledgedTimestamp;
             if (timeSinceAcknowledged < 10000) { // 10 seconds
                 console.log(`⏰ User ${userId} recently pressed /ok (${Math.round(timeSinceAcknowledged/1000)}s ago) - not starting new reminder`);
                 return;
             }
             // Clean up old acknowledgments
-            this.acknowledgedTime.delete(userId);
+            this.acknowledgedTime.delete(userIdStr);
         }
         
-        // Check if user has acknowledged this keyword (even before reminder was added)
-        if (this.acknowledgedKeywords.has(userId)) {
-            const userAcknowledgedKeywords = this.acknowledgedKeywords.get(userId);
-            if (userAcknowledgedKeywords.has(keyword)) {
+        // Check if user has acknowledged this keyword (search reminders Map - no need for separate Set)
+        // Once acknowledged, keyword is permanently blocked - check reminders directly
+        const hasAcknowledgedKeyword = Array.from(this.reminders.values()).some(r => 
+            r.userId.toString() === userIdStr && 
+            r.keyword === keyword && 
+            r.status === 'acknowledged'
+        );
+        if (hasAcknowledgedKeyword) {
                 console.log(`⏰ User ${userId} already acknowledged keyword: "${keyword}" - not starting new reminder`);
                 return;
-            }
         }
         
         // Check if there's an existing reminder for this user using the new system
-        const existingReminderId = this.activeReminders.get(userId);
+        const existingReminderId = this.activeReminders.get(userIdStr);
         if (existingReminderId) {
             console.log(`🔍 Found existing reminder ${existingReminderId} for user ${userId}`);
             const existingReminder = this.reminders.get(existingReminderId);
@@ -106,6 +113,14 @@ class ReminderManager extends EventEmitter {
             // Cancel the existing reminder to prevent duplicates
             console.log(`🔍 Canceling existing reminder and replacing`);
             this.cancelReminderTimer(existingReminderId);
+            
+            // Mark the existing reminder as 'cancelled' (overridden) with timestamp
+            if (existingReminder && existingReminder.status === 'active') {
+                existingReminder.status = 'cancelled';
+                existingReminder.cancelledAt = new Date();
+                this.saveReminders();
+                console.log(`⏰ Marked reminder ${existingReminderId} as 'cancelled' (overridden by new keyword)`);
+            }
             // DON'T delete from activeReminders - we'll update it with new reminderId
         }
 
@@ -136,7 +151,7 @@ class ReminderManager extends EventEmitter {
 
         // Store by reminderId for unique access
         this.reminders.set(reminderId, reminder);
-        this.activeReminders.set(userId, reminderId); // Fast user lookup
+        this.activeReminders.set(userIdStr, reminderId); // Fast user lookup (use string key for consistency)
         this.saveReminders();
 
         console.log(`⏰ Added reminder for user ${userId} - keyword: "${keyword}"`);
@@ -204,6 +219,7 @@ class ReminderManager extends EventEmitter {
                 if (currentReminder.reminderCount >= this.maxReminders) {
                     console.log(`⏰ Maximum reminders reached for ${reminder.reminderId} - marking completed`);
                     currentReminder.status = 'completed';
+                    currentReminder.completedAt = new Date();
                     this.saveReminders();
                     this.removeReminderByUserId(currentReminder.userId);
                     return;
@@ -253,45 +269,176 @@ class ReminderManager extends EventEmitter {
         console.log(`🔍 activeReminders entries:`, Array.from(this.activeReminders.entries()));
         
         const userIdStr = userId.toString();
+        const now = Date.now();
+        const lastOkTimestamp = this.lastOkAt.get(userIdStr) || 0; // Get last /ok timestamp (0 = beginning of time)
+        
+        // Get all reminders for this user since last /ok
+        const allUserReminders = Array.from(this.reminders.values()).filter(r => {
+            if (r.userId.toString() !== userIdStr) return false;
+            const reminderTime = new Date(r.firstDetectedAt).getTime();
+            return reminderTime >= lastOkTimestamp;
+        });
+        
+        // Categorize reminders
+        const activeReminder = allUserReminders.find(r => r.status === 'active');
+        const cancelledReminders = allUserReminders.filter(r => r.status === 'cancelled');
+        const completedReminders = allUserReminders.filter(r => r.status === 'completed');
+        
         const reminderId = this.activeReminders.get(userIdStr);
         console.log(`🔍 Looking up key: "${userIdStr}" (type: ${typeof userIdStr})`);
         console.log(`🔍 Found reminderId: ${reminderId}`);
+        console.log(`🔍 Found ${allUserReminders.length} reminders since last /ok: ${activeReminder ? 1 : 0} active, ${cancelledReminders.length} cancelled, ${completedReminders.length} completed`);
         
+        // FULL RESET: Mark ALL reminders (active, cancelled, completed) as acknowledged
+        // This ensures they never trigger again and clears all timers
+        
+        // Build summary message
+        let summary = '';
+        const activeKeywords = [];
+        const cancelledKeywords = [];
+        const completedKeywords = [];
+        
+        // Process ACTIVE reminder - acknowledge and stop
+        // Safety check: If reminderId exists in activeReminders but not in filtered list, still acknowledge it
         if (reminderId) {
             const reminder = this.reminders.get(reminderId);
-            console.log(`🔍 reminders.get(${reminderId}) = ${reminder ? 'found' : 'NOT FOUND'}`);
-            if (reminder) {
-                console.log(`🔍 Reminder status: ${reminder.status}`);
-            }
-            
-            if (reminder) {
-                console.log(`✅ User ${userId} acknowledged reminder ${reminderId} - stopping all reminders`);
+            // Double-check: verify it's the same user and active status
+            if (reminder && reminder.userId.toString() === userIdStr && reminder.status === 'active') {
+                // Check if it was already in activeKeywords (from activeReminder match)
+                const alreadyProcessed = activeReminder && activeReminder.reminderId === reminderId;
                 
-                // CRITICAL: Set status to 'acknowledged' - this stops all timers
+                if (!alreadyProcessed) {
+                    console.log(`✅ User ${userId} acknowledging ACTIVE reminder ${reminderId} (safety check - not in filtered list) - stopping timers`);
+                } else {
+                    console.log(`✅ User ${userId} acknowledging ACTIVE reminder ${reminderId} - stopping timers`);
+                }
+                
+                // Mark as acknowledged
                 reminder.status = 'acknowledged';
-                this.saveReminders();
+                reminder.acknowledgedAt = new Date();
                 
                 // Cancel any pending timers
                 this.cancelReminderTimer(reminderId);
                 
-                // Store the keyword to prevent future reminders
-                if (!this.acknowledgedKeywords.has(userId)) {
-                    this.acknowledgedKeywords.set(userId, new Set());
-                }
-                this.acknowledgedKeywords.get(userId).add(reminder.keyword);
+                // Keyword is now permanently blocked (status='acknowledged' checked in addReminder)
                 
-                // Return object format expected by telegram-commands.js
-                return {
-                    hasActive: true,
-                    summary: `✅ Reminder acknowledged and stopped. Keyword: "${reminder.keyword}"`
-                };
+                // Add to keywords only if not already added
+                if (!activeKeywords.includes(`"${reminder.keyword}"`)) {
+                    activeKeywords.push(`"${reminder.keyword}"`);
+                }
             }
         }
         
-        console.log(`✅ User ${userId} pressed /ok but no active reminder found`);
+        // Defensive check: Process activeReminder if it exists and wasn't already processed
+        // (handles edge case where activeReminder exists but reminderId is null or different)
+        if (activeReminder && (!reminderId || activeReminder.reminderId !== reminderId)) {
+            console.log(`✅ User ${userId} acknowledging ACTIVE reminder ${activeReminder.reminderId} (from filtered list, not in activeReminders Map) - stopping timers`);
+            
+            // Mark as acknowledged
+            activeReminder.status = 'acknowledged';
+            activeReminder.acknowledgedAt = new Date();
+            
+            // Cancel any pending timers
+            this.cancelReminderTimer(activeReminder.reminderId);
+            
+            // Add to keywords only if not already added
+            if (!activeKeywords.includes(`"${activeReminder.keyword}"`)) {
+                activeKeywords.push(`"${activeReminder.keyword}"`);
+            }
+        }
+        
+        // Process CANCELLED reminders - convert to acknowledged
+        cancelledReminders.forEach(r => {
+            console.log(`✅ User ${userId} acknowledging CANCELLED reminder ${r.reminderId} - marking as acknowledged`);
+            
+            // Mark as acknowledged (even though it was cancelled)
+            r.status = 'acknowledged';
+            r.acknowledgedAt = new Date();
+            
+            // Cancel any pending timers (shouldn't have any, but be safe)
+            this.cancelReminderTimer(r.reminderId);
+            
+            // Keyword is now permanently blocked (status='acknowledged' checked in addReminder)
+            
+            // Collect for summary (deduplicate)
+            if (!cancelledKeywords.includes(`"${r.keyword}"`)) {
+                cancelledKeywords.push(`"${r.keyword}"`);
+            }
+        });
+        
+        // Process COMPLETED reminders - convert to acknowledged
+        completedReminders.forEach(r => {
+            console.log(`✅ User ${userId} acknowledging COMPLETED reminder ${r.reminderId} - marking as acknowledged`);
+            
+            // Mark as acknowledged (even though it completed)
+            r.status = 'acknowledged';
+            r.acknowledgedAt = new Date();
+            
+            // Cancel any pending timers (shouldn't have any, but be safe)
+            this.cancelReminderTimer(r.reminderId);
+            
+            // Keyword is now permanently blocked (status='acknowledged' checked in addReminder)
+            
+            // Collect for summary (deduplicate)
+            if (!completedKeywords.includes(`"${r.keyword}"`)) {
+                completedKeywords.push(`"${r.keyword}"`);
+            }
+        });
+        
+        // Save all changes (always save if we processed any reminders)
+        // Track if we modified any reminder
+        let remindersModified = false;
+        
+        // Check if reminderId was acknowledged
+        if (reminderId) {
+            const reminder = this.reminders.get(reminderId);
+            if (reminder && reminder.status === 'acknowledged') {
+                remindersModified = true;
+            }
+        }
+        
+        // Check if activeReminder was processed (defensive check)
+        if (activeReminder && (!reminderId || activeReminder.reminderId !== reminderId)) {
+            if (activeReminder.status === 'acknowledged') {
+                remindersModified = true;
+            }
+        }
+        
+        // Save if we processed any reminders (if any keywords were added to summary, we modified reminders)
+        // Also save if remindersModified flag is set (for edge cases like defensive activeReminder check)
+        if (activeKeywords.length > 0 || cancelledKeywords.length > 0 || completedKeywords.length > 0 || remindersModified) {
+            this.saveReminders();
+        }
+        
+        // Build the summary message
+        if (activeKeywords.length > 0 || cancelledKeywords.length > 0 || completedKeywords.length > 0) {
+            summary = '✅ <b>Reminder acknowledged and stopped.</b>\n\n';
+            
+            if (activeKeywords.length > 0) {
+                summary += `🟢 <b>Active reminders stopped:</b> ${activeKeywords.join(', ')}\n`;
+            }
+            
+            if (cancelledKeywords.length > 0) {
+                summary += `⚪ <b>Override reminders (canceled early):</b> ${cancelledKeywords.join(', ')}\n`;
+            }
+            
+            if (completedKeywords.length > 0) {
+                summary += `🔴 <b>Expired reminders (completed schedule after 1 hour without /ok):</b> ${completedKeywords.join(', ')}\n`;
+            }
+        } else {
+            console.log(`✅ User ${userId} pressed /ok but no reminders found since last /ok`);
+            summary = '✅ <b>No active reminders to acknowledge</b>';
+        }
+        
+        // Update lastOkAt timestamp
+        this.lastOkAt.set(userIdStr, now);
+        
+        // Also update acknowledgedTime for race condition protection (existing functionality)
+        this.acknowledgedTime.set(userIdStr, now);
+        
         return {
-            hasActive: false,
-            summary: "✅ No active reminders to acknowledge"
+            hasActive: activeKeywords.length > 0,
+            summary: summary
         };
     }
     
@@ -299,9 +446,10 @@ class ReminderManager extends EventEmitter {
      * Remove reminder by userId (clears the activeReminders mapping)
      */
     removeReminderByUserId(userId) {
-        const reminderId = this.activeReminders.get(userId);
+        const userIdStr = userId.toString();
+        const reminderId = this.activeReminders.get(userIdStr);
         if (reminderId) {
-            this.activeReminders.delete(userId);
+            this.activeReminders.delete(userIdStr);
             // Note: Don't delete from reminders Map, let it expire
         }
     }
@@ -310,7 +458,8 @@ class ReminderManager extends EventEmitter {
      * Remove reminder for a user
      */
     removeReminder(userId, keepAcknowledgedKeyword = false) {
-        const reminderId = this.activeReminders.get(userId);
+        const userIdStr = userId.toString();
+        const reminderId = this.activeReminders.get(userIdStr);
         if (!reminderId) {
             return;
         }
@@ -320,18 +469,11 @@ class ReminderManager extends EventEmitter {
         
         const reminder = this.reminders.get(reminderId);
         if (reminder) {
-            // Only clear acknowledged keyword tracking if we want to (default is clear it)
-            // When called from acknowledgeReminder, we want to KEEP the keyword so future reminders are blocked
-            if (!keepAcknowledgedKeyword && this.acknowledgedKeywords.has(userId)) {
-                this.acknowledgedKeywords.get(userId).delete(reminder.keyword);
-                // Clean up empty Set
-                if (this.acknowledgedKeywords.get(userId).size === 0) {
-                    this.acknowledgedKeywords.delete(userId);
-                }
-            }
+            // NOTE: No need to manage acknowledgedKeywords Set anymore
+            // Acknowledged status is tracked directly in reminders Map
             
             this.reminders.delete(reminderId);
-            this.activeReminders.delete(userId);
+            this.activeReminders.delete(userIdStr);
             this.saveReminders();
         }
     }
@@ -340,7 +482,8 @@ class ReminderManager extends EventEmitter {
      * Get active reminder for a user
      */
     getReminders(userId) {
-        const reminderId = this.activeReminders.get(userId);
+        const userIdStr = userId.toString();
+        const reminderId = this.activeReminders.get(userIdStr);
         if (reminderId) {
             return this.reminders.get(reminderId);
         }
@@ -358,10 +501,11 @@ class ReminderManager extends EventEmitter {
      * Check if user pressed /ok recently
      */
     hasRecentlyAcknowledged(userId, maxSeconds = 60) {
-        if (!this.acknowledgedTime.has(userId)) {
+        const userIdStr = userId.toString();
+        if (!this.acknowledgedTime.has(userIdStr)) {
             return false;
         }
-        const acknowledgedTimestamp = this.acknowledgedTime.get(userId);
+        const acknowledgedTimestamp = this.acknowledgedTime.get(userIdStr);
         const timeSinceAcknowledged = Date.now() - acknowledgedTimestamp;
         return timeSinceAcknowledged < (maxSeconds * 1000);
     }
@@ -370,7 +514,8 @@ class ReminderManager extends EventEmitter {
      * Check if user has pending reminder
      */
     hasReminder(userId) {
-        const reminderId = this.activeReminders.get(userId);
+        const userIdStr = userId.toString();
+        const reminderId = this.activeReminders.get(userIdStr);
         if (!reminderId) return false;
         const reminder = this.reminders.get(reminderId);
         return reminder && reminder.status === 'active';
@@ -381,7 +526,8 @@ class ReminderManager extends EventEmitter {
      */
     resetReminderForKeyword(userId, keyword, message, sender, group, messageId, phoneNumber, attachment, isGlobal = false) {
         console.log(`🔍 resetReminderForKeyword called for user ${userId}, keyword "${keyword}"`);
-        const existingReminderId = this.activeReminders.get(userId);
+        const userIdStr = userId.toString();
+        const existingReminderId = this.activeReminders.get(userIdStr);
         const existingReminder = existingReminderId ? this.reminders.get(existingReminderId) : null;
         
         // If same keyword detected again AND not acknowledged, restart the timer
@@ -398,6 +544,123 @@ class ReminderManager extends EventEmitter {
         }
         
         return false;
+    }
+
+    /**
+     * Clear all acknowledged reminders from memory (weekly reset)
+     * This frees memory and allows previously acknowledged keywords to trigger new reminders
+     */
+    clearAcknowledgedReminders() {
+        console.log(`🧹 Starting weekly reset: Clearing acknowledged reminders from memory...`);
+        
+        let clearedCount = 0;
+        const acknowledgedReminderIds = [];
+        
+        // Find all acknowledged reminders
+        for (const [reminderId, reminder] of this.reminders) {
+            if (reminder.status === 'acknowledged') {
+                acknowledgedReminderIds.push(reminderId);
+            }
+        }
+        
+        // Remove acknowledged reminders from Map
+        for (const reminderId of acknowledgedReminderIds) {
+            this.reminders.delete(reminderId);
+            // Also cancel any lingering timers (shouldn't exist, but be safe)
+            this.cancelReminderTimer(reminderId);
+            clearedCount++;
+        }
+        
+        // Also clear old acknowledgedTime entries (older than 1 week) to free memory
+        const oneWeekAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
+        let clearedTimeEntries = 0;
+        for (const [userIdStr, timestamp] of this.acknowledgedTime) {
+            if (timestamp < oneWeekAgo) {
+                this.acknowledgedTime.delete(userIdStr);
+                clearedTimeEntries++;
+            }
+        }
+        
+        // Also clear old lastOkAt entries (older than 1 week) to free memory
+        let clearedOkEntries = 0;
+        for (const [userIdStr, timestamp] of this.lastOkAt) {
+            if (timestamp < oneWeekAgo) {
+                this.lastOkAt.delete(userIdStr);
+                clearedOkEntries++;
+            }
+        }
+        
+        // Save the cleaned state (removes acknowledged reminders from file)
+        this.saveReminders();
+        
+        console.log(`✅ Weekly reset complete: Cleared ${clearedCount} acknowledged reminders, ${clearedTimeEntries} old acknowledgedTime entries, ${clearedOkEntries} old lastOkAt entries`);
+        console.log(`💾 Reminders Map size: ${this.reminders.size}, Active reminders: ${this.activeReminders.size}`);
+    }
+
+    /**
+     * Calculate next Saturday at 1:00 PM in local time
+     */
+    getNextSaturday1PM() {
+        const now = new Date();
+        const nextReset = new Date();
+        
+        // Set to Saturday 1:00 PM
+        nextReset.setHours(13, 0, 0, 0);
+        
+        // Get current day of week (0 = Sunday, 6 = Saturday)
+        const currentDay = now.getDay();
+        const daysUntilSaturday = (6 - currentDay) % 7;
+        
+        if (daysUntilSaturday === 0) {
+            // Today is Saturday
+            if (now.getHours() >= 13) {
+                // Already past 1 PM today, schedule for next Saturday
+                nextReset.setDate(now.getDate() + 7);
+            } else {
+                // Before 1 PM today, schedule for today
+                nextReset.setDate(now.getDate());
+            }
+        } else {
+            // Not Saturday yet, schedule for upcoming Saturday
+            nextReset.setDate(now.getDate() + daysUntilSaturday);
+        }
+        
+        return nextReset;
+    }
+
+    /**
+     * Schedule weekly reset of acknowledged reminders (every Saturday at 1:00 PM)
+     * Runs silently without notifications
+     */
+    scheduleWeeklyReset() {
+        // Clear any existing timer
+        if (this.weeklyResetTimer) {
+            clearTimeout(this.weeklyResetTimer);
+        }
+        
+        const nextReset = this.getNextSaturday1PM();
+        const delay = nextReset.getTime() - Date.now();
+        
+        console.log(`📅 Weekly reset scheduled for: ${nextReset.toLocaleString()} (in ${Math.round(delay / 1000 / 60 / 60)} hours)`);
+        
+        this.weeklyResetTimer = setTimeout(() => {
+            // Clear acknowledged reminders (silent reset)
+            this.clearAcknowledgedReminders();
+            
+            // Schedule next reset (7 days later)
+            this.scheduleWeeklyReset();
+        }, delay);
+    }
+
+    /**
+     * Stop weekly reset schedule (for cleanup/shutdown)
+     */
+    stopWeeklyReset() {
+        if (this.weeklyResetTimer) {
+            clearTimeout(this.weeklyResetTimer);
+            this.weeklyResetTimer = null;
+            console.log(`📅 Weekly reset schedule stopped`);
+        }
     }
 }
 

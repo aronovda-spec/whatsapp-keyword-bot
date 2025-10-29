@@ -1631,7 +1631,7 @@ class TelegramCommandHandler {
             const reminderManager = this.getReminderManager();
             if (reminderManager) {
                 const result = reminderManager.acknowledgeReminder(userId);
-                bot.sendMessage(chatId, result.summary);
+                bot.sendMessage(chatId, result.summary, { parse_mode: 'HTML' });
             }
         });
 

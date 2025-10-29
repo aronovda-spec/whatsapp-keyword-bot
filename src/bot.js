@@ -417,13 +417,13 @@ class WhatsAppKeywordBot {
                             }
                             
                             // Skip if user already acknowledged a reminder for this keyword
-                            if (existingReminder && existingReminder.keyword === keywordData.keyword && existingReminder.acknowledged) {
+                            if (existingReminder && existingReminder.keyword === keywordData.keyword && existingReminder.status === 'acknowledged') {
                                 console.log(`⏰ User ${keywordData.userId} already acknowledged reminder for keyword: "${keywordData.keyword}" - skipping`);
                                 continue;
                             }
                             
                             // Only restart if reminder exists AND is not acknowledged
-                            if (existingReminder && existingReminder.keyword === keywordData.keyword && !existingReminder.acknowledged) {
+                            if (existingReminder && existingReminder.keyword === keywordData.keyword && existingReminder.status !== 'acknowledged') {
                                 // Same keyword detected again - restart timer
                                 this.notifier.reminderManager.resetReminderForKeyword(
                                     keywordData.userId,
