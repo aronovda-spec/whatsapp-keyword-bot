@@ -320,7 +320,7 @@ class WhatsAppKeywordBot {
             }
 
             // Detect keywords in the message text and file name (global + personal for subscribed users only)
-            const detectedKeywords = this.keywordDetector.detectKeywords(textToSearch, messageData.group);
+            const detectedKeywords = await this.keywordDetector.detectKeywords(textToSearch, messageData.group);
 
             if (detectedKeywords.length > 0) {
                 this.stats.keywordsDetected += detectedKeywords.length;
