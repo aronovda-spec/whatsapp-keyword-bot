@@ -777,30 +777,29 @@ class KeywordDetector {
             }
         }
 
-        // Check personal keywords ONLY for users subscribed to this specific group
-        if (groupName) {
-            const groupSubscribers = this.getGroupSubscribers(groupName);
-            for (const userId of groupSubscribers) {
-                const personalKeywords = this.getPersonalKeywords(userId);
-                for (const keyword of personalKeywords) {
-                    const searchKeyword = this.caseSensitive ? keyword : keyword.toLowerCase();
-                    
-                    if (this.exactMatch) {
-                        if (this.isLatinScript(searchKeyword)) {
-                            const regex = new RegExp(`\\b${this.escapeRegex(searchKeyword)}\\b`, this.caseSensitive ? 'g' : 'gi');
-                            if (regex.test(searchText)) {
-                                detectedKeywords.push({ keyword, type: 'personal', userId, matchType: 'exact' });
-                            }
-                        } else {
-                            const regex = new RegExp(`(^|[\\s\\p{P}])${this.escapeRegex(searchKeyword)}([\\s\\p{P}]|$)`, this.caseSensitive ? 'gu' : 'giu');
-                            if (regex.test(searchText)) {
-                                detectedKeywords.push({ keyword, type: 'personal', userId, matchType: 'exact' });
-                            }
-                        }
-                    } else {
-                        if (searchText.includes(searchKeyword)) {
+        // Check personal keywords for ALL authorized users (same logic as global keywords, but sent only to owner)
+        // Personal keywords work in ALL groups and private chats, just like global keywords
+        const authorizedUsers = this.getAuthorizedUsers();
+        for (const userId of authorizedUsers) {
+            const personalKeywords = this.getPersonalKeywords(userId);
+            for (const keyword of personalKeywords) {
+                const searchKeyword = this.caseSensitive ? keyword : keyword.toLowerCase();
+                
+                if (this.exactMatch) {
+                    if (this.isLatinScript(searchKeyword)) {
+                        const regex = new RegExp(`\\b${this.escapeRegex(searchKeyword)}\\b`, this.caseSensitive ? 'g' : 'gi');
+                        if (regex.test(searchText)) {
                             detectedKeywords.push({ keyword, type: 'personal', userId, matchType: 'exact' });
                         }
+                    } else {
+                        const regex = new RegExp(`(^|[\\s\\p{P}])${this.escapeRegex(searchKeyword)}([\\s\\p{P}]|$)`, this.caseSensitive ? 'gu' : 'giu');
+                        if (regex.test(searchText)) {
+                            detectedKeywords.push({ keyword, type: 'personal', userId, matchType: 'exact' });
+                        }
+                    }
+                } else {
+                    if (searchText.includes(searchKeyword)) {
+                        detectedKeywords.push({ keyword, type: 'personal', userId, matchType: 'exact' });
                     }
                 }
             }
@@ -2452,27 +2451,26 @@ class KeywordDetector {
             }
         }
 
-        // Check personal keywords ONLY for users subscribed to this specific group
-        if (groupName) {
-            const groupSubscribers = this.getGroupSubscribers(groupName);
-            for (const userId of groupSubscribers) {
-                const personalKeywords = this.getPersonalKeywords(userId);
-                for (const keyword of personalKeywords) {
-                    // Skip keyboard conversion for personal keywords too
-                    const normalizedKeyword = this.normalizeText(keyword, true);
+        // Check personal keywords for ALL authorized users (same logic as global keywords, but sent only to owner)
+        // Personal keywords work in ALL groups and private chats, just like global keywords
+        const authorizedUsers = this.getAuthorizedUsers();
+        for (const userId of authorizedUsers) {
+            const personalKeywords = this.getPersonalKeywords(userId);
+            for (const keyword of personalKeywords) {
+                // Skip keyboard conversion for personal keywords too
+                const normalizedKeyword = this.normalizeText(keyword, true);
+                
+                for (const token of tokens) {
+                    // Exact match first
+                    if (token === normalizedKeyword) {
+                        detectedKeywords.push({ keyword, type: 'personal', userId, matchType: 'exact' });
+                        break;
+                    }
                     
-                    for (const token of tokens) {
-                        // Exact match first
-                        if (token === normalizedKeyword) {
-                            detectedKeywords.push({ keyword, type: 'personal', userId, matchType: 'exact' });
-                            break;
-                        }
-                        
-                        // Fuzzy match
-                        if (this.fuzzyMatch(token, normalizedKeyword)) {
-                            detectedKeywords.push({ keyword, type: 'personal', userId, matchType: 'fuzzy', token });
-                            break;
-                        }
+                    // Fuzzy match
+                    if (this.fuzzyMatch(token, normalizedKeyword)) {
+                        detectedKeywords.push({ keyword, type: 'personal', userId, matchType: 'fuzzy', token });
+                        break;
                     }
                 }
             }
