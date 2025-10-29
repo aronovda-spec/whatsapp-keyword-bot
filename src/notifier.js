@@ -367,7 +367,7 @@ ${reminderCount > 0 ? '⏰ Reply /ok to acknowledge and stop reminders.' : '💡
             .replace(/'/g, '&#39;');
     }
 
-    async sendBotStatus(status, details = '') {
+    async sendBotStatus(status, details = '', adminOnly = false) {
         if (!this.enabled) return;
 
         try {
@@ -378,15 +378,57 @@ ${reminderCount > 0 ? '⏰ Reply /ok to acknowledge and stop reminders.' : '💡
 
 ${details ? `📝 <b>Details:</b>\n${details}` : ''}`;
 
-            // Send to all configured chat IDs (primary notification method)
+            // Determine recipients: admins only or all configured chat IDs
+            let recipients = [];
+            if (adminOnly) {
+                // Get admin users from authorization system
+                const adminUsers = this.authorization.getAdminUsers();
+                
+                // Error handling: Check if no admins found
+                if (!adminUsers || adminUsers.length === 0) {
+                    console.error('❌ No admin users found! Cannot send admin-only status update.');
+                    console.error('⚠️ Sending alert to all users about missing admin configuration.');
+                    
+                    // Send alert to all users about no admins found
+                    const noAdminMessage = `⚠️ <b>Configuration Issue</b>\n\n❌ No admin users found in the system.\n\n📋 Please check:\n• telegram-auth.json (adminUsers)\n• TELEGRAM_ADMIN_USERS environment variable\n• Supabase database (if enabled)\n\nStatus update could not be sent to admins.`;
+                    
+                    // Send to all configured chat IDs to alert users
+                    if (this.chatIds.length > 0) {
+                        const alertResults = await Promise.allSettled(
+                            this.chatIds.map(chatId => this.sendWithRetry(noAdminMessage, chatId))
+                        );
+                        const successCount = alertResults.filter(result => result.status === 'fulfilled').length;
+                        console.log(`📤 No admin alert sent to ${successCount}/${this.chatIds.length} users`);
+                    } else {
+                        console.error('❌ No configured chatIds either! Cannot send alert.');
+                    }
+                    
+                    return; // Don't send the original status update
+                } else {
+                    recipients = adminUsers;
+                    console.log(`📤 Sending status update to ${adminUsers.length} admin(s) only`);
+                }
+            } else {
+                // Send to all configured chat IDs (primary notification method)
+                recipients = this.chatIds;
+            }
+
+            if (recipients.length === 0) {
+                console.warn('⚠️ No recipients found for bot status update');
+                console.warn('💡 Check TELEGRAM_CHAT_ID and TELEGRAM_ADDITIONAL_CHAT_IDS environment variables');
+                return;
+            }
+
+            // Send to all recipients
             const results = await Promise.allSettled(
-                this.chatIds.map(chatId => this.sendWithRetry(message, chatId))
+                recipients.map(chatId => this.sendWithRetry(message, chatId))
             );
             
             const successCount = results.filter(result => result.status === 'fulfilled').length;
-            console.log(`📤 Status update sent to ${successCount}/${this.chatIds.length} configured users`);
+            const recipientType = adminOnly ? 'admin(s)' : 'configured users';
+            console.log(`📤 Status update sent to ${successCount}/${recipients.length} ${recipientType}`);
         } catch (error) {
-            logError(error, { context: 'send_bot_status', status });
+            logError(error, { context: 'send_bot_status', status, adminOnly });
         }
     }
 
