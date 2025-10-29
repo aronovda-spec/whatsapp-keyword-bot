@@ -75,16 +75,16 @@ class ReminderManager extends EventEmitter {
     addReminder(userId, keyword, message, sender, group, messageId, phoneNumber, attachment, isGlobal = false) {
         console.log(`🔍 addReminder START for user ${userId}, keyword "${keyword}"`);
         
-        // Check if user recently pressed /ok (within last 10 seconds - race condition protection)
+        // Check if user recently pressed /ok (within last 2 seconds - race condition protection)
         const userIdStr = userId.toString();
         if (this.acknowledgedTime.has(userIdStr)) {
             const acknowledgedTimestamp = this.acknowledgedTime.get(userIdStr);
             const timeSinceAcknowledged = Date.now() - acknowledgedTimestamp;
-            if (timeSinceAcknowledged < 10000) { // 10 seconds
+            if (timeSinceAcknowledged < 2000) { // 2 seconds - user likely still watching bot screen
                 console.log(`⏰ User ${userId} recently pressed /ok (${Math.round(timeSinceAcknowledged/1000)}s ago) - not starting new reminder`);
                 return;
             }
-            // Clean up old acknowledgments
+            // Clean up old acknowledgments (older than 2 seconds)
             this.acknowledgedTime.delete(userIdStr);
         }
         
@@ -270,6 +270,11 @@ class ReminderManager extends EventEmitter {
         
         const userIdStr = userId.toString();
         const now = Date.now();
+        
+        // IMPORTANT: Set acknowledgedTime FIRST to protect against race conditions
+        // This blocks new reminders immediately when /ok is pressed, before processing completes
+        this.acknowledgedTime.set(userIdStr, now);
+        
         const lastOkTimestamp = this.lastOkAt.get(userIdStr) || 0; // Get last /ok timestamp (0 = beginning of time)
         
         // Get all reminders for this user since last /ok
@@ -444,8 +449,7 @@ class ReminderManager extends EventEmitter {
         // Update lastOkAt timestamp
         this.lastOkAt.set(userIdStr, now);
         
-        // Also update acknowledgedTime for race condition protection (existing functionality)
-        this.acknowledgedTime.set(userIdStr, now);
+        // NOTE: acknowledgedTime was already set at the beginning of this function for race condition protection
         
         console.log(`✅ Acknowledged ${deletedCount} reminders and deleted them - keywords are no longer blocked`);
         
