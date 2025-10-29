@@ -736,14 +736,14 @@ class KeywordDetector {
         await this.loadConfig();
     }
 
-    detectKeywords(messageText, groupName = null) {
+    async detectKeywords(messageText, groupName = null) {
         if (!this.enabled || !messageText || typeof messageText !== 'string') {
             return [];
         }
 
         // Use fuzzy matching if enabled, otherwise fall back to exact matching
         if (this.fuzzyMatching) {
-            return this.detectKeywordsWithFuzzy(messageText, groupName);
+            return await this.detectKeywordsWithFuzzy(messageText, groupName);
         }
 
         // Fallback to original exact matching logic
@@ -781,7 +781,7 @@ class KeywordDetector {
         // Personal keywords work in ALL groups and private chats, just like global keywords
         const authorizedUsers = this.getAuthorizedUsers();
         for (const userId of authorizedUsers) {
-            const personalKeywords = this.getPersonalKeywords(userId);
+            const personalKeywords = await this.getPersonalKeywords(userId);
             for (const keyword of personalKeywords) {
                 const searchKeyword = this.caseSensitive ? keyword : keyword.toLowerCase();
                 
@@ -2333,7 +2333,7 @@ class KeywordDetector {
     // ==================== END RUSSIAN PROCESSING METHODS ====================
 
     // Enhanced keyword detection with fuzzy matching
-    detectKeywordsWithFuzzy(messageText, groupName = null) {
+    async detectKeywordsWithFuzzy(messageText, groupName = null) {
         if (!this.enabled || !messageText || typeof messageText !== 'string') {
             return [];
         }
@@ -2455,7 +2455,7 @@ class KeywordDetector {
         // Personal keywords work in ALL groups and private chats, just like global keywords
         const authorizedUsers = this.getAuthorizedUsers();
         for (const userId of authorizedUsers) {
-            const personalKeywords = this.getPersonalKeywords(userId);
+            const personalKeywords = await this.getPersonalKeywords(userId);
             for (const keyword of personalKeywords) {
                 // Skip keyboard conversion for personal keywords too
                 const normalizedKeyword = this.normalizeText(keyword, true);
@@ -2595,8 +2595,26 @@ class KeywordDetector {
         }
     }
 
-    getPersonalKeywords(userId) {
+    async getPersonalKeywords(userId) {
         try {
+            // Try Supabase first if enabled
+            if (this.supabase.isEnabled()) {
+                try {
+                    const dbKeywords = await this.supabase.getPersonalKeywords(userId);
+                    if (dbKeywords && dbKeywords.length > 0) {
+                        console.log(`📊 Loaded ${dbKeywords.length} personal keywords from Supabase for user ${userId}`);
+                        return dbKeywords;
+                    } else if (dbKeywords !== null) {
+                        // Supabase returned empty array (user has no keywords)
+                        return [];
+                    }
+                    // If dbKeywords is null, fall through to file-based fallback
+                } catch (error) {
+                    console.warn(`⚠️ Failed to load personal keywords from Supabase for user ${userId}, falling back to file:`, error.message);
+                }
+            }
+            
+            // Fallback to file-based config
             const fs = require('fs');
             const path = require('path');
             const personalKeywordsPath = path.join(__dirname, '../config/personal-keywords.json');

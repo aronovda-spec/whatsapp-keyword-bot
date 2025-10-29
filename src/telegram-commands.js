@@ -236,13 +236,13 @@ class TelegramCommandHandler {
         });
 
         // Help command
-        this.bot.onText(/\/help/, (msg) => {
+        this.bot.onText(/\/help/, async (msg) => {
             const chatId = msg.chat.id;
             const userId = msg.from.id;
             console.log('📨 Received /help from:', msg.from.username || msg.from.first_name);
             
             if (!this.authorization.isAuthorized(userId)) {
-                this.bot.sendMessage(chatId, '❌ You are not authorized to use this bot.');
+                await this.bot.sendMessage(chatId, '❌ You are not authorized to use this bot.');
                 return;
             }
 
@@ -292,7 +292,7 @@ class TelegramCommandHandler {
                     '/setemail <user_id> <email> - Set user email\n' +
                     '/removeemail <user_id> - Remove user email\n' +
                     '/makeadmin <user_id> - Promote user to admin';
-            this.bot.sendMessage(chatId, helpText);
+            await this.bot.sendMessage(chatId, helpText);
         });
 
         // Status command
@@ -433,7 +433,7 @@ class TelegramCommandHandler {
 
         // Keywords command
         // Keywords command - Show current keywords
-        this.bot.onText(/\/keywords/, (msg) => {
+        this.bot.onText(/\/keywords/, async (msg) => {
             const chatId = msg.chat.id;
             const userId = msg.from.id;
             
@@ -444,12 +444,12 @@ class TelegramCommandHandler {
             }
             
             if (!this.authorization.isAuthorized(userId)) {
-                this.bot.sendMessage(chatId, '❌ You are not authorized to use this bot.');
+                await this.bot.sendMessage(chatId, '❌ You are not authorized to use this bot.');
                 return;
             }
 
             if (!this.keywordDetector) {
-                this.bot.sendMessage(chatId, '❌ Keyword detector is not initialized. Please restart the bot.');
+                await this.bot.sendMessage(chatId, '❌ Keyword detector is not initialized. Please restart the bot.');
                 return;
             }
 
@@ -478,7 +478,7 @@ class TelegramCommandHandler {
             keywordsText += '• /addmykeyword &lt;word&gt; - Add personal keyword\n';
             keywordsText += '• /removemykeyword &lt;word&gt; - Remove personal keyword';
 
-            this.bot.sendMessage(chatId, keywordsText, { parse_mode: 'HTML' });
+            await this.bot.sendMessage(chatId, keywordsText, { parse_mode: 'HTML' });
         });
 
         // Stats command
@@ -506,13 +506,13 @@ class TelegramCommandHandler {
         });
 
         // Groups command
-        this.bot.onText(/\/groups/, (msg) => {
+        this.bot.onText(/\/groups/, async (msg) => {
             const chatId = msg.chat.id;
             const userId = msg.from.id;
             console.log('📨 Received /groups from:', msg.from.username || msg.from.first_name);
             
             if (!this.authorization.isAuthorized(userId)) {
-                this.bot.sendMessage(chatId, '❌ You are not authorized to use this bot.');
+                await this.bot.sendMessage(chatId, '❌ You are not authorized to use this bot.');
                 return;
             }
             
@@ -1257,30 +1257,30 @@ class TelegramCommandHandler {
             }
 
             if (!this.authorization.isAdmin(userId)) {
-                this.bot.sendMessage(chatId, '❌ Admin access required to add global keywords.');
+                await this.bot.sendMessage(chatId, '❌ Admin access required to add global keywords.');
                 return;
             }
 
             if (keyword.length < 2) {
-                this.bot.sendMessage(chatId, '❌ Keyword must be at least 2 characters long.');
+                await this.bot.sendMessage(chatId, '❌ Keyword must be at least 2 characters long.');
                 return;
             }
 
             if (!this.keywordDetector) {
-                this.bot.sendMessage(chatId, '❌ Keyword detector is not initialized. Please restart the bot.');
+                await this.bot.sendMessage(chatId, '❌ Keyword detector is not initialized. Please restart the bot.');
                 return;
             }
 
             const keywords = this.keywordDetector.getKeywords();
             if (keywords.includes(keyword)) {
                 const escapedKeyword = this.escapeHtml(keyword);
-                this.bot.sendMessage(chatId, `❌ Keyword "${escapedKeyword}" already exists.`);
+                await this.bot.sendMessage(chatId, `❌ Keyword "${escapedKeyword}" already exists.`);
                 return;
             }
 
             await this.keywordDetector.addKeyword(keyword, userId.toString());
             const escapedKeyword = this.escapeHtml(keyword);
-            this.bot.sendMessage(chatId, `✅ Added global keyword: "${escapedKeyword}"`);
+            await this.bot.sendMessage(chatId, `✅ Added global keyword: "${escapedKeyword}"`);
             console.log(`🔑 Admin ${userId} added keyword: ${keyword}`);
         });
 
@@ -1297,45 +1297,46 @@ class TelegramCommandHandler {
             }
 
             if (!this.authorization.isAdmin(userId)) {
-                this.bot.sendMessage(chatId, '❌ Admin access required to remove global keywords.');
+                await this.bot.sendMessage(chatId, '❌ Admin access required to remove global keywords.');
                 return;
             }
 
             if (!this.keywordDetector) {
-                this.bot.sendMessage(chatId, '❌ Keyword detector is not initialized. Please restart the bot.');
+                await this.bot.sendMessage(chatId, '❌ Keyword detector is not initialized. Please restart the bot.');
                 return;
             }
 
             const keywords = this.keywordDetector.getKeywords();
             if (!keywords.includes(keyword)) {
                 const escapedKeyword = this.escapeHtml(keyword);
-                this.bot.sendMessage(chatId, `❌ Keyword "${escapedKeyword}" not found.`);
+                await this.bot.sendMessage(chatId, `❌ Keyword "${escapedKeyword}" not found.`);
                 return;
             }
 
             await this.keywordDetector.removeKeyword(keyword);
             const escapedKeyword = this.escapeHtml(keyword);
-            this.bot.sendMessage(chatId, `✅ Removed global keyword: "${escapedKeyword}"`);
+            await this.bot.sendMessage(chatId, `✅ Removed global keyword: "${escapedKeyword}"`);
             console.log(`🔑 Admin ${userId} removed keyword: ${keyword}`);
         });
 
         // My keywords command - Show user's personal keywords
-        this.bot.onText(/\/mykeywords/, (msg) => {
+        this.bot.onText(/\/mykeywords/, async (msg) => {
             const chatId = msg.chat.id;
             const userId = msg.from.id;
-
+            
             // Prevent duplicate commands
             if (this.isDuplicateCommand(userId, 'mykeywords')) {
                 console.log('🚫 Duplicate /mykeywords command ignored from:', msg.from.username || msg.from.first_name);
                 return;
             }
-
+            
             if (!this.authorization.isAuthorized(userId)) {
-                this.bot.sendMessage(chatId, '❌ You are not authorized to use this bot.');
+                await this.bot.sendMessage(chatId, '❌ You are not authorized to use this bot.');
                 return;
             }
-
-            const personalKeywords = this.getPersonalKeywords(userId);
+            
+            // Use keywordDetector's method which checks Supabase first
+            const personalKeywords = await this.getPersonalKeywordsFromSupabase(userId);
             let keywordsText = '🔑 <b>Your Personal Keywords:</b>\n\n';
             
             if (personalKeywords.length === 0) {
@@ -1359,7 +1360,7 @@ class TelegramCommandHandler {
             keywordsText += '• /removemykeyword &lt;word&gt; - Remove personal keyword\n\n';
             keywordsText += 'ℹ️ Personal keywords work alongside global keywords.';
 
-            this.bot.sendMessage(chatId, keywordsText, { parse_mode: 'HTML' });
+            await this.bot.sendMessage(chatId, keywordsText, { parse_mode: 'HTML' });
         });
 
         // Add personal keyword command
@@ -1375,25 +1376,26 @@ class TelegramCommandHandler {
             }
 
             if (!this.authorization.isAuthorized(userId)) {
-                this.bot.sendMessage(chatId, '❌ You are not authorized to use this bot.');
+                await this.bot.sendMessage(chatId, '❌ You are not authorized to use this bot.');
                 return;
             }
 
             if (keyword.length < 2) {
-                this.bot.sendMessage(chatId, '❌ Keyword must be at least 2 characters long.');
+                await this.bot.sendMessage(chatId, '❌ Keyword must be at least 2 characters long.');
                 return;
             }
 
-            const personalKeywords = this.getPersonalKeywords(userId);
+            // Use keywordDetector's method which checks Supabase first
+            const personalKeywords = await this.getPersonalKeywordsFromSupabase(userId);
             if (personalKeywords.includes(keyword)) {
                 const escapedKeyword = this.escapeHtml(keyword);
-                this.bot.sendMessage(chatId, `❌ Personal keyword "${escapedKeyword}" already exists.`);
+                await this.bot.sendMessage(chatId, `❌ Personal keyword "${escapedKeyword}" already exists.`);
                 return;
             }
 
             await this.addPersonalKeyword(userId, keyword);
             const escapedKeyword = this.escapeHtml(keyword);
-            this.bot.sendMessage(chatId, `✅ Added personal keyword: "${escapedKeyword}"`);
+            await this.bot.sendMessage(chatId, `✅ Added personal keyword: "${escapedKeyword}"`);
             console.log(`🔑 User ${userId} added personal keyword: ${keyword}`);
         });
 
@@ -1410,20 +1412,21 @@ class TelegramCommandHandler {
             }
 
             if (!this.authorization.isAuthorized(userId)) {
-                this.bot.sendMessage(chatId, '❌ You are not authorized to use this bot.');
+                await this.bot.sendMessage(chatId, '❌ You are not authorized to use this bot.');
                 return;
             }
 
-            const personalKeywords = this.getPersonalKeywords(userId);
+            // Use keywordDetector's method which checks Supabase first
+            const personalKeywords = await this.getPersonalKeywordsFromSupabase(userId);
             if (!personalKeywords.includes(keyword)) {
                 const escapedKeyword = this.escapeHtml(keyword);
-                this.bot.sendMessage(chatId, `❌ Personal keyword "${escapedKeyword}" not found.`);
+                await this.bot.sendMessage(chatId, `❌ Personal keyword "${escapedKeyword}" not found.`);
                 return;
             }
 
             await this.removePersonalKeyword(userId, keyword);
             const escapedKeyword = this.escapeHtml(keyword);
-            this.bot.sendMessage(chatId, `✅ Removed personal keyword: "${escapedKeyword}"`);
+            await this.bot.sendMessage(chatId, `✅ Removed personal keyword: "${escapedKeyword}"`);
             console.log(`🔑 User ${userId} removed personal keyword: ${keyword}`);
         });
 
@@ -1805,6 +1808,23 @@ class TelegramCommandHandler {
     }
 
     // Personal keyword management methods
+    // Helper method that uses keywordDetector's Supabase-aware method
+    async getPersonalKeywordsFromSupabase(userId) {
+        try {
+            if (this.keywordDetector) {
+                // Use keywordDetector's method which checks Supabase first, then file
+                return await this.keywordDetector.getPersonalKeywords(userId);
+            }
+            // Fallback to file if keywordDetector not available
+            return this.getPersonalKeywords(userId);
+        } catch (error) {
+            console.error('Error loading personal keywords from Supabase:', error.message);
+            // Fallback to file
+            return this.getPersonalKeywords(userId);
+        }
+    }
+
+    // Legacy file-based method (kept for backward compatibility and fallback)
     getPersonalKeywords(userId) {
         try {
             const fs = require('fs');
@@ -1818,7 +1838,7 @@ class TelegramCommandHandler {
             
             return [];
         } catch (error) {
-            console.error('Error loading personal keywords:', error.message);
+            console.error('Error loading personal keywords from file:', error.message);
             return [];
         }
     }
