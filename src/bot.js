@@ -336,13 +336,9 @@ class WhatsAppKeywordBot {
                                 // Check if reminder already exists for this user
                                 const existingReminder = this.notifier.reminderManager.getReminders(userId);
                                 
-                                // Skip if user recently pressed /ok (within last 60 seconds)
-                                if (this.notifier.reminderManager.hasRecentlyAcknowledged(userId, 60)) {
-                                    console.log(`⏰ User ${userId} recently pressed /ok - skipping reminder for keyword: "${keywordData.keyword}"`);
-                                    continue;
-                                }
+                                // NOTE: Removed hasRecentlyAcknowledged check - reminders are deleted immediately after /ok, so no need to block
                                 
-                                // Skip if user already acknowledged a reminder for this keyword
+                                // Skip if user already acknowledged a reminder for this keyword (shouldn't happen since reminders are deleted, but keep as safeguard)
                                 if (existingReminder && existingReminder.keyword === keywordData.keyword && existingReminder.status === 'acknowledged') {
                                     console.log(`⏰ User ${userId} already acknowledged reminder for keyword: "${keywordData.keyword}" - skipping`);
                                     continue;
@@ -410,13 +406,9 @@ class WhatsAppKeywordBot {
                             // Check if reminder already exists for this user
                             const existingReminder = this.notifier.reminderManager.getReminders(keywordData.userId);
                             
-                            // Skip if user recently pressed /ok (within last 60 seconds)
-                            if (this.notifier.reminderManager.hasRecentlyAcknowledged(keywordData.userId, 60)) {
-                                console.log(`⏰ User ${keywordData.userId} recently pressed /ok - skipping reminder for keyword: "${keywordData.keyword}"`);
-                                continue;
-                            }
+                            // NOTE: Removed hasRecentlyAcknowledged check - reminders are deleted immediately after /ok, so no need to block
                             
-                            // Skip if user already acknowledged a reminder for this keyword
+                            // Skip if user already acknowledged a reminder for this keyword (shouldn't happen since reminders are deleted, but keep as safeguard)
                             if (existingReminder && existingReminder.keyword === keywordData.keyword && existingReminder.status === 'acknowledged') {
                                 console.log(`⏰ User ${keywordData.userId} already acknowledged reminder for keyword: "${keywordData.keyword}" - skipping`);
                                 continue;
