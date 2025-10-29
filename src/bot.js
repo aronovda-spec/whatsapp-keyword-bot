@@ -90,11 +90,33 @@ class WhatsAppKeywordBot {
             connection.on('connected', () => {
                 console.log(`✅ Phone ${phoneNumber} connected successfully!`);
                 logBotEvent('phone_connected', { phoneNumber, description });
+                // Send status update to all users (not just admins) - they need to know if bot is working
+                this.notifier.sendBotStatus('Connected', `Phone ${phoneNumber} is now connected and monitoring WhatsApp messages`);
             });
 
-            connection.on('disconnected', () => {
+            connection.on('disconnected', (disconnectInfo) => {
                 console.log(`❌ Phone ${phoneNumber} disconnected`);
                 logBotEvent('phone_disconnected', { phoneNumber });
+                
+                // Send status update to all users (not just admins) - they need to know if bot is not working
+                let details = '';
+                if (disconnectInfo) {
+                    if (disconnectInfo.isVirtualNumberExpired) {
+                        details = '🚨 VIRTUAL NUMBER MAY HAVE EXPIRED!\n\n' +
+                                 '📋 Action Required:\n' +
+                                 '1. Check virtual number status with provider\n' +
+                                 '2. Renew or get new virtual number\n' +
+                                 '3. Update bot configuration\n' +
+                                 '4. Restart bot and scan new QR code\n\n' +
+                                 '💡 Check logs for more details';
+                        this.notifier.sendCriticalAlert('Virtual Number Expired', details);
+                    } else {
+                        details = `Phone: ${phoneNumber}\nDisconnect reason: ${disconnectInfo.reason || 'Unknown'}\nMessage: ${disconnectInfo.message || 'Bot lost connection to WhatsApp'}`;
+                        this.notifier.sendBotStatus('Disconnected', details);
+                    }
+                } else {
+                    this.notifier.sendBotStatus('Disconnected', `Phone ${phoneNumber} lost connection to WhatsApp`);
+                }
             });
 
             this.connections.set(phoneNumber, connection);
@@ -467,27 +489,76 @@ class WhatsAppKeywordBot {
     }
 
     setupHealthMonitoring() {
-        // Send periodic status updates
-        setInterval(() => {
-            const connectedPhones = Array.from(this.connections.entries())
-                .filter(([phone, connection]) => connection.getConnectionStatus())
-                .map(([phone]) => phone);
-            
-            if (connectedPhones.length > 0 && this.notifier.isEnabled()) {
-                const uptime = Math.floor((Date.now() - this.stats.startTime.getTime()) / 1000 / 60); // minutes
-                
-                if (uptime % 60 === 0) { // Every hour
-                    this.notifier.sendBotStatus('Running', 
-                        `Uptime: ${uptime} minutes\nMessages: ${this.stats.messagesProcessed}\nKeywords: ${this.stats.keywordsDetected}\nConnected phones: ${connectedPhones.join(', ')}`
-                    );
-                }
-            }
-        }, 60000); // Check every minute
+        // Schedule daily status update at 11:00 AM Israeli time
+        this.scheduleDailyStatusUpdate();
 
         // Anti-ban safety monitoring
         setInterval(() => {
             this.performAntiBanCheck();
         }, 30000); // Every 30 seconds
+    }
+
+    /**
+     * Schedule daily status update at 11:00 AM Israeli time (Asia/Jerusalem)
+     */
+    scheduleDailyStatusUpdate() {
+        const calculateNext11AM = () => {
+            // Use Israeli timezone
+            const now = new Date();
+            const tzOffset = 2 * 60 * 60 * 1000; // UTC+2 for Israel (DST handled by Date)
+            const israeliTime = new Date(now.getTime() + tzOffset);
+            
+            const next11AM = new Date(israeliTime);
+            next11AM.setUTCHours(9, 0, 0, 0); // 11:00 AM Israel = 9:00 UTC (approximate, adjust for DST)
+            
+            // If already past 11 AM today, schedule for tomorrow
+            if (next11AM.getTime() <= israeliTime.getTime()) {
+                next11AM.setUTCDate(next11AM.getUTCDate() + 1);
+            }
+            
+            return next11AM.getTime() - now.getTime();
+        };
+
+        const scheduleNext = () => {
+            const msUntil11AM = calculateNext11AM();
+            const hoursUntil = Math.floor(msUntil11AM / (1000 * 60 * 60));
+            const minutesUntil = Math.floor((msUntil11AM % (1000 * 60 * 60)) / (1000 * 60));
+            
+            console.log(`📅 Daily status update scheduled for 11:00 AM Israeli time (in ~${hoursUntil}h ${minutesUntil}m)`);
+            
+            setTimeout(() => {
+                // Send daily status update
+                const connectedPhones = Array.from(this.connections.entries())
+                    .filter(([phone, connection]) => connection.getConnectionStatus())
+                    .map(([phone]) => phone);
+                
+                if (connectedPhones.length > 0 && this.notifier.isEnabled()) {
+                    const uptimeMinutes = Math.floor((Date.now() - this.stats.startTime.getTime()) / 1000 / 60);
+                    const uptimeHours = Math.floor(uptimeMinutes / 60);
+                    const uptimeDays = Math.floor(uptimeHours / 24);
+                    
+                    let uptimeStr = '';
+                    if (uptimeDays > 0) {
+                        uptimeStr = `${uptimeDays} day(s), ${uptimeHours % 24} hour(s)`;
+                    } else if (uptimeHours > 0) {
+                        uptimeStr = `${uptimeHours} hour(s), ${uptimeMinutes % 60} minute(s)`;
+                    } else {
+                        uptimeStr = `${uptimeMinutes} minute(s)`;
+                    }
+                    
+                    this.notifier.sendBotStatus('Running', 
+                        `Uptime: ${uptimeStr}\nMessages: ${this.stats.messagesProcessed}\nKeywords: ${this.stats.keywordsDetected}\nConnected phones: ${connectedPhones.join(', ')}`,
+                        true // adminOnly = true
+                    );
+                }
+                
+                // Schedule next day's update
+                scheduleNext();
+            }, msUntil11AM);
+        };
+
+        // Start scheduling
+        scheduleNext();
     }
 
     performAntiBanCheck() {
