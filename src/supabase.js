@@ -430,6 +430,127 @@ class SupabaseManager {
         }
     }
 
+    // Reminders (Supabase-backed persistence)
+    async remindersGetAll() {
+        if (!this.enabled) return null;
+        try {
+            const { data, error } = await this.client
+                .from('reminders')
+                .select('*');
+            if (error) throw error;
+            return data || [];
+        } catch (error) {
+            console.error('Supabase remindersGetAll error:', error.message);
+            return null;
+        }
+    }
+
+    async remindersGetActive() {
+        if (!this.enabled) return null;
+        try {
+            const { data, error } = await this.client
+                .from('reminders')
+                .select('*')
+                .eq('status', 'active');
+            if (error) throw error;
+            return data || [];
+        } catch (error) {
+            console.error('Supabase remindersGetActive error:', error.message);
+            return null;
+        }
+    }
+
+    async remindersGetByUser(userId) {
+        if (!this.enabled) return null;
+        try {
+            const { data, error } = await this.client
+                .from('reminders')
+                .select('*')
+                .eq('user_id', userId.toString());
+            if (error) throw error;
+            return data || [];
+        } catch (error) {
+            console.error('Supabase remindersGetByUser error:', error.message);
+            return null;
+        }
+    }
+
+    async remindersUpsert(reminder) {
+        if (!this.enabled) return false;
+        try {
+            const payload = {
+                id: reminder.reminderId || reminder.id, // allow either field name
+                user_id: reminder.userId?.toString(),
+                keyword: reminder.keyword,
+                message: reminder.message,
+                sender: reminder.sender,
+                group: reminder.group,
+                message_id: reminder.messageId,
+                phone_number: reminder.phoneNumber,
+                attachment: reminder.attachment || null,
+                is_global: !!reminder.isGlobal,
+                status: reminder.status,
+                reminder_count: reminder.reminderCount,
+                first_detected_at: reminder.firstDetectedAt ? new Date(reminder.firstDetectedAt).toISOString() : new Date().toISOString(),
+                next_reminder_at: reminder.nextReminderAt ? new Date(reminder.nextReminderAt).toISOString() : null,
+                updated_at: new Date().toISOString()
+            };
+            const { error } = await this.client
+                .from('reminders')
+                .upsert(payload);
+            if (error) throw error;
+            return true;
+        } catch (error) {
+            console.error('Supabase remindersUpsert error:', error.message);
+            return false;
+        }
+    }
+
+    async remindersUpdateStatus(id, status, fields = {}) {
+        if (!this.enabled) return false;
+        try {
+            const { error } = await this.client
+                .from('reminders')
+                .update({ status, updated_at: new Date().toISOString(), ...fields })
+                .eq('id', id);
+            if (error) throw error;
+            return true;
+        } catch (error) {
+            console.error('Supabase remindersUpdateStatus error:', error.message);
+            return false;
+        }
+    }
+
+    async remindersDelete(id) {
+        if (!this.enabled) return false;
+        try {
+            const { error } = await this.client
+                .from('reminders')
+                .delete()
+                .eq('id', id);
+            if (error) throw error;
+            return true;
+        } catch (error) {
+            console.error('Supabase remindersDelete error:', error.message);
+            return false;
+        }
+    }
+
+    async remindersClearAll() {
+        if (!this.enabled) return false;
+        try {
+            const { error } = await this.client
+                .from('reminders')
+                .delete()
+                .neq('id', '');
+            if (error) throw error;
+            return true;
+        } catch (error) {
+            console.error('Supabase remindersClearAll error:', error.message);
+            return false;
+        }
+    }
+
     // Session Backup - Backup individual file (NEW IMPROVED METHOD)
     async backupSessionFile(phoneNumber, filename, content) {
         if (!this.enabled) return false;
