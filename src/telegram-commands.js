@@ -591,7 +591,7 @@ class TelegramCommandHandler {
             });
 
             // All groups command - Show available groups for subscription
-            this.bot.onText(/\/allgroups/, (msg) => {
+            this.bot.onText(/\/allgroups/, async (msg) => {
                 const chatId = msg.chat.id;
                 const userId = msg.from.id;
                 
@@ -602,15 +602,15 @@ class TelegramCommandHandler {
                 }
                 
                 if (!this.authorization.isAuthorized(userId)) {
-                    this.bot.sendMessage(chatId, '❌ You are not authorized to use this bot.');
+                    await this.bot.sendMessage(chatId, '❌ You are not authorized to use this bot.');
                     return;
                 }
-                
+
                 console.log('📨 Received /allgroups from:', msg.from.username || msg.from.first_name);
                 
                 // Load discovered groups and subscriptions
                 const discoveredGroups = this.loadDiscoveredGroups();
-                const subscriptions = this.loadGroupSubscriptions();
+                const subscriptions = await this.loadGroupSubscriptions();
                 
                 let allGroupsText = '📱 Available Groups:\n\n';
                 
@@ -635,11 +635,11 @@ class TelegramCommandHandler {
                     allGroupsText += '• /mygroups - Show your subscriptions';
                 }
                 
-                this.bot.sendMessage(chatId, allGroupsText);
+                await this.bot.sendMessage(chatId, allGroupsText);
             });
 
             // Subscribe to group command
-            this.bot.onText(/\/subscribe (.+)/, (msg, match) => {
+            this.bot.onText(/\/subscribe (.+)/, async (msg, match) => {
                 const chatId = msg.chat.id;
                 const userId = msg.from.id;
                 const groupName = match[1].trim();
@@ -659,7 +659,7 @@ class TelegramCommandHandler {
                 
                 // Load discovered groups and subscriptions
                 const discoveredGroups = this.loadDiscoveredGroups();
-                const subscriptions = this.loadGroupSubscriptions();
+                const subscriptions = await this.loadGroupSubscriptions();
                 
                 // Check if group exists
                 const groupExists = Object.values(discoveredGroups).some(group => 
@@ -667,7 +667,7 @@ class TelegramCommandHandler {
                 );
                 
                 if (!groupExists) {
-                    this.bot.sendMessage(chatId,
+                    await this.bot.sendMessage(chatId,
                         `❌ Group "${groupName}" not found!\n\n` +
                         `💡 Available groups:\n` +
                         Object.values(discoveredGroups).map(group => `• ${group.name || 'Unknown'}`).join('\n') +
@@ -678,19 +678,32 @@ class TelegramCommandHandler {
                 
                 // Check if already subscribed
                 const currentSubscribers = subscriptions[groupName] || [];
-                if (currentSubscribers.includes(chatId)) {
-                    this.bot.sendMessage(chatId,
+                const userIdStr = userId.toString();
+                if (currentSubscribers.includes(userIdStr) || currentSubscribers.includes(chatId.toString())) {
+                    await this.bot.sendMessage(chatId,
                         `✅ You're already subscribed to "${groupName}"!\n\n` +
                         `Use /mygroups to see all your subscriptions.`
                     );
                     return;
                 }
                 
-                // Add subscription
-                subscriptions[groupName] = [...currentSubscribers, chatId];
-                this.saveGroupSubscriptions(subscriptions);
+                // Add subscription to Supabase first, then update file
+                if (this.keywordDetector && this.keywordDetector.supabase && this.keywordDetector.supabase.isEnabled()) {
+                    try {
+                        const supabaseSuccess = await this.keywordDetector.supabase.addGroupSubscription(userIdStr, groupName);
+                        if (supabaseSuccess) {
+                            console.log(`💾 Added group subscription to Supabase: user ${userId} → ${groupName}`);
+                        }
+                    } catch (error) {
+                        console.error('Error adding subscription to Supabase:', error.message);
+                    }
+                }
                 
-                this.bot.sendMessage(chatId,
+                // Also save to file (backup and backward compatibility)
+                subscriptions[groupName] = [...currentSubscribers, userIdStr];
+                await this.saveGroupSubscriptions(subscriptions);
+                
+                await this.bot.sendMessage(chatId,
                     `✅ Successfully subscribed to "${groupName}"!\n\n` +
                     `🔔 You'll now receive notifications when keywords are detected in this group.\n\n` +
                     `Use /mygroups to see all your subscriptions.`
@@ -698,7 +711,7 @@ class TelegramCommandHandler {
             });
 
             // Unsubscribe from group command
-            this.bot.onText(/\/unsubscribe (.+)/, (msg, match) => {
+            this.bot.onText(/\/unsubscribe (.+)/, async (msg, match) => {
                 const chatId = msg.chat.id;
                 const userId = msg.from.id;
                 const groupName = match[1].trim();
@@ -717,22 +730,38 @@ class TelegramCommandHandler {
                 console.log('📨 Received /unsubscribe from:', msg.from.username || msg.from.first_name, 'for group:', groupName);
                 
                 // Load subscriptions
-                const subscriptions = this.loadGroupSubscriptions();
+                const subscriptions = await this.loadGroupSubscriptions();
                 const currentSubscribers = subscriptions[groupName] || [];
+                const userIdStr = userId.toString();
                 
-                if (!currentSubscribers.includes(chatId)) {
-                    this.bot.sendMessage(chatId,
+                // Check if subscribed (check both userId and chatId for backward compatibility)
+                const isSubscribed = currentSubscribers.includes(userIdStr) || currentSubscribers.includes(chatId.toString());
+                
+                if (!isSubscribed) {
+                    await this.bot.sendMessage(chatId,
                         `❌ You're not subscribed to "${groupName}"!\n\n` +
                         `Use /mygroups to see your current subscriptions.`
                     );
                     return;
                 }
                 
-                // Remove subscription
-                subscriptions[groupName] = currentSubscribers.filter(id => id !== chatId);
-                this.saveGroupSubscriptions(subscriptions);
+                // Remove subscription from Supabase first
+                if (this.keywordDetector && this.keywordDetector.supabase && this.keywordDetector.supabase.isEnabled()) {
+                    try {
+                        const supabaseSuccess = await this.keywordDetector.supabase.removeGroupSubscription(userIdStr, groupName);
+                        if (supabaseSuccess) {
+                            console.log(`💾 Removed group subscription from Supabase: user ${userId} → ${groupName}`);
+                        }
+                    } catch (error) {
+                        console.error('Error removing subscription from Supabase:', error.message);
+                    }
+                }
                 
-                this.bot.sendMessage(chatId,
+                // Also remove from file (backup and backward compatibility)
+                subscriptions[groupName] = currentSubscribers.filter(id => id !== userIdStr && id !== chatId.toString());
+                await this.saveGroupSubscriptions(subscriptions);
+                
+                await this.bot.sendMessage(chatId,
                     `✅ Successfully unsubscribed from "${groupName}"!\n\n` +
                     `🔕 You'll no longer receive notifications from this group.\n\n` +
                     `Use /mygroups to see your remaining subscriptions.`
@@ -740,7 +769,7 @@ class TelegramCommandHandler {
             });
 
             // My groups command
-            this.bot.onText(/\/mygroups/, (msg) => {
+            this.bot.onText(/\/mygroups/, async (msg) => {
                 const chatId = msg.chat.id;
                 const userId = msg.from.id;
                 
@@ -751,18 +780,19 @@ class TelegramCommandHandler {
                 }
                 
                 if (!this.authorization.isAuthorized(userId)) {
-                    this.bot.sendMessage(chatId, '❌ You are not authorized to use this bot.');
+                    await this.bot.sendMessage(chatId, '❌ You are not authorized to use this bot.');
                     return;
                 }
                 
                 console.log('📨 Received /mygroups from:', msg.from.username || msg.from.first_name);
                 
-                // Load subscriptions
-                const subscriptions = this.loadGroupSubscriptions();
+                // Load subscriptions from Supabase first
+                const subscriptions = await this.loadGroupSubscriptions();
                 
-                // Find user's subscriptions
+                // Find user's subscriptions (check both userId and chatId for backward compatibility)
+                const userIdStr = userId.toString();
                 const userSubscriptions = Object.entries(subscriptions)
-                    .filter(([groupName, subscribers]) => subscribers.includes(chatId))
+                    .filter(([groupName, subscribers]) => subscribers.includes(userIdStr) || subscribers.includes(chatId.toString()))
                     .map(([groupName]) => groupName);
                 
                 let myGroupsText = '📱 Your Group Subscriptions:\n\n';
@@ -784,11 +814,11 @@ class TelegramCommandHandler {
                     myGroupsText += '• /discover - See all groups bot is in';
                 }
                 
-                this.bot.sendMessage(chatId, myGroupsText);
+                await this.bot.sendMessage(chatId, myGroupsText);
             });
 
             // Simple timezone commands that actually work!
-            this.bot.onText(/\/israel/, (msg) => {
+            this.bot.onText(/\/israel/, async (msg) => {
                 const chatId = msg.chat.id;
                 const userId = msg.from.id;
                 
@@ -799,50 +829,50 @@ class TelegramCommandHandler {
                 }
                 
                 if (!this.authorization.isAuthorized(userId)) {
-                    this.bot.sendMessage(chatId, '❌ You are not authorized to use this bot.');
+                    await this.bot.sendMessage(chatId, '❌ You are not authorized to use this bot.');
                     return;
                 }
-                this.updateTimezone(chatId, 'Asia/Jerusalem');
+                await this.updateTimezone(chatId, 'Asia/Jerusalem');
             });
 
-            this.bot.onText(/\/usa/, (msg) => {
+            this.bot.onText(/\/usa/, async (msg) => {
                 const chatId = msg.chat.id;
                 const userId = msg.from.id;
                 if (!this.authorization.isAuthorized(userId)) {
-                    this.bot.sendMessage(chatId, '❌ You are not authorized to use this bot.');
+                    await this.bot.sendMessage(chatId, '❌ You are not authorized to use this bot.');
                     return;
                 }
-                this.updateTimezone(chatId, 'America/New_York');
+                await this.updateTimezone(chatId, 'America/New_York');
             });
 
-            this.bot.onText(/\/uk/, (msg) => {
+            this.bot.onText(/\/uk/, async (msg) => {
                 const chatId = msg.chat.id;
                 const userId = msg.from.id;
                 if (!this.authorization.isAuthorized(userId)) {
-                    this.bot.sendMessage(chatId, '❌ You are not authorized to use this bot.');
+                    await this.bot.sendMessage(chatId, '❌ You are not authorized to use this bot.');
                     return;
                 }
-                this.updateTimezone(chatId, 'Europe/London');
+                await this.updateTimezone(chatId, 'Europe/London');
             });
 
-            this.bot.onText(/\/japan/, (msg) => {
+            this.bot.onText(/\/japan/, async (msg) => {
                 const chatId = msg.chat.id;
                 const userId = msg.from.id;
                 if (!this.authorization.isAuthorized(userId)) {
-                    this.bot.sendMessage(chatId, '❌ You are not authorized to use this bot.');
+                    await this.bot.sendMessage(chatId, '❌ You are not authorized to use this bot.');
                     return;
                 }
-                this.updateTimezone(chatId, 'Asia/Tokyo');
+                await this.updateTimezone(chatId, 'Asia/Tokyo');
             });
 
             // Advanced timezone command (for power users)
-            this.bot.onText(/\/timezone (.+)/, (msg, match) => {
+            this.bot.onText(/\/timezone (.+)/, async (msg, match) => {
                 const chatId = msg.chat.id;
                 const userId = msg.from.id;
                 const timezone = match[1];
 
                 if (!this.authorization.isAuthorized(userId)) {
-                    this.bot.sendMessage(chatId, '❌ You are not authorized to use this bot.');
+                    await this.bot.sendMessage(chatId, '❌ You are not authorized to use this bot.');
                     return;
                 }
 
@@ -852,7 +882,7 @@ class TelegramCommandHandler {
                 ];
 
                 if (!validTimezones.includes(timezone)) {
-                    this.bot.sendMessage(chatId,
+                    await this.bot.sendMessage(chatId,
                         '❌ Invalid timezone!\n\n' +
                         '🇮🇱 Simple Commands:\n' +
                         '/israel - Israeli time\n' +
@@ -870,16 +900,16 @@ class TelegramCommandHandler {
                     return;
                 }
 
-                this.updateTimezone(chatId, timezone);
+                await this.updateTimezone(chatId, timezone);
             });
 
             // Sleep mode commands
-            this.bot.onText(/\/sleep/, (msg) => {
+            this.bot.onText(/\/sleep/, async (msg) => {
                 const chatId = msg.chat.id;
                 const userId = msg.from.id;
 
                 if (!this.authorization.isAuthorized(userId)) {
-                    this.bot.sendMessage(chatId, '❌ You are not authorized to use this bot.');
+                    await this.bot.sendMessage(chatId, '❌ You are not authorized to use this bot.');
                     return;
                 }
 
@@ -890,7 +920,7 @@ class TelegramCommandHandler {
                 }
 
                 // Get user's timezone preference
-                const userTimezone = this.getUserTimezone(chatId);
+                const userTimezone = await this.getUserTimezone(chatId);
                 const now = new Date();
                 const userTime = new Date(now.toLocaleString("en-US", {timeZone: userTimezone}));
                 const currentTime = userTime.toTimeString().substring(0, 5);
@@ -911,7 +941,7 @@ class TelegramCommandHandler {
 
                 const displayName = timezoneNames[userTimezone] || userTimezone;
 
-                this.bot.sendMessage(chatId,
+                await this.bot.sendMessage(chatId,
                     `😴 Your Sleep Status\n\n` +
                     `🌍 Your Timezone: ${displayName}\n` +
                     `🕐 Your Local Time: ${userTime.toLocaleString()}\n` +
@@ -1547,9 +1577,23 @@ class TelegramCommandHandler {
         }
     }
 
-    // Load group subscriptions from file
-    loadGroupSubscriptions() {
+    // Load group subscriptions from Supabase first, fallback to file
+    async loadGroupSubscriptions() {
         try {
+            // Try Supabase first if enabled
+            if (this.keywordDetector && this.keywordDetector.supabase && this.keywordDetector.supabase.isEnabled()) {
+                try {
+                    const subscriptions = await this.keywordDetector.supabase.getGroupSubscriptions();
+                    if (subscriptions !== null) {
+                        console.log('📊 Loaded group subscriptions from Supabase');
+                        return subscriptions;
+                    }
+                } catch (error) {
+                    console.warn('⚠️ Failed to load group subscriptions from Supabase, falling back to file:', error.message);
+                }
+            }
+            
+            // Fallback to file-based config
             const fs = require('fs');
             const path = require('path');
             const subscriptionsPath = path.join(__dirname, '../config/group-subscriptions.json');
@@ -1565,23 +1609,43 @@ class TelegramCommandHandler {
         }
     }
 
-    // Save group subscriptions to file
-    saveGroupSubscriptions(subscriptions) {
+    // Save group subscriptions to file (backup)
+    async saveGroupSubscriptions(subscriptions) {
         try {
+            // Save to file first (backup)
             const fs = require('fs');
             const path = require('path');
             const subscriptionsPath = path.join(__dirname, '../config/group-subscriptions.json');
             
             fs.writeFileSync(subscriptionsPath, JSON.stringify(subscriptions, null, 2));
-            console.log('✅ Group subscriptions saved successfully');
+            console.log('✅ Group subscriptions saved to file');
+            
+            // Note: Supabase operations are handled individually via add/remove methods for better consistency
         } catch (error) {
             console.error('Error saving group subscriptions:', error.message);
         }
     }
 
-    // Get user's timezone preference
-    getUserTimezone(chatId) {
+    // Get user's timezone preference from Supabase first, fallback to file
+    async getUserTimezone(chatId) {
         try {
+            // Try Supabase first if enabled
+            if (this.keywordDetector && this.keywordDetector.supabase && this.keywordDetector.supabase.isEnabled()) {
+                try {
+                    const prefs = await this.keywordDetector.supabase.getUserPreferences(chatId.toString());
+                    if (prefs && prefs.timezone) {
+                        console.log(`📊 Loaded timezone preference from Supabase for user ${chatId}: ${prefs.timezone}`);
+                        return prefs.timezone;
+                    } else if (prefs !== null) {
+                        // Supabase returned data but no timezone preference
+                        return 'Asia/Jerusalem'; // Default to Israeli time
+                    }
+                } catch (error) {
+                    console.warn(`⚠️ Failed to load timezone preference from Supabase for user ${chatId}, falling back to file:`, error.message);
+                }
+            }
+            
+            // Fallback to file-based config
             const fs = require('fs');
             const path = require('path');
             const userConfigPath = path.join(__dirname, '../config/user-preferences.json');
@@ -1758,8 +1822,21 @@ class TelegramCommandHandler {
         return `${hours} hours ago`;
     }
 
-    updateTimezone(chatId, timezone) {
+    async updateTimezone(chatId, timezone) {
         try {
+            // Save to Supabase first if enabled
+            if (this.keywordDetector && this.keywordDetector.supabase && this.keywordDetector.supabase.isEnabled()) {
+                try {
+                    const success = await this.keywordDetector.supabase.setUserPreferences(chatId.toString(), { timezone });
+                    if (success) {
+                        console.log(`💾 Saved timezone preference to Supabase for user ${chatId}: ${timezone}`);
+                    }
+                } catch (error) {
+                    console.error('Error saving timezone preference to Supabase:', error.message);
+                }
+            }
+            
+            // Also save to file (backup and backward compatibility)
             const fs = require('fs');
             const path = require('path');
             const userConfigPath = path.join(__dirname, '../config/user-preferences.json');
@@ -1791,14 +1868,18 @@ class TelegramCommandHandler {
             
             const displayName = timezoneNames[timezone] || timezone;
             
-            this.bot.sendMessage(chatId,
+            await this.bot.sendMessage(chatId,
                 `🌍 Your timezone changed to: ${displayName}\n\n` +
                 `✅ No restart needed! Changes take effect immediately.\n\n` +
                 `💡 Each user can have their own timezone preference.\n` +
                 `Use /sleep to check your personal sleep status.`
             );
         } catch (error) {
-            this.bot.sendMessage(chatId, '❌ Error updating timezone. Check bot logs.');
+            try {
+                await this.bot.sendMessage(chatId, '❌ Error updating timezone. Check bot logs.');
+            } catch (sendError) {
+                console.error('Failed to send error message:', sendError.message);
+            }
         }
     }
 
