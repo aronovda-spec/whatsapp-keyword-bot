@@ -255,11 +255,11 @@ class Notifier {
                 attachmentInfo += ` (${sizeKB} KB)`;
             }
         }
-        
+
+        // Update header to indicate type
         const header = reminderCount === 0 
-            ? '🚨 <b>Keyword Alert</b>'
-            : '⏰ <b>Keyword Alert - Reminder</b>';
-        
+            ? '🚨 <b>Personal Keyword Alert</b>'
+            : '⏰ <b>Personal Keyword Alert - Reminder</b>';
         return `${header}
 
 🚨 <b>Keyword:</b> ${this.escapeHtml(keyword)}${matchInfo}
@@ -301,11 +301,10 @@ ${reminderCount > 0 ? '⏰ Reply /ok to acknowledge and stop reminders.' : '💡
     formatAlertMessage(keyword, message, sender, group, messageId, phoneNumber = null, matchType = 'exact', matchedToken = null, attachment = null, isReminder = false, reminderCount = 0) {
         const timestamp = new Date().toLocaleString();
         const truncatedMessage = message.length > 200 ? message.substring(0, 200) + '...' : message;
-        
         // Set header based on reminder status
         const header = isReminder 
-            ? '⏰ <b>Keyword Alert - Reminder</b>'
-            : '🚨 <b>Keyword Alert!</b>';
+            ? '⏰ <b>Global Keyword Alert - Reminder</b>'
+            : '🚨 <b>Global Keyword Alert!</b>';
         
         // Add reminder info if applicable
         let reminderInfo = '';
