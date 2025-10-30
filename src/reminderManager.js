@@ -397,7 +397,7 @@ class ReminderManager extends EventEmitter {
             }
             
             if (cancelledKeywords.length > 0) {
-                summary += `⚪ <b>Override reminders (canceled early):</b> ${cancelledKeywords.join(', ')}\n`;
+                summary += `⚪ <b>Override reminders:</b> ${cancelledKeywords.join(', ')}\n`;
             }
             
             if (completedKeywords.length > 0) {
