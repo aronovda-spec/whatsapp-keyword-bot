@@ -2,6 +2,7 @@ const EventEmitter = require('events');
 const fs = require('fs');
 const path = require('path');
 const { logError, logBotEvent } = require('./logger');
+const SupabaseManager = require('./supabase');
 
 class ReminderManager extends EventEmitter {
     constructor() {
@@ -18,6 +19,12 @@ class ReminderManager extends EventEmitter {
         this.maxReminders = 7; // 0 min, 1 min, 2 min, 5 min, 15 min, 60 min, 90 min
         this.weeklyResetTimer = null; // Timer for weekly acknowledged reminders reset
         this.catchupDelayMs = parseInt(process.env.REMINDER_CATCHUP_DELAY_MS || '30000'); // default 30s
+        this.backend = process.env.REMINDERS_BACKEND || 'auto'; // auto|supabase|file
+        this.supabase = new SupabaseManager();
+        // Resolve backend automatically
+        if (this.backend === 'auto') {
+            this.backend = this.supabase && this.supabase.isEnabled() ? 'supabase' : 'file';
+        }
         this.loadReminders();
         this.scheduleWeeklyReset(); // Start weekly reset schedule
     }
@@ -25,53 +32,78 @@ class ReminderManager extends EventEmitter {
     /**
      * Load active reminders from file
      */
-    loadReminders() {
+    async loadReminders() {
         try {
+            const now = Date.now();
+            this.reminders = new Map();
+            this.activeReminders = new Map();
+            this.reminderTimers = new Map();
+            this.reminderExecuting = new Map();
+
+            if (this.backend === 'supabase') {
+                // Load from Supabase
+                const rows = await this.supabase.remindersGetAll();
+                if (rows && Array.isArray(rows)) {
+                    for (const row of rows) {
+                        const reminder = {
+                            reminderId: row.id,
+                            userId: row.user_id,
+                            keyword: row.keyword,
+                            message: row.message,
+                            sender: row.sender,
+                            group: row.group,
+                            messageId: row.message_id,
+                            phoneNumber: row.phone_number,
+                            attachment: row.attachment,
+                            isGlobal: !!row.is_global,
+                            status: row.status,
+                            firstDetectedAt: row.first_detected_at ? new Date(row.first_detected_at) : new Date(),
+                            nextReminderAt: row.next_reminder_at ? new Date(row.next_reminder_at) : null,
+                            reminderCount: row.reminder_count || 0
+                        };
+                        this.reminders.set(reminder.reminderId, reminder);
+                        if (reminder.status === 'active') {
+                            this.activeReminders.set(reminder.userId.toString(), reminder.reminderId);
+                            const nextAt = reminder.nextReminderAt ? reminder.nextReminderAt.getTime() : (now + 60000);
+                            if (nextAt <= now) {
+                                reminder.nextReminderAt = new Date(now + this.catchupDelayMs);
+                            }
+                        }
+                    }
+                    // Schedule only active
+                    for (const [, reminder] of this.reminders) {
+                        if (reminder.status === 'active') {
+                            this.scheduleNextReminder(reminder);
+                        }
+                    }
+                    console.log(`✅ Restored ${this.reminders.size} reminders from Supabase; active: ${this.activeReminders.size}`);
+                    return;
+                }
+                // Fall through to file if Supabase returned null
+            }
+
+            // File backend or fallback
             if (fs.existsSync(this.storagePath)) {
                 const data = fs.readFileSync(this.storagePath, 'utf8');
                 const savedReminders = JSON.parse(data);
-
-                // Restore reminders map
-                const now = Date.now();
-                this.reminders = new Map();
-                this.activeReminders = new Map();
-                this.reminderTimers = new Map();
-                this.reminderExecuting = new Map();
-
                 for (const reminderId of Object.keys(savedReminders)) {
                     const r = savedReminders[reminderId];
-                    // Validate minimal fields
                     if (!r || !r.userId || !r.keyword) continue;
-
-                    // Rehydrate date fields
                     if (r.firstDetectedAt) r.firstDetectedAt = new Date(r.firstDetectedAt);
                     if (r.nextReminderAt) r.nextReminderAt = new Date(r.nextReminderAt);
-
-                    // Keep all states for /ok summary (active/cancelled/completed)
                     this.reminders.set(reminderId, r);
-
-                    // Rebuild active mapping for active reminders (last one wins per user)
                     if (r.status === 'active') {
                         this.activeReminders.set(r.userId.toString(), reminderId);
-
-                        // Catch-up scheduling: if overdue, schedule a near-future reminder once
                         const nextAt = r.nextReminderAt ? r.nextReminderAt.getTime() : (now + 60000);
                         if (nextAt <= now) {
-                            // Nudge to configurable delay from now to avoid spamming immediate burst
                             r.nextReminderAt = new Date(now + this.catchupDelayMs);
                         }
                     }
                 }
-
-                // Schedule timers for active reminders only
-                for (const [rid, reminder] of this.reminders) {
-                    if (reminder.status === 'active') {
-                        this.scheduleNextReminder(reminder);
-                    }
+                for (const [, reminder] of this.reminders) {
+                    if (reminder.status === 'active') this.scheduleNextReminder(reminder);
                 }
-
                 console.log(`✅ Restored ${this.reminders.size} reminders from disk; active: ${this.activeReminders.size}`);
-                return;
             }
         } catch (error) {
             logError(error, { context: 'load_reminders' });
@@ -82,20 +114,24 @@ class ReminderManager extends EventEmitter {
     /**
      * Save active reminders to file
      */
-    saveReminders() {
+    async saveReminders() {
         try {
+            if (this.backend === 'supabase') {
+                // Upsert all reminders
+                for (const [, reminder] of this.reminders) {
+                    await this.supabase.remindersUpsert(reminder);
+                }
+                return;
+            }
+            // File backend
             const remindersObj = {};
             for (const [reminderId, reminder] of this.reminders) {
-                // Store by reminderId (the actual key)
                 remindersObj[reminderId] = reminder;
             }
-            
-            // Ensure directory exists
             const dir = path.dirname(this.storagePath);
             if (!fs.existsSync(dir)) {
                 fs.mkdirSync(dir, { recursive: true });
             }
-            
             fs.writeFileSync(this.storagePath, JSON.stringify(remindersObj, null, 2));
         } catch (error) {
             logError(error, { context: 'save_reminders' });
@@ -188,6 +224,9 @@ class ReminderManager extends EventEmitter {
         this.reminders.set(reminderId, reminder);
         this.activeReminders.set(userIdStr, reminderId); // Fast user lookup (use string key for consistency)
         this.saveReminders();
+        if (this.backend === 'supabase') {
+            this.supabase.remindersUpsert(reminder);
+        }
 
         console.log(`⏰ Added reminder for user ${userId} - keyword: "${keyword}"`);
         console.log(`🔍 About to call scheduleNextReminder for ${reminderId}`);
@@ -256,6 +295,12 @@ class ReminderManager extends EventEmitter {
                     currentReminder.status = 'completed';
                     currentReminder.completedAt = new Date();
                     this.saveReminders();
+                    if (this.backend === 'supabase') {
+                        await this.supabase.remindersUpdateStatus(currentReminder.reminderId, 'completed', {
+                            reminder_count: currentReminder.reminderCount,
+                            next_reminder_at: null
+                        });
+                    }
                     this.removeReminderByUserId(currentReminder.userId);
                     return;
                 }
@@ -269,6 +314,9 @@ class ReminderManager extends EventEmitter {
                     if (nextInterval) {
                         currentReminder.nextReminderAt = new Date(Date.now() + nextInterval);
                         this.saveReminders();
+                        if (this.backend === 'supabase') {
+                            await this.supabase.remindersUpsert(currentReminder);
+                        }
                         this.scheduleNextReminder(currentReminder);
                     }
                 }
@@ -462,10 +510,13 @@ class ReminderManager extends EventEmitter {
             }
         }
         
-        // Delete all acknowledged reminders from Map
+        // Delete all acknowledged reminders from Map (and Supabase if enabled)
         let deletedCount = 0;
         for (const reminderIdToDelete of acknowledgedReminderIdsToDelete) {
             this.reminders.delete(reminderIdToDelete);
+            if (this.backend === 'supabase') {
+                try { await this.supabase.remindersDelete(reminderIdToDelete); } catch (e) {}
+            }
             
             // Also remove from activeReminders if it's the current active reminder
             if (reminderIdToDelete === reminderId) {
@@ -478,7 +529,7 @@ class ReminderManager extends EventEmitter {
         
         // Save changes (reminders deleted from memory)
         if (deletedCount > 0 || activeKeywords.length > 0 || cancelledKeywords.length > 0 || completedKeywords.length > 0) {
-            this.saveReminders();
+            await this.saveReminders();
         }
         
         // Update lastOkAt timestamp
@@ -716,7 +767,7 @@ class ReminderManager extends EventEmitter {
     }
 
     // Admin: reset all reminders and clear storage
-    resetAllReminders() {
+    async resetAllReminders() {
         // Cancel timers
         for (const [, timerId] of this.reminderTimers) {
             clearTimeout(timerId);
@@ -734,6 +785,15 @@ class ReminderManager extends EventEmitter {
             console.log('🗑️ All reminders reset and storage cleared');
         } catch (e) {
             console.warn('⚠️ Failed to delete reminders storage file:', e.message);
+        }
+
+        // Clear Supabase table
+        try {
+            if (this.backend === 'supabase') {
+                await this.supabase.remindersClearAll();
+            }
+        } catch (e) {
+            console.warn('⚠️ Failed to clear Supabase reminders:', e.message);
         }
     }
 }
