@@ -779,27 +779,28 @@ class KeywordDetector {
 
         // Check personal keywords for ALL authorized users (same logic as global keywords, but sent only to owner)
         // Personal keywords work in ALL groups and private chats, just like global keywords
+        // NOTE: Personal keywords no longer require group subscription - they work everywhere
         const authorizedUsers = this.getAuthorizedUsers();
         for (const userId of authorizedUsers) {
             const personalKeywords = await this.getPersonalKeywords(userId);
-            for (const keyword of personalKeywords) {
-                const searchKeyword = this.caseSensitive ? keyword : keyword.toLowerCase();
-                
-                if (this.exactMatch) {
-                    if (this.isLatinScript(searchKeyword)) {
-                        const regex = new RegExp(`\\b${this.escapeRegex(searchKeyword)}\\b`, this.caseSensitive ? 'g' : 'gi');
-                        if (regex.test(searchText)) {
-                            detectedKeywords.push({ keyword, type: 'personal', userId, matchType: 'exact' });
+                for (const keyword of personalKeywords) {
+                    const searchKeyword = this.caseSensitive ? keyword : keyword.toLowerCase();
+                    
+                    if (this.exactMatch) {
+                        if (this.isLatinScript(searchKeyword)) {
+                            const regex = new RegExp(`\\b${this.escapeRegex(searchKeyword)}\\b`, this.caseSensitive ? 'g' : 'gi');
+                            if (regex.test(searchText)) {
+                                detectedKeywords.push({ keyword, type: 'personal', userId, matchType: 'exact' });
+                            }
+                        } else {
+                            const regex = new RegExp(`(^|[\\s\\p{P}])${this.escapeRegex(searchKeyword)}([\\s\\p{P}]|$)`, this.caseSensitive ? 'gu' : 'giu');
+                            if (regex.test(searchText)) {
+                                detectedKeywords.push({ keyword, type: 'personal', userId, matchType: 'exact' });
+                            }
                         }
                     } else {
-                        const regex = new RegExp(`(^|[\\s\\p{P}])${this.escapeRegex(searchKeyword)}([\\s\\p{P}]|$)`, this.caseSensitive ? 'gu' : 'giu');
-                        if (regex.test(searchText)) {
+                        if (searchText.includes(searchKeyword)) {
                             detectedKeywords.push({ keyword, type: 'personal', userId, matchType: 'exact' });
-                        }
-                    }
-                } else {
-                    if (searchText.includes(searchKeyword)) {
-                        detectedKeywords.push({ keyword, type: 'personal', userId, matchType: 'exact' });
                     }
                 }
             }
@@ -2453,24 +2454,25 @@ class KeywordDetector {
 
         // Check personal keywords for ALL authorized users (same logic as global keywords, but sent only to owner)
         // Personal keywords work in ALL groups and private chats, just like global keywords
+        // NOTE: Personal keywords no longer require group subscription - they work everywhere
         const authorizedUsers = this.getAuthorizedUsers();
         for (const userId of authorizedUsers) {
             const personalKeywords = await this.getPersonalKeywords(userId);
-            for (const keyword of personalKeywords) {
-                // Skip keyboard conversion for personal keywords too
-                const normalizedKeyword = this.normalizeText(keyword, true);
-                
-                for (const token of tokens) {
-                    // Exact match first
-                    if (token === normalizedKeyword) {
-                        detectedKeywords.push({ keyword, type: 'personal', userId, matchType: 'exact' });
-                        break;
-                    }
+                for (const keyword of personalKeywords) {
+                    // Skip keyboard conversion for personal keywords too
+                    const normalizedKeyword = this.normalizeText(keyword, true);
                     
-                    // Fuzzy match
-                    if (this.fuzzyMatch(token, normalizedKeyword)) {
-                        detectedKeywords.push({ keyword, type: 'personal', userId, matchType: 'fuzzy', token });
-                        break;
+                    for (const token of tokens) {
+                        // Exact match first
+                        if (token === normalizedKeyword) {
+                            detectedKeywords.push({ keyword, type: 'personal', userId, matchType: 'exact' });
+                            break;
+                        }
+                        
+                        // Fuzzy match
+                        if (this.fuzzyMatch(token, normalizedKeyword)) {
+                            detectedKeywords.push({ keyword, type: 'personal', userId, matchType: 'fuzzy', token });
+                            break;
                     }
                 }
             }
@@ -2577,8 +2579,26 @@ class KeywordDetector {
         }
     }
 
-    getGroupSubscribers(groupName) {
+    async getGroupSubscribers(groupName) {
         try {
+            // Try Supabase first if enabled
+            if (this.supabase.isEnabled()) {
+                try {
+                    const allSubscriptions = await this.supabase.getGroupSubscriptions();
+                    if (allSubscriptions && allSubscriptions[groupName]) {
+                        console.log(`📊 Loaded ${allSubscriptions[groupName].length} subscribers for group "${groupName}" from Supabase`);
+                        return allSubscriptions[groupName];
+                    } else if (allSubscriptions !== null) {
+                        // Supabase returned data but group has no subscribers
+                        return [];
+                    }
+                    // If allSubscriptions is null, fall through to file-based fallback
+                } catch (error) {
+                    console.warn(`⚠️ Failed to load group subscribers from Supabase for group "${groupName}", falling back to file:`, error.message);
+                }
+            }
+            
+            // Fallback to file-based config
             const fs = require('fs');
             const path = require('path');
             const subscriptionsPath = path.join(__dirname, '../config/group-subscriptions.json');

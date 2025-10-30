@@ -370,7 +370,7 @@ class ReminderManager extends EventEmitter {
                 cancelledKeywords.push(`"${r.keyword}"`);
             }
         });
-        
+                
         // Process COMPLETED reminders - convert to acknowledged
         completedReminders.forEach(r => {
             console.log(`✅ User ${userId} acknowledging COMPLETED reminder ${r.reminderId} - marking as acknowledged`);
