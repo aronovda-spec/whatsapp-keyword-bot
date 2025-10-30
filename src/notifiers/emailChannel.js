@@ -52,6 +52,15 @@ class EmailChannel {
                 maxMessages: 100
             });
 
+            // Diagnostic: verify SMTP connectivity/auth
+            this.transporter.verify((err, success) => {
+                if (err) {
+                    console.error('📧 SMTP verify failed:', err.message);
+                } else {
+                    console.log('📧 SMTP verify: OK');
+                }
+            });
+
             // Parse recipients (comma-separated)
             this.recipients = recipients.split(',').map(email => email.trim());
 
