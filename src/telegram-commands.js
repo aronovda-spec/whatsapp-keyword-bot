@@ -1544,6 +1544,87 @@ class TelegramCommandHandler {
                 console.error('❌ Polling error:', error.message);
             }
         });
+
+        // /reminders command - show active reminders
+        this.bot.onText(/\/reminders/, async (msg) => {
+            const chatId = msg.chat.id;
+            const userId = msg.from.id;
+            
+            console.log(`📨 Received /reminders from user ${userId} (chatId: ${chatId})`);
+            
+            try {
+                if (!this.authorization.isAuthorized(userId)) {
+                    await this.bot.sendMessage(chatId, '❌ You are not authorized to use this bot.');
+                    return;
+                }
+
+                if (this.isDuplicateCommand(userId, 'reminders')) {
+                    console.log(`⚠️ Duplicate /reminders command from user ${userId} - ignoring`);
+                    return;
+                }
+
+                const reminderManager = this.getReminderManager();
+                if (!reminderManager) {
+                    console.error(`❌ ReminderManager is null for user ${userId}`);
+                    await this.bot.sendMessage(chatId, '❌ Reminder system is not available. Please contact an administrator.');
+                    return;
+                }
+
+                try {
+                    const reminder = reminderManager.getReminders(userId);
+                    if (reminder) {
+                        const timeElapsed = this.calculateTimeElapsed(reminder.firstDetectedAt);
+                        const response = `⏰ Active Reminder\n\n` +
+                            `Keyword: ${reminder.keyword}\n` +
+                            `From: ${reminder.sender}\n` +
+                            `Group: ${reminder.group}\n` +
+                            `Detected: ${timeElapsed}\n` +
+                            `Reminders sent: ${reminder.reminderCount}/4\n\n` +
+                            `Message:\n"${reminder.message.substring(0, 100)}${reminder.message.length > 100 ? '...' : ''}"\n\n` +
+                            `Reply /ok to acknowledge and stop.`;
+                        await this.bot.sendMessage(chatId, response);
+                        console.log(`✅ Successfully sent reminder info to user ${userId}`);
+                    } else {
+                        await this.bot.sendMessage(chatId, 'ℹ️ No active reminders.');
+                    }
+                } catch (error) {
+                    console.error(`❌ Error getting reminders for user ${userId}:`, error.message);
+                    console.error('Stack trace:', error.stack);
+                    await this.bot.sendMessage(chatId, '❌ Error retrieving reminder information. Check bot logs.');
+                }
+            } catch (error) {
+                console.error(`❌ Unexpected error in /reminders command handler for user ${userId}:`, error.message);
+                console.error('Stack trace:', error.stack);
+                try {
+                    await this.bot.sendMessage(chatId, '❌ An unexpected error occurred. Please try again or contact an administrator.');
+                } catch (sendError) {
+                    console.error(`❌ Failed to send error message to user ${userId}:`, sendError.message);
+                }
+            }
+        });
+
+        // Admin: reset all reminders
+        this.bot.onText(/\/resetall/, async (msg) => {
+            const chatId = msg.chat.id;
+            const userId = msg.from.id;
+
+            if (!this.authorization.isAdmin(userId)) {
+                await this.bot.sendMessage(chatId, '❌ Admin access required.');
+                return;
+            }
+
+            try {
+                const reminderManager = this.getReminderManager();
+                if (!reminderManager) {
+                    await this.bot.sendMessage(chatId, '❌ Reminder system is not available.');
+                    return;
+                }
+                reminderManager.resetAllReminders();
+                await this.bot.sendMessage(chatId, '🗑️ All reminders have been reset and storage cleared.');
+            } catch (error) {
+                await this.bot.sendMessage(chatId, '❌ Failed to reset reminders. Check logs.');
+            }
+        });
     }
 
     // Load discovered groups from file
