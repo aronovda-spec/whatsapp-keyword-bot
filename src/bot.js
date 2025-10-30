@@ -528,11 +528,11 @@ class WhatsAppKeywordBot {
             
             setTimeout(() => {
                 // Send daily status update
-                const connectedPhones = Array.from(this.connections.entries())
-                    .filter(([phone, connection]) => connection.getConnectionStatus())
-                    .map(([phone]) => phone);
-                
-                if (connectedPhones.length > 0 && this.notifier.isEnabled()) {
+            const connectedPhones = Array.from(this.connections.entries())
+                .filter(([phone, connection]) => connection.getConnectionStatus())
+                .map(([phone]) => phone);
+            
+            if (connectedPhones.length > 0 && this.notifier.isEnabled()) {
                     const uptimeMinutes = Math.floor((Date.now() - this.stats.startTime.getTime()) / 1000 / 60);
                     const uptimeHours = Math.floor(uptimeMinutes / 60);
                     const uptimeDays = Math.floor(uptimeHours / 24);

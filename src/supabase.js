@@ -308,6 +308,24 @@ class SupabaseManager {
         }
     }
 
+    async removeGroupSubscription(userId, groupName) {
+        if (!this.enabled) return false;
+
+        try {
+            const { error } = await this.client
+                .from('group_subscriptions')
+                .delete()
+                .eq('user_id', userId.toString())
+                .eq('group_name', groupName);
+
+            if (error) throw error;
+            return true;
+        } catch (error) {
+            console.error('Supabase removeGroupSubscription error:', error.message);
+            return false;
+        }
+    }
+
     // User Preferences
     async getUserPreferences(userId) {
         if (!this.enabled) return null;

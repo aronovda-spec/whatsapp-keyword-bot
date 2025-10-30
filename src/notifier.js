@@ -419,7 +419,7 @@ ${details ? `📝 <b>Details:</b>\n${details}` : ''}`;
                     console.log(`📤 Sending status update to ${adminUsers.length} admin(s) only`);
                 }
             } else {
-                // Send to all configured chat IDs (primary notification method)
+            // Send to all configured chat IDs (primary notification method)
                 recipients = this.chatIds;
             }
 
