@@ -259,7 +259,7 @@ class ReminderManager extends EventEmitter {
         console.log(`⏰ Scheduling reminder for user ${reminder.userId}, keyword "${reminder.keyword}", delay: ${delay}ms (${Math.round(delay/1000)}s)`);
 
         // Schedule new timer and store its ID  
-        const timerId = setTimeout(() => {
+        const timerId = setTimeout(async () => {
             // Prevent race condition - check if we're already executing
             if (this.reminderExecuting.get(reminder.reminderId)) {
                 console.log(`⏰ Reminder already executing for ${reminder.reminderId}, skipping`);
@@ -313,7 +313,7 @@ class ReminderManager extends EventEmitter {
                     const nextInterval = currentReminder.reminderIntervals[currentReminder.reminderCount - 1];
                     if (nextInterval) {
                         currentReminder.nextReminderAt = new Date(Date.now() + nextInterval);
-                        this.saveReminders();
+                        await this.saveReminders();
                         if (this.backend === 'supabase') {
                             await this.supabase.remindersUpsert(currentReminder);
                         }
@@ -345,7 +345,7 @@ class ReminderManager extends EventEmitter {
     /**
      * Acknowledge a reminder (stop all reminders for user)
      */
-    acknowledgeReminder(userId) {
+    async acknowledgeReminder(userId) {
         console.log(`🔍 acknowledgeReminder START for user ${userId} (type: ${typeof userId})`);
         console.log(`🔍 activeReminders Map size: ${this.activeReminders.size}`);
         console.log(`🔍 activeReminders keys:`, Array.from(this.activeReminders.keys()));
