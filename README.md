@@ -98,8 +98,8 @@ A cloud-based bot that monitors WhatsApp group messages for specific keywords an
 - `/reject <user_id>` - Reject user
 - `/pending` - Show pending requests
 - `/remove <user_id>` - Remove user
-- `/setemail <user_id> <email>` - Set user email for notifications
-- `/removeemail <user_id>` - Remove user email from notifications
+- `/setemail <user_id> <email>` - Add user email (supports multiple addresses)
+- `/removeemail <user_id> <email>` - Remove specific user email
 - `/addkeyword <word>` - Add global keyword
 - `/removekeyword <word>` - Remove global keyword
 - `/restart` - Restart bot (preserves all data)
@@ -128,10 +128,18 @@ EMAIL_SMTP_PORT=587
 EMAIL_SMTP_USER=your_email@gmail.com
 EMAIL_SMTP_PASS=your_app_password
 EMAIL_TO=user1@mail.com,user2@mail.com
+# Optional: strict personal email routing
+# PERSONAL_EMAIL_FALLBACK_ENABLED=false  # default: personal alerts email only to user_emails
 
 PORT=3000
 NODE_ENV=production
 ```
+
+### Supabase Tables (emails)
+- `users.email`: legacy single email (still read as fallback)
+- `user_emails`: multiple emails per user for personal alerts
+  - Columns: `id uuid`, `user_id text`, `email text`, `updated_at timestamptz`
+  - Unique index on (`user_id`, `email`)
 
 ### Keywords (config/keywords.json)
 ```json
