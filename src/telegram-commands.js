@@ -283,7 +283,8 @@ class TelegramCommandHandler {
                     '/admin - Admin panel\n' +
                     '/users - List all users with roles\n' +
                     '/admins - Show admin users only\n' +
-                    '/stats - Bot statistics\n\n' +
+                    '/stats - Bot statistics\n' +
+                    '/antiban - Show anti-ban status (Admin only)\n\n' +
                     '👑 Admin Only:\n' +
                     '/approve <user_id> - Approve user\n' +
                     '/reject <user_id> - Reject user\n' +
@@ -291,7 +292,8 @@ class TelegramCommandHandler {
                     '/remove <user_id> - Remove user (with confirmation)\n' +
                     '/setemail <user_id> <email> - Set user email\n' +
                     '/removeemail <user_id> - Remove user email\n' +
-                    '/makeadmin <user_id> - Promote user to admin';
+                    '/makeadmin <user_id> - Promote user to admin\n' +
+                    '/resetall - Reset all reminders (admin)';
             await this.bot.sendMessage(chatId, helpText);
         });
 
@@ -1623,6 +1625,48 @@ class TelegramCommandHandler {
                 await this.bot.sendMessage(chatId, '🗑️ All reminders have been reset and storage cleared.');
             } catch (error) {
                 await this.bot.sendMessage(chatId, '❌ Failed to reset reminders. Check logs.');
+            }
+        });
+
+        // Admin: anti-ban status
+        this.bot.onText(/\/antiban/, async (msg) => {
+            const chatId = msg.chat.id;
+            const userId = msg.from.id;
+
+            if (!this.authorization.isAdmin(userId)) {
+                await this.bot.sendMessage(chatId, '❌ Admin access required.');
+                return;
+            }
+
+            try {
+                const WhatsAppAntiBan = require('./anti-ban');
+                const antiBan = new WhatsAppAntiBan();
+                const checklist = antiBan.getSafetyChecklist();
+                const nonActive = antiBan.isNonActiveHours();
+
+                let text = '🛡️ <b>Anti-Ban Status</b>\n\n';
+                text += '📋 <b>Safety Checklist</b>\n';
+                text += `• Dedicated phone: ${checklist.phoneNumber.dedicated ? '✅' : '❌'}\n`;
+                text += `• Virtual number: ${checklist.phoneNumber.virtual ? '✅' : '❌'}\n`;
+                text += `• Not personal: ${checklist.phoneNumber.notPersonal ? '✅' : '❌'}\n`;
+                text += `• Verified: ${checklist.phoneNumber.verified ? '✅' : '❌'}\n\n`;
+                text += `• No spam: ${checklist.behavior.noSpam ? '✅' : '❌'}\n`;
+                text += `• Human-like delays: ${checklist.behavior.humanLikeDelays ? '✅' : '❌'}\n`;
+                text += `• Rate limited: ${checklist.behavior.rateLimited ? '✅' : '❌'}\n`;
+                text += `• No automated replies: ${checklist.behavior.noAutomatedReplies ? '✅' : '❌'}\n\n`;
+                text += `• Read-only monitoring: ${checklist.monitoring.readOnly ? '✅' : '❌'}\n`;
+                text += `• No message sending: ${checklist.monitoring.noMessageSending ? '✅' : '❌'}\n\n`;
+                text += '⏱️ <b>Non-Active Hours</b>\n';
+                if (nonActive.isActive) {
+                    text += '• Status: Active hours\n';
+                } else {
+                    text += `• Status: Sleeping (${nonActive.schedule.name})\n`;
+                    text += `• Behavior: ${nonActive.behavior.toUpperCase()}\n`;
+                }
+
+                await this.bot.sendMessage(chatId, text, { parse_mode: 'HTML' });
+            } catch (error) {
+                await this.bot.sendMessage(chatId, '❌ Failed to load anti-ban status.');
             }
         });
     }

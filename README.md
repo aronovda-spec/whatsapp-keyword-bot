@@ -91,6 +91,7 @@ A cloud-based bot that monitors WhatsApp group messages for specific keywords an
 - `/admins` - Show admin users only
 - `/keywords` - Show keywords
 - `/stats` - Bot statistics
+- `/antiban` - Show anti-ban status (Admin only)
 
 ### 👑 Admin Only
 - `/approve <user_id>` - Approve user
@@ -102,6 +103,7 @@ A cloud-based bot that monitors WhatsApp group messages for specific keywords an
 - `/addkeyword <word>` - Add global keyword
 - `/removekeyword <word>` - Remove global keyword
 - `/restart` - Restart bot (preserves all data)
+- `/resetall` - Reset all reminders (clears active-reminders storage)
 
 ### 🔑 Keyword Management
 - `/keywords` - Show global keywords
