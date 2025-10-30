@@ -29,6 +29,7 @@ class EmailChannel {
             const user = process.env.EMAIL_SMTP_USER;
             const pass = process.env.EMAIL_SMTP_PASS;
             const recipients = process.env.EMAIL_TO;
+            const fromAddress = process.env.EMAIL_FROM || user; // Prefer explicit FROM
 
             if (!host || !user || !pass || !recipients) {
                 console.log('📧 Email credentials not found. Email notifications disabled.');
@@ -63,6 +64,9 @@ class EmailChannel {
 
             // Parse recipients (comma-separated)
             this.recipients = recipients.split(',').map(email => email.trim());
+
+            // Store from address for later use
+            this.fromAddress = fromAddress;
 
             // Load per-user email mapping (optional)
             this.loadUserEmailMap();
@@ -350,7 +354,7 @@ Message ID: ${messageId || 'N/A'}`;
             try {
                 console.log(`📧 Attempting to send email (attempt ${attempt}/${this.retryAttempts}) to ${recipient}`);
                 await this.transporter.sendMail({
-                    from: process.env.EMAIL_SMTP_USER,
+                    from: this.fromAddress,
                     to: recipient,
                     subject: emailContent.subject,
                     html: emailContent.html,
