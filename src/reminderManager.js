@@ -17,6 +17,7 @@ class ReminderManager extends EventEmitter {
         this.storagePath = path.join(__dirname, '../config/active-reminders.json');
         this.maxReminders = 7; // 0 min, 1 min, 2 min, 5 min, 15 min, 60 min, 90 min
         this.weeklyResetTimer = null; // Timer for weekly acknowledged reminders reset
+        this.catchupDelayMs = parseInt(process.env.REMINDER_CATCHUP_DELAY_MS || '30000'); // default 30s
         this.loadReminders();
         this.scheduleWeeklyReset(); // Start weekly reset schedule
     }
@@ -56,8 +57,8 @@ class ReminderManager extends EventEmitter {
                         // Catch-up scheduling: if overdue, schedule a near-future reminder once
                         const nextAt = r.nextReminderAt ? r.nextReminderAt.getTime() : (now + 60000);
                         if (nextAt <= now) {
-                            // Nudge to 10s from now to avoid spamming immediate burst
-                            r.nextReminderAt = new Date(now + 10000);
+                            // Nudge to configurable delay from now to avoid spamming immediate burst
+                            r.nextReminderAt = new Date(now + this.catchupDelayMs);
                         }
                     }
                 }
