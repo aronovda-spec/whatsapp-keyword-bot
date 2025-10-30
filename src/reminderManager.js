@@ -29,16 +29,48 @@ class ReminderManager extends EventEmitter {
             if (fs.existsSync(this.storagePath)) {
                 const data = fs.readFileSync(this.storagePath, 'utf8');
                 const savedReminders = JSON.parse(data);
-                
-                // Note: We don't restore old reminder timers on startup
-                // because the setTimeout IDs are lost after restart
-                // Users will need to re-trigger keyword alerts for new reminders
-                console.log(`📋 Found saved reminders but not restoring (timers lost on restart)`);
-                console.log(`📋 To prevent old reminders from spamming, clearing saved reminders...`);
-                
-                // Clear old reminders file to prevent confusion
-                fs.unlinkSync(this.storagePath);
-                console.log(`🗑️ Cleared old reminders file`);
+
+                // Restore reminders map
+                const now = Date.now();
+                this.reminders = new Map();
+                this.activeReminders = new Map();
+                this.reminderTimers = new Map();
+                this.reminderExecuting = new Map();
+
+                for (const reminderId of Object.keys(savedReminders)) {
+                    const r = savedReminders[reminderId];
+                    // Validate minimal fields
+                    if (!r || !r.userId || !r.keyword) continue;
+
+                    // Rehydrate date fields
+                    if (r.firstDetectedAt) r.firstDetectedAt = new Date(r.firstDetectedAt);
+                    if (r.nextReminderAt) r.nextReminderAt = new Date(r.nextReminderAt);
+
+                    // Keep all states for /ok summary (active/cancelled/completed)
+                    this.reminders.set(reminderId, r);
+
+                    // Rebuild active mapping for active reminders (last one wins per user)
+                    if (r.status === 'active') {
+                        this.activeReminders.set(r.userId.toString(), reminderId);
+
+                        // Catch-up scheduling: if overdue, schedule a near-future reminder once
+                        const nextAt = r.nextReminderAt ? r.nextReminderAt.getTime() : (now + 60000);
+                        if (nextAt <= now) {
+                            // Nudge to 10s from now to avoid spamming immediate burst
+                            r.nextReminderAt = new Date(now + 10000);
+                        }
+                    }
+                }
+
+                // Schedule timers for active reminders only
+                for (const [rid, reminder] of this.reminders) {
+                    if (reminder.status === 'active') {
+                        this.scheduleNextReminder(reminder);
+                    }
+                }
+
+                console.log(`✅ Restored ${this.reminders.size} reminders from disk; active: ${this.activeReminders.size}`);
+                return;
             }
         } catch (error) {
             logError(error, { context: 'load_reminders' });
@@ -679,6 +711,28 @@ class ReminderManager extends EventEmitter {
             clearTimeout(this.weeklyResetTimer);
             this.weeklyResetTimer = null;
             console.log(`📅 Weekly reset schedule stopped`);
+        }
+    }
+
+    // Admin: reset all reminders and clear storage
+    resetAllReminders() {
+        // Cancel timers
+        for (const [, timerId] of this.reminderTimers) {
+            clearTimeout(timerId);
+        }
+        this.reminderTimers.clear();
+        this.reminderExecuting.clear();
+        this.activeReminders.clear();
+        this.reminders.clear();
+
+        // Delete storage file
+        try {
+            if (fs.existsSync(this.storagePath)) {
+                fs.unlinkSync(this.storagePath);
+            }
+            console.log('🗑️ All reminders reset and storage cleared');
+        } catch (e) {
+            console.warn('⚠️ Failed to delete reminders storage file:', e.message);
         }
     }
 }
