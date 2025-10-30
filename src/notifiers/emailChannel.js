@@ -204,6 +204,7 @@ class EmailChannel {
 
         // If per-user email mapping exists, use it
         const userEmails = await this.getEmailForUser(targetUserId);
+        const fallbackEnabled = process.env.PERSONAL_EMAIL_FALLBACK_ENABLED === 'true';
         
         if (userEmails && userEmails.length > 0) {
             // Send to all user's emails
@@ -218,8 +219,12 @@ class EmailChannel {
             
             return successCount > 0;
         } else {
-            // Fallback to all recipients if no per-user mapping
-            return await this.sendKeywordAlert(keyword, message, sender, group, messageId, phoneNumber, matchType, matchedToken, attachment);
+            if (fallbackEnabled) {
+                console.log('📧 No personal email on file; falling back to EMAIL_TO for personal alert');
+                return await this.sendKeywordAlert(keyword, message, sender, group, messageId, phoneNumber, matchType, matchedToken, attachment);
+            }
+            console.log(`📧 Skipping personal email: no email configured for user ${targetUserId}`);
+            return false;
         }
     }
 
