@@ -290,8 +290,8 @@ class TelegramCommandHandler {
                     '/reject <user_id> - Reject user\n' +
                     '/pending - Show pending requests\n' +
                     '/remove <user_id> - Remove user (with confirmation)\n' +
-                    '/setemail <user_id> <email> - Set user email\n' +
-                    '/removeemail <user_id> - Remove user email\n' +
+                    '/setemail <user_id> <email> - Add user email (supports multiple)\n' +
+                    '/removeemail <user_id> <email> - Remove specific user email\n' +
                     '/makeadmin <user_id> - Promote user to admin\n' +
                     '/resetall - Reset all reminders (admin)';
             await this.bot.sendMessage(chatId, helpText);
@@ -1049,7 +1049,7 @@ class TelegramCommandHandler {
             }
         });
 
-        // Set email command - Admin only
+        // Set email command - Admin only (adds email; supports multiple)
         this.bot.onText(/\/setemail (.+) (.+)/, (msg, match) => {
             const chatId = msg.chat.id;
             const adminId = msg.from.id;
@@ -1061,53 +1061,49 @@ class TelegramCommandHandler {
                 return;
             }
             
-            console.log(`📧 Admin ${adminId} setting email for user ${userId}: ${email}`);
+            console.log(`📧 Admin ${adminId} adding email for user ${userId}: ${email}`);
             
-            // Update email in Supabase
-            if (this.authorization.supabase && this.authorization.supabase.isEnabled()) {
-                this.authorization.supabase.client.from('users')
-                    .update({ 
-                        email: email,
-                        updated_at: new Date().toISOString()
-                    })
-                    .eq('user_id', userId)
-                    .then(({ error }) => {
-                        if (error) throw error;
-                        this.bot.sendMessage(chatId, `✅ Email set for user ${userId}: ${email}`);
+            // Add email in Supabase (user_emails table)
+            if (this.keywordDetector && this.keywordDetector.supabase && this.keywordDetector.supabase.isEnabled()) {
+                this.keywordDetector.supabase.addUserEmail(userId, email)
+                    .then(success => {
+                        if (success) {
+                            this.bot.sendMessage(chatId, `✅ Email added for user ${userId}: ${email}`);
+                        } else {
+                            this.bot.sendMessage(chatId, `❌ Failed to add email for user ${userId}`);
+                        }
                     })
                     .catch(err => {
-                        console.error('Error setting email:', err);
-                        this.bot.sendMessage(chatId, `❌ Failed to set email: ${err.message}`);
+                        console.error('Error adding email:', err);
+                        this.bot.sendMessage(chatId, `❌ Failed to add email: ${err.message}`);
                     });
             } else {
                 this.bot.sendMessage(chatId, '❌ Supabase not configured. Cannot update email.');
             }
         });
 
-        // Remove email command - Admin only
-        this.bot.onText(/\/removeemail (.+)/, (msg, match) => {
+        // Remove email command - Admin only (removes specific address)
+        this.bot.onText(/\/removeemail (.+) (.+)/, (msg, match) => {
             const chatId = msg.chat.id;
             const adminId = msg.from.id;
             const userId = match[1];
+            const email = match[2];
             
             if (!this.authorization.isAdmin(adminId)) {
                 this.bot.sendMessage(chatId, '❌ Admin access required.');
                 return;
             }
             
-            console.log(`📧 Admin ${adminId} removing email for user ${userId}`);
+            console.log(`📧 Admin ${adminId} removing email for user ${userId}: ${email}`);
             
-            // Update email in Supabase to null
-            if (this.authorization.supabase && this.authorization.supabase.isEnabled()) {
-                this.authorization.supabase.client.from('users')
-                    .update({ 
-                        email: null,
-                        updated_at: new Date().toISOString()
-                    })
-                    .eq('user_id', userId)
-                    .then(({ error }) => {
-                        if (error) throw error;
-                        this.bot.sendMessage(chatId, `✅ Email removed for user ${userId}`);
+            if (this.keywordDetector && this.keywordDetector.supabase && this.keywordDetector.supabase.isEnabled()) {
+                this.keywordDetector.supabase.removeUserEmail(userId, email)
+                    .then(success => {
+                        if (success) {
+                            this.bot.sendMessage(chatId, `✅ Email removed for user ${userId}: ${email}`);
+                        } else {
+                            this.bot.sendMessage(chatId, `❌ Failed to remove email for user ${userId}`);
+                        }
                     })
                     .catch(err => {
                         console.error('Error removing email:', err);
@@ -1832,7 +1828,7 @@ class TelegramCommandHandler {
                 // Acknowledge reminder with error handling
                 let result;
                 try {
-                    result = reminderManager.acknowledgeReminder(userId);
+                    result = await reminderManager.acknowledgeReminder(userId);
                     console.log(`✅ Successfully acknowledged reminders for user ${userId}`);
                 } catch (error) {
                     console.error(`❌ Error acknowledging reminder for user ${userId}:`, error.message);
