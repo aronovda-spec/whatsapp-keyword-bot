@@ -90,15 +90,15 @@ class WhatsAppKeywordBot {
             connection.on('connected', () => {
                 console.log(`✅ Phone ${phoneNumber} connected successfully!`);
                 logBotEvent('phone_connected', { phoneNumber, description });
-                // Send status update to all users (not just admins) - they need to know if bot is working
-                this.notifier.sendBotStatus('Connected', `Phone ${phoneNumber} is now connected and monitoring WhatsApp messages`);
+                // Send status update to admins only during development stage
+                this.notifier.sendBotStatus('Connected', `Phone ${phoneNumber} is now connected and monitoring WhatsApp messages`, true);
             });
 
             connection.on('disconnected', (disconnectInfo) => {
                 console.log(`❌ Phone ${phoneNumber} disconnected`);
                 logBotEvent('phone_disconnected', { phoneNumber });
                 
-                // Send status update to all users (not just admins) - they need to know if bot is not working
+                // Send status update to admins only during development stage
                 let details = '';
                 if (disconnectInfo) {
                     if (disconnectInfo.isVirtualNumberExpired) {
@@ -112,10 +112,10 @@ class WhatsAppKeywordBot {
                         this.notifier.sendCriticalAlert('Virtual Number Expired', details);
                     } else {
                         details = `Phone: ${phoneNumber}\nDisconnect reason: ${disconnectInfo.reason || 'Unknown'}\nMessage: ${disconnectInfo.message || 'Bot lost connection to WhatsApp'}`;
-                        this.notifier.sendBotStatus('Disconnected', details);
+                        this.notifier.sendBotStatus('Disconnected', details, true);
                     }
                 } else {
-                    this.notifier.sendBotStatus('Disconnected', `Phone ${phoneNumber} lost connection to WhatsApp`);
+                    this.notifier.sendBotStatus('Disconnected', `Phone ${phoneNumber} lost connection to WhatsApp`, true);
                 }
             });
 
@@ -242,7 +242,7 @@ class WhatsAppKeywordBot {
         // Handle WhatsApp connection events
         this.whatsapp.on('connected', () => {
             logBotEvent('bot_started');
-            this.notifier.sendBotStatus('Connected', 'Bot is now monitoring WhatsApp messages');
+            this.notifier.sendBotStatus('Connected', 'Bot is now monitoring WhatsApp messages', true);
         });
 
         this.whatsapp.on('disconnected', (disconnectInfo) => {
@@ -267,10 +267,10 @@ class WhatsAppKeywordBot {
                     this.notifier.sendCriticalAlert('Virtual Number Expired', details);
                 } else {
                     details = `Disconnect reason: ${disconnectInfo.reason || 'Unknown'}`;
-                    this.notifier.sendBotStatus('Disconnected', details);
+                    this.notifier.sendBotStatus('Disconnected', details, true);
                 }
             } else {
-                this.notifier.sendBotStatus('Disconnected', 'Bot lost connection to WhatsApp');
+                this.notifier.sendBotStatus('Disconnected', 'Bot lost connection to WhatsApp', true);
             }
         });
     }
