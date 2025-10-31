@@ -11,7 +11,7 @@ class TelegramAuthorization {
     constructor() {
         this.authorizedUsers = new Set();
         this.adminUsers = new Set();
-        this.pendingApprovals = new Map(); // userId -> timestamp
+        this.pendingApprovals = new Map(); // userId -> {timestamp, username, firstName}
         this.configPath = path.join(__dirname, '../config/telegram-auth.json');
         this.supabase = new SupabaseManager();
         this.loadAuthorizedUsers();
@@ -143,13 +143,26 @@ class TelegramAuthorization {
         return true;
     }
 
-    addPendingApproval(userId) {
-        this.pendingApprovals.set(userId.toString(), Date.now());
+    addPendingApproval(userId, userInfo = {}) {
+        const userIdStr = userId.toString();
+        const timestamp = Date.now();
+        
+        // Store user info along with timestamp
+        this.pendingApprovals.set(userIdStr, {
+            timestamp,
+            username: userInfo.username || null,
+            firstName: userInfo.firstName || null
+        });
+        
         console.log(`⏳ User ${userId} added to pending approvals`);
     }
 
     getPendingApprovals() {
-        return Array.from(this.pendingApprovals.keys());
+        // Return array of objects with userId and userInfo
+        return Array.from(this.pendingApprovals.entries()).map(([userId, info]) => ({
+            userId,
+            ...info
+        }));
     }
 
     approveUser(userId, approvedBy, userName = null) {
