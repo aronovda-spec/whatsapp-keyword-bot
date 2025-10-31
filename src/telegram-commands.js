@@ -415,16 +415,16 @@ class TelegramCommandHandler {
                     const adminEmoji = isAdmin ? '✅' : '👤';
                     const userName = this.authorization.getUserName(user) || 'Unknown';
                     
-                    // Get user emails
+                    // Get user emails from Supabase (same table for all users - admins and regular users)
                     let userEmails = [];
-                    if (this.supabase && this.supabase.isEnabled()) {
+                    if (this.keywordDetector && this.keywordDetector.supabase && this.keywordDetector.supabase.isEnabled()) {
                         try {
-                            const emails = await this.supabase.getUserEmails(user);
+                            const emails = await this.keywordDetector.supabase.getUserEmails(user);
                             if (emails && emails.length > 0) {
                                 userEmails = emails;
                             } else {
                                 // Fallback to legacy single email
-                                const legacyEmail = await this.supabase.getUserEmail(user);
+                                const legacyEmail = await this.keywordDetector.supabase.getUserEmail(user);
                                 if (legacyEmail) {
                                     userEmails = [legacyEmail];
                                 }
@@ -491,16 +491,17 @@ class TelegramCommandHandler {
                     const adminId = adminUsers[index];
                     const adminName = this.authorization.getUserName(adminId) || 'Unknown';
                     
-                    // Get admin emails
+                    // Get admin emails from Supabase (same user_emails table - admins are users too)
+                    // Note: There's no separate "admin email" - admins have emails in user_emails table like all users
                     let adminEmails = [];
-                    if (this.supabase && this.supabase.isEnabled()) {
+                    if (this.keywordDetector && this.keywordDetector.supabase && this.keywordDetector.supabase.isEnabled()) {
                         try {
-                            const emails = await this.supabase.getUserEmails(adminId);
+                            const emails = await this.keywordDetector.supabase.getUserEmails(adminId);
                             if (emails && emails.length > 0) {
                                 adminEmails = emails;
                             } else {
                                 // Fallback to legacy single email
-                                const legacyEmail = await this.supabase.getUserEmail(adminId);
+                                const legacyEmail = await this.keywordDetector.supabase.getUserEmail(adminId);
                                 if (legacyEmail) {
                                     adminEmails = [legacyEmail];
                                 }
