@@ -346,16 +346,16 @@ class TelegramCommandHandler {
             const adminText = '👑 Admin Panel - Help Menu\n\n' +
                 '<b>Available admin-only commands:</b>\n\n' +
                 '<b>User Management:</b>\n' +
-                '/approve <user_id> - Approve user\n' +
-                '/reject <user_id> - Reject user\n' +
-                '/remove <user_id> - Remove user (with confirmation)\n' +
+                '/approve &lt;user_id&gt; - Approve user\n' +
+                '/reject &lt;user_id&gt; - Reject user\n' +
+                '/remove &lt;user_id&gt; - Remove user (with confirmation)\n' +
                 '/pending - Show pending requests\n' +
-                '/makeadmin <user_id> - Promote user to admin\n' +
-                '/setemail <user_id> <email> - Add user email\n' +
-                '/removeemail <user_id> <email> - Remove user email\n\n' +
+                '/makeadmin &lt;user_id&gt; - Promote user to admin\n' +
+                '/setemail &lt;user_id&gt; &lt;email&gt; - Add user email\n' +
+                '/removeemail &lt;user_id&gt; &lt;email&gt; - Remove user email\n\n' +
                 '<b>Keyword Management:</b>\n' +
-                '/addkeyword <word> - Add global keyword\n' +
-                '/removekeyword <word> - Remove global keyword\n\n' +
+                '/addkeyword &lt;word&gt; - Add global keyword\n' +
+                '/removekeyword &lt;word&gt; - Remove global keyword\n\n' +
                 '<b>Bot Control:</b>\n' +
                 '/restart - Restart bot (preserves all data)\n' +
                 '/resetall - Reset all reminders\n' +
