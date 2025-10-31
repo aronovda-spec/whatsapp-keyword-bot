@@ -237,7 +237,10 @@ class TelegramCommandHandler {
                     username: msg.from.username,
                     firstName: msg.from.first_name
                 });
-                this.notifyAdmins(`🔔 New access request from user ${userId} (@${msg.from.username || 'unknown'}) - ${userName}`);
+                // Send async notification to admins (don't await - fire and forget)
+                this.notifyAdmins(`🔔 New access request from user ${userId} (@${msg.from.username || 'unknown'}) - ${userName}`).catch(error => {
+                    console.error('❌ Error sending admin notification:', error.message);
+                });
             }
         });
 
@@ -1363,11 +1366,17 @@ class TelegramCommandHandler {
             if (pending.length === 0) {
                 pendingText += 'No pending requests.';
             } else {
-                pending.forEach(userId => {
+                pending.forEach(pendingInfo => {
+                    const userId = pendingInfo.userId;
+                    const username = pendingInfo.username || 'unknown';
+                    const firstName = pendingInfo.firstName || 'Unknown';
+                    const timestamp = pendingInfo.timestamp || Date.now();
+                    const timeAgo = this.formatTimeAgo(timestamp);
+                    
                     pendingText += `👤 User ID: ${userId}\n`;
-                    pendingText += `📝 Username: @unknown\n`;
-                    pendingText += `👋 Name: unknown\n`;
-                    pendingText += `📅 Requested: Just now\n\n`;
+                    pendingText += `📝 Username: @${username}\n`;
+                    pendingText += `👋 Name: ${firstName}\n`;
+                    pendingText += `📅 Requested: ${timeAgo}\n\n`;
                 });
                 pendingText += 'Use /approve <user_id> or /reject <user_id> to respond.';
             }
@@ -2109,9 +2118,49 @@ class TelegramCommandHandler {
         }
     }
 
-    notifyAdmins(message) {
-        // Simplified - just log for now
-        console.log('📢 Admin notification:', message);
+    formatTimeAgo(timestamp) {
+        const now = Date.now();
+        const diff = now - timestamp;
+        const seconds = Math.floor(diff / 1000);
+        const minutes = Math.floor(seconds / 60);
+        const hours = Math.floor(minutes / 60);
+        const days = Math.floor(hours / 24);
+        
+        if (seconds < 60) {
+            return 'Just now';
+        } else if (minutes < 60) {
+            return `${minutes} minute${minutes !== 1 ? 's' : ''} ago`;
+        } else if (hours < 24) {
+            return `${hours} hour${hours !== 1 ? 's' : ''} ago`;
+        } else {
+            return `${days} day${days !== 1 ? 's' : ''} ago`;
+        }
+    }
+
+    async notifyAdmins(message) {
+        // Send notification to all admin users
+        const adminUsers = this.authorization.getAdminUsers();
+        
+        if (!adminUsers || adminUsers.length === 0) {
+            console.warn('⚠️ No admin users found! Cannot send admin notification.');
+            console.log('📢 Admin notification (logged only):', message);
+            return;
+        }
+        
+        console.log(`📢 Sending admin notification to ${adminUsers.length} admin(s):`, message);
+        
+        // Send to all admins asynchronously
+        const sendPromises = adminUsers.map(async (adminId) => {
+            try {
+                await this.bot.sendMessage(adminId, message);
+                console.log(`✅ Admin notification sent to admin ${adminId}`);
+            } catch (error) {
+                console.error(`❌ Failed to send admin notification to admin ${adminId}:`, error.message);
+            }
+        });
+        
+        // Wait for all notifications to be sent (or fail)
+        await Promise.allSettled(sendPromises);
     }
 
     // Personal keyword management methods
