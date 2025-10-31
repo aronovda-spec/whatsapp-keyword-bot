@@ -197,6 +197,28 @@ class SupabaseManager {
         }
     }
 
+    async getUserInfo(userId) {
+        if (!this.enabled) return null;
+
+        try {
+            const { data, error } = await this.client
+                .from('users')
+                .select('first_name, username, email, is_admin')
+                .eq('user_id', userId.toString())
+                .single();
+
+            if (error) {
+                if (error.code === 'PGRST116') return null; // Not found
+                throw error;
+            }
+
+            return data;
+        } catch (error) {
+            console.error('Supabase getUserInfo error:', error.message);
+            return null;
+        }
+    }
+
     async getUserEmail(userId) {
         if (!this.enabled) return null;
 
