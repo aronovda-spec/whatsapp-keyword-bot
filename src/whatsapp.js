@@ -320,6 +320,11 @@ class WhatsAppConnection {
             // This is WhatsApp's normal session refresh/maintenance cycle
             disconnectMessage = additionalErrorCodes[428];
             console.log('ℹ️ Code 428 detected - This is WhatsApp\'s normal session maintenance. Reconnecting automatically...');
+        } else if (disconnectReason === 503) {
+            // Code 503: Service Unavailable
+            // This is a temporary WhatsApp server issue that auto-recovers
+            disconnectMessage = additionalErrorCodes[503];
+            console.log('ℹ️ Code 503 detected - WhatsApp service temporarily unavailable. Reconnecting automatically...');
         } else if (additionalErrorCodes[disconnectReason]) {
             disconnectMessage = additionalErrorCodes[disconnectReason];
         } else if (disconnectReasons[disconnectReason]) {

@@ -99,12 +99,13 @@ class WhatsAppKeywordBot {
                 logBotEvent('phone_disconnected', { phoneNumber });
                 
                 // Send status update to admins only during development stage
-                // Skip notifications for code 428 (normal WhatsApp session refresh/maintenance)
-                const isNormalMaintenance = disconnectInfo?.reason === 428;
-                
-                if (isNormalMaintenance) {
+                // Skip notifications for code 428 (normal session refresh) and 503 (temporary server issue)
+                if (disconnectInfo?.reason === 428) {
                     console.log('ℹ️ Code 428 - Normal WhatsApp session maintenance, skipping notification (will auto-reconnect)');
                     return; // Don't send notification for normal maintenance
+                } else if (disconnectInfo?.reason === 503) {
+                    console.log('ℹ️ Code 503 - WhatsApp service temporarily unavailable, skipping notification (will auto-reconnect)');
+                    return; // Don't send notification for temporary server issue
                 }
                 
                 let details = '';
@@ -256,12 +257,13 @@ class WhatsAppKeywordBot {
         this.whatsapp.on('disconnected', (disconnectInfo) => {
             logBotEvent('bot_disconnected', disconnectInfo);
             
-            // Skip notifications for code 428 (normal WhatsApp session refresh/maintenance)
-            const isNormalMaintenance = disconnectInfo?.reason === 428;
-            
-            if (isNormalMaintenance) {
+            // Skip notifications for code 428 (normal session refresh) and 503 (temporary server issue)
+            if (disconnectInfo?.reason === 428) {
                 console.log('ℹ️ Code 428 - Normal WhatsApp session maintenance, skipping notification (will auto-reconnect)');
                 return; // Don't send notification for normal maintenance
+            } else if (disconnectInfo?.reason === 503) {
+                console.log('ℹ️ Code 503 - WhatsApp service temporarily unavailable, skipping notification (will auto-reconnect)');
+                return; // Don't send notification for temporary server issue
             }
             
             let statusMessage = 'Bot lost connection to WhatsApp';
