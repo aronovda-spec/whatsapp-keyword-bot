@@ -262,18 +262,28 @@ class EmailChannel {
         const timestamp = new Date().toLocaleString();
         const truncatedMessage = message.length > 500 ? message.substring(0, 500) + '...' : message;
 
+        // Escape all user-provided content to prevent HTML injection
+        const escapedKeyword = this.escapeHtml(keyword);
+        const escapedSender = this.escapeHtml(sender || 'Unknown');
+        const escapedGroup = this.escapeHtml(group || 'Unknown');
+        const escapedPhoneNumber = this.escapeHtml(phoneNumber || 'Unknown Phone');
+        const escapedMessageId = this.escapeHtml(messageId || 'N/A');
+        const escapedMatchedToken = matchedToken ? this.escapeHtml(matchedToken) : null;
+
         let matchInfo = '';
         if (matchType === 'fuzzy' && matchedToken) {
-            matchInfo = `\nFuzzy Match: "${matchedToken}" → "${keyword}"`;
+            matchInfo = `\nFuzzy Match: "${escapedMatchedToken}" → "${escapedKeyword}"`;
         } else if (matchType === 'exact') {
             matchInfo = '\nExact Match';
         }
 
         let attachmentInfo = '';
         if (attachment) {
-            attachmentInfo = `\nAttachment: ${attachment.type}`;
+            const escapedAttachmentType = this.escapeHtml(attachment.type);
+            attachmentInfo = `\nAttachment: ${escapedAttachmentType}`;
             if (attachment.filename) {
-                attachmentInfo += ` - ${attachment.filename}`;
+                const escapedFilename = this.escapeHtml(attachment.filename);
+                attachmentInfo += ` - ${escapedFilename}`;
             }
             if (attachment.size) {
                 const sizeKB = (attachment.size / 1024).toFixed(2);
@@ -281,7 +291,7 @@ class EmailChannel {
             }
         }
 
-        const subject = `🚨 Keyword Alert: ${keyword}`;
+        const subject = `🚨 Keyword Alert: ${escapedKeyword}`;
         
         const htmlBody = `
 <!DOCTYPE html>
@@ -302,10 +312,10 @@ class EmailChannel {
     <h2 style="color: #d32f2f;">🚨 Keyword Alert</h2>
     
     <div class="info">
-        <p><strong>Keyword:</strong> <span class="keyword">${keyword}</span>${matchInfo}</p>
-        <p><strong>Sender:</strong> ${sender || 'Unknown'}</p>
-        <p><strong>Group:</strong> ${group || 'Unknown'}</p>
-        <p><strong>Detected by:</strong> ${phoneNumber || 'Unknown Phone'}</p>
+        <p><strong>Keyword:</strong> <span class="keyword">${escapedKeyword}</span>${matchInfo}</p>
+        <p><strong>Sender:</strong> ${escapedSender}</p>
+        <p><strong>Group:</strong> ${escapedGroup}</p>
+        <p><strong>Detected by:</strong> ${escapedPhoneNumber}</p>
         <p><strong>Time:</strong> ${timestamp}${attachmentInfo ? `<br/>${attachmentInfo}` : ''}</p>
     </div>
 
@@ -315,7 +325,7 @@ class EmailChannel {
     </div>
 
     <div class="alert">
-        <strong>Message ID:</strong> ${messageId || 'N/A'}
+        <strong>Message ID:</strong> ${escapedMessageId}
     </div>
 
     <p style="color: #666; font-size: 12px; margin-top: 20px;">

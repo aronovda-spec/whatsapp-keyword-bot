@@ -123,9 +123,10 @@ class TelegramCommandHandler {
                     const cleanupSuccess = this.authorization.cleanupUserData(confirmation.userIdToRemove);
                     
                     if (success && cleanupSuccess) {
+                        const escapedUserName = this.escapeHtml(confirmation.userName);
                         this.bot.sendMessage(confirmation.chatId, 
                             '✅ <b>User Removal Confirmed!</b>\n\n' +
-                            `🗑️ <b>User ${confirmation.userIdToRemove} (${confirmation.userName}) has been removed</b>\n\n` +
+                            `🗑️ <b>User ${confirmation.userIdToRemove} (${escapedUserName}) has been removed</b>\n\n` +
                             '🧹 <b>Data Cleaned Up:</b>\n' +
                             '• ✅ Removed from authorized users\n' +
                             '• ✅ Removed admin privileges (if any)\n' +
@@ -147,9 +148,10 @@ class TelegramCommandHandler {
                         
                         console.log(`🗑️ Admin ${userId} confirmed removal of user ${confirmation.userIdToRemove} (${confirmation.userName})`);
                     } else {
+                        const escapedUserName = this.escapeHtml(confirmation.userName);
                         this.bot.sendMessage(confirmation.chatId, 
                             '❌ <b>Removal Failed</b>\n\n' +
-                            `Failed to remove user ${confirmation.userIdToRemove} (${confirmation.userName}).\n` +
+                            `Failed to remove user ${confirmation.userIdToRemove} (${escapedUserName}).\n` +
                             'Please try again or check the logs for errors.',
                             { parse_mode: 'HTML' }
                         );
@@ -159,9 +161,10 @@ class TelegramCommandHandler {
                     // Cancelled removal
                     this.pendingRemovalConfirmations.delete(userId);
                     
+                    const escapedUserName = this.escapeHtml(confirmation.userName);
                     this.bot.sendMessage(confirmation.chatId, 
                         '❌ <b>User Removal Cancelled</b>\n\n' +
-                        `✅ User ${confirmation.userIdToRemove} (${confirmation.userName}) remains authorized.\n` +
+                        `✅ User ${confirmation.userIdToRemove} (${escapedUserName}) remains authorized.\n` +
                         '🗑️ Use /remove again if you need to remove the user later.',
                         { parse_mode: 'HTML' }
                     );
@@ -190,7 +193,9 @@ class TelegramCommandHandler {
                 // Send to all authorized users
                 authorizedUsers.forEach(authorizedUserId => {
                     try {
-                        const broadcastMessage = `📢 <b>Message from ${userName}:</b>\n\n"${messageText}"`;
+                        const escapedUserName = this.escapeHtml(userName);
+                        const escapedMessageText = this.escapeHtml(messageText);
+                        const broadcastMessage = `📢 <b>Message from ${escapedUserName}:</b>\n\n"${escapedMessageText}"`;
                         this.bot.sendMessage(authorizedUserId, broadcastMessage, { parse_mode: 'HTML' });
                     } catch (error) {
                         console.error(`❌ Failed to send broadcast to user ${authorizedUserId}:`, error.message);
@@ -264,6 +269,7 @@ class TelegramCommandHandler {
                     '📱 Group Management:\n' +
                     '/discover - Show all groups bot is in\n' +
                     '/allgroups - Show available groups for subscription\n' +
+                    '/groups - Show monitored groups\n' +
                     '/subscribe <group> - Subscribe to a group\n' +
                     '/unsubscribe <group> - Unsubscribe from a group\n' +
                     '/mygroups - Show your subscriptions\n\n' +
@@ -274,13 +280,14 @@ class TelegramCommandHandler {
                     '/mykeywords - Show your personal keywords\n' +
                     '/addmykeyword <word> - Add personal keyword\n' +
                     '/removemykeyword <word> - Remove personal keyword\n\n' +
-                    '🌍 Timezone Commands (SIMPLE!):\n' +
+                    '🌍 Timezone Commands:\n' +
                     '/israel - Israeli time 🇮🇱\n' +
                     '/usa - US Eastern time 🇺🇸\n' +
                     '/uk - UK time 🇬🇧\n' +
-                    '/japan - Japan time 🇯🇵\n\n' +
+                    '/japan - Japan time 🇯🇵\n' +
+                    '/timezone <tz> - Set custom timezone (e.g., Asia/Jerusalem)\n\n' +
                     '⚙️ Control Commands:\n' +
-                    '/24h - Toggle 24/7 mode (ACTUALLY WORKS!)\n' +
+                    '/24h - Toggle 24/7 mode\n' +
                     '/admin - Admin panel\n' +
                     '/users - List all users with roles\n' +
                     '/admins - Show admin users only\n' +
@@ -294,7 +301,10 @@ class TelegramCommandHandler {
                     '/setemail <user_id> <email> - Add user email (supports multiple)\n' +
                     '/removeemail <user_id> <email> - Remove specific user email\n' +
                     '/makeadmin <user_id> - Promote user to admin\n' +
-                    '/resetall - Reset all reminders (admin)';
+                    '/restart - Restart bot (preserves all data)\n' +
+                    '/resetall - Reset all reminders (clears active reminders)\n\n' +
+                    '💬 Broadcast:\n' +
+                    'Send any message (not a command) to broadcast to all authorized users';
             await this.bot.sendMessage(chatId, helpText);
         });
 
@@ -420,13 +430,15 @@ class TelegramCommandHandler {
                     }
                     
                     const index = authorizedUsers.indexOf(user) + 1;
-                    usersText += `${adminBadge} <b>User ${index} - ${userName}</b>\n`;
+                    const escapedUserName = this.escapeHtml(userName);
+                    usersText += `${adminBadge} <b>User ${index} - ${escapedUserName}</b>\n`;
                     usersText += `   📱 ID: ${user}\n`;
                     usersText += `   ${adminEmoji} Role: ${adminStatus}\n`;
                     usersText += `   ✅ Status: Active\n`;
                     usersText += `   🔔 Notifications: Enabled\n`;
                     if (userEmails.length > 0) {
-                        usersText += `   📧 Email(s): ${userEmails.join(', ')}\n`;
+                        const escapedEmails = userEmails.map(email => this.escapeHtml(email)).join(', ');
+                        usersText += `   📧 Email(s): ${escapedEmails}\n`;
                     } else {
                         usersText += `   📧 Email(s): Not configured\n`;
                     }
@@ -493,14 +505,16 @@ class TelegramCommandHandler {
                         }
                     }
                     
-                    adminsText += `👑 <b>Admin ${index + 1} - ${adminName}</b>\n`;
+                    const escapedAdminName = this.escapeHtml(adminName);
+                    adminsText += `👑 <b>Admin ${index + 1} - ${escapedAdminName}</b>\n`;
                     adminsText += `   📱 ID: ${adminId}\n`;
                     adminsText += `   ✅ Role: Admin\n`;
                     adminsText += `   ✅ Status: Active\n`;
                     adminsText += `   🔔 Notifications: Enabled\n`;
                     adminsText += `   🛠️ Admin Commands: Available\n`;
                     if (adminEmails.length > 0) {
-                        adminsText += `   📧 Email(s): ${adminEmails.join(', ')}\n`;
+                        const escapedEmails = adminEmails.map(email => this.escapeHtml(email)).join(', ');
+                        adminsText += `   📧 Email(s): ${escapedEmails}\n`;
                     } else {
                         adminsText += `   📧 Email(s): Not configured\n`;
                     }
@@ -1289,13 +1303,14 @@ class TelegramCommandHandler {
             }
             
             const userName = this.authorization.getUserName(userIdToRemove) || 'Unknown';
+            const escapedUserName = this.escapeHtml(userName);
             
             // Create confirmation message with special warnings for admin removal
             let confirmationMessage = '⚠️ <b>USER REMOVAL CONFIRMATION</b>\n\n';
             
             if (isTargetAdmin) {
                 confirmationMessage += '👑 <b>ADMIN REMOVAL WARNING</b>\n\n';
-                confirmationMessage += `🗑️ <b>Are you sure you want to remove ADMIN ${userIdToRemove} (${userName})?</b>\n\n`;
+                confirmationMessage += `🗑️ <b>Are you sure you want to remove ADMIN ${userIdToRemove} (${escapedUserName})?</b>\n\n`;
                 confirmationMessage += '⚠️ <b>This will permanently:</b>\n';
                 confirmationMessage += '• Remove admin from authorized users\n';
                 confirmationMessage += '• Remove ALL admin privileges\n';
@@ -1305,7 +1320,7 @@ class TelegramCommandHandler {
                 confirmationMessage += '• Remove user name from records\n\n';
                 confirmationMessage += '🚨 <b>ADMIN PRIVILEGES WILL BE LOST FOREVER!</b>\n\n';
             } else {
-                confirmationMessage += `🗑️ <b>Are you sure you want to remove user ${userIdToRemove} (${userName})?</b>\n\n`;
+                confirmationMessage += `🗑️ <b>Are you sure you want to remove user ${userIdToRemove} (${escapedUserName})?</b>\n\n`;
                 confirmationMessage += '⚠️ <b>This will permanently:</b>\n';
                 confirmationMessage += '• Remove user from authorized users\n';
                 confirmationMessage += '• Delete all personal keywords\n';
@@ -1744,8 +1759,10 @@ class TelegramCommandHandler {
                 if (nonActive.isActive) {
                     text += '• Status: Active hours\n';
                 } else {
-                    text += `• Status: Sleeping (${nonActive.schedule.name})\n`;
-                    text += `• Behavior: ${nonActive.behavior.toUpperCase()}\n`;
+                    const escapedScheduleName = this.escapeHtml(nonActive.schedule.name);
+                    const escapedBehavior = this.escapeHtml(nonActive.behavior.toUpperCase());
+                    text += `• Status: Sleeping (${escapedScheduleName})\n`;
+                    text += `• Behavior: ${escapedBehavior}\n`;
                 }
 
                 await this.bot.sendMessage(chatId, text, { parse_mode: 'HTML' });

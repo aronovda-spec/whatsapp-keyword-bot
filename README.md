@@ -74,6 +74,7 @@ A cloud-based bot that monitors WhatsApp group messages for specific keywords an
 ### 📱 Group Management
 - `/discover` - Show all groups bot is in
 - `/allgroups` - Show available groups for subscription
+- `/groups` - Show monitored groups information
 - `/subscribe <group_name>` - Subscribe to a group
 - `/unsubscribe <group_name>` - Unsubscribe from a group
 - `/mygroups` - Show your subscriptions
@@ -83,6 +84,7 @@ A cloud-based bot that monitors WhatsApp group messages for specific keywords an
 - `/usa` - US Eastern time 🇺🇸
 - `/uk` - UK time 🇬🇧
 - `/japan` - Japan time 🇯🇵
+- `/timezone <tz>` - Set custom timezone (e.g., Asia/Jerusalem, America/New_York)
 
 ### ⚙️ Control Commands
 - `/24h` - Toggle 24/7 mode
@@ -92,6 +94,9 @@ A cloud-based bot that monitors WhatsApp group messages for specific keywords an
 - `/keywords` - Show keywords
 - `/stats` - Bot statistics
 - `/antiban` - Show anti-ban status (Admin only)
+
+### 💬 Broadcast
+- Send any message (not a command) to broadcast to all authorized users
 
 ### 👑 Admin Only
 - `/approve <user_id>` - Approve user
