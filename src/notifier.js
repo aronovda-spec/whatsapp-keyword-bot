@@ -57,7 +57,7 @@ class Notifier {
         }
     }
 
-    async sendKeywordAlert(keyword, message, sender, group, messageId, phoneNumber = null, matchType = 'exact', matchedToken = null, attachment = null, isReminder = false, reminderCount = 0) {
+    async sendKeywordAlert(keyword, message, sender, group, messageId, phoneNumber = null, matchType = 'exact', matchedToken = null, attachment = null, isReminder = false, reminderCount = 0, targetUsers = null) {
         let telegramSuccess = false;
         let emailSuccess = false;
 
@@ -66,8 +66,9 @@ class Notifier {
             try {
                 const alertMessage = this.formatAlertMessage(keyword, message, sender, group, messageId, phoneNumber, matchType, matchedToken, attachment, isReminder, reminderCount);
                 
-                // Send to ALL authorized users (not just chatIds)
-                const authorizedUsers = this.authorization.getAuthorizedUsers();
+                // If targetUsers is provided, use it (for reminders to specific user)
+                // Otherwise, send to ALL authorized users (for initial alerts)
+                const authorizedUsers = targetUsers || this.authorization.getAuthorizedUsers();
                 console.log(`📤 Sending global keyword alert to ${authorizedUsers.length} authorized user(s)`);
                 
                 if (authorizedUsers.length > 0) {
@@ -102,8 +103,12 @@ class Notifier {
         if (this.emailChannel && this.emailChannel.enabled) {
             try {
                 console.log(`📧 Attempting to send email for global keyword: "${keyword}"`);
+                // Pass authorized users to email channel so it can send to each user's email from database
+                // If targetUsers is provided, use it (for reminders to specific user)
+                // Otherwise, send to ALL authorized users (for initial alerts)
+                const emailUsers = targetUsers || this.authorization.getAuthorizedUsers();
                 emailSuccess = await this.emailChannel.sendKeywordAlert(
-                    keyword, message, sender, group, messageId, phoneNumber, matchType, matchedToken, attachment
+                    keyword, message, sender, group, messageId, phoneNumber, matchType, matchedToken, attachment, emailUsers
                 );
                 console.log(`📧 Email notification ${emailSuccess ? 'sent successfully' : 'failed'} for keyword: "${keyword}"`);
             } catch (error) {
@@ -186,9 +191,13 @@ class Notifier {
         console.log(`⏰ Sending reminder ${reminder.reminderCount} for user ${reminder.userId} (global: ${reminder.isGlobal || false})`);
         
         try {
-            // Use global alert for global keywords, personal alert otherwise
+            // IMPORTANT: Even for global keyword reminders, send reminder only to the specific user whose timer fired
+            // The initial alert already went to all authorized users, but each reminder is per-user
+            // This ensures that when a user presses /ok, only their reminders stop, not everyone's
             if (reminder.isGlobal) {
-                // Send to ALL authorized users (global keyword reminder)
+                // For global keywords, use sendKeywordAlert but pass only this specific user
+                // This ensures correct formatting ("Global Keyword Alert - Reminder") while only sending to one user
+                const authorizedUsers = [reminder.userId]; // Only send to this user
                 await this.sendKeywordAlert(
                     reminder.keyword,
                     reminder.message,
@@ -200,10 +209,11 @@ class Notifier {
                     null,
                     reminder.attachment,
                     true, // isReminder
-                    reminder.reminderCount // reminder count
+                    reminder.reminderCount, // reminder count
+                    authorizedUsers // Pass only this user, not all authorized users
                 );
             } else {
-                // Send to specific user (personal keyword reminder)
+                // For personal keywords, use sendPersonalKeywordAlert as before
                 await this.sendPersonalKeywordAlert(
                     reminder.keyword,
                     reminder.message,
