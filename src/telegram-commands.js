@@ -433,32 +433,97 @@ class TelegramCommandHandler {
             if (authorizedUsers.length === 0) {
                 usersText += '❌ No authorized users found.';
             } else {
-                // Fetch emails for all users
+                // Fetch emails and names for all users
                 for (const user of authorizedUsers) {
                     const isAdmin = adminUsers.includes(user);
                     const adminBadge = isAdmin ? '👑' : '👤';
                     const adminStatus = isAdmin ? 'Admin' : 'User';
                     const adminEmoji = isAdmin ? '✅' : '👤';
-                    const userName = this.authorization.getUserName(user) || 'Unknown';
                     
-                    // Get user emails from Supabase (same table for all users - admins and regular users)
+                    // Get user name from multiple sources (priority: Supabase > telegram-auth.json > Telegram API)
+                    let userName = null;
                     let userEmails = [];
+                    
+                    // Try Supabase first (most reliable source)
                     if (this.keywordDetector && this.keywordDetector.supabase && this.keywordDetector.supabase.isEnabled()) {
                         try {
-                            const emails = await this.keywordDetector.supabase.getUserEmails(user);
-                            if (emails && emails.length > 0) {
-                                userEmails = emails;
+                            // Get user info from Supabase (includes first_name, username, email)
+                            const userInfo = await this.keywordDetector.supabase.getUserInfo(user);
+                            
+                            if (userInfo) {
+                                // Prefer first_name, fallback to username
+                                userName = userInfo.first_name || userInfo.username || null;
+                                
+                                // Get emails
+                                const emails = await this.keywordDetector.supabase.getUserEmails(user);
+                                if (emails && emails.length > 0) {
+                                    userEmails = emails;
+                                } else if (userInfo.email) {
+                                    userEmails = [userInfo.email];
+                                } else {
+                                    // Fallback to legacy single email
+                                    const legacyEmail = await this.keywordDetector.supabase.getUserEmail(user);
+                                    if (legacyEmail) {
+                                        userEmails = [legacyEmail];
+                                    }
+                                }
                             } else {
-                                // Fallback to legacy single email
-                                const legacyEmail = await this.keywordDetector.supabase.getUserEmail(user);
-                                if (legacyEmail) {
-                                    userEmails = [legacyEmail];
+                                // User not in Supabase, try legacy email method
+                                try {
+                                    const emails = await this.keywordDetector.supabase.getUserEmails(user);
+                                    if (emails && emails.length > 0) {
+                                        userEmails = emails;
+                                    } else {
+                                        const legacyEmail = await this.keywordDetector.supabase.getUserEmail(user);
+                                        if (legacyEmail) {
+                                            userEmails = [legacyEmail];
+                                        }
+                                    }
+                                } catch (emailError) {
+                                    // Silently fail for email lookup
                                 }
                             }
                         } catch (error) {
-                            console.error(`Error fetching emails for user ${user}:`, error.message);
+                            console.error(`Error fetching user info for ${user}:`, error.message);
+                            // Try fallback email method
+                            try {
+                                const emails = await this.keywordDetector.supabase.getUserEmails(user);
+                                if (emails && emails.length > 0) {
+                                    userEmails = emails;
+                                } else {
+                                    const legacyEmail = await this.keywordDetector.supabase.getUserEmail(user);
+                                    if (legacyEmail) {
+                                        userEmails = [legacyEmail];
+                                    }
+                                }
+                            } catch (emailError) {
+                                // Silently fail for email lookup
+                            }
                         }
                     }
+                    
+                    // Fallback to telegram-auth.json if name not found in Supabase
+                    if (!userName) {
+                        userName = this.authorization.getUserName(user);
+                    }
+                    
+                    // Final fallback: try to fetch from Telegram API
+                    if (!userName) {
+                        try {
+                            const chatInfo = await this.bot.getChat(user);
+                            userName = chatInfo.first_name || chatInfo.username || null;
+                            
+                            // If we got a name from Telegram, save it for future use
+                            if (userName) {
+                                this.authorization.setUserName(user, userName);
+                            }
+                        } catch (error) {
+                            // Silently fail - can't fetch from Telegram API
+                        }
+                    }
+                    
+                    // Final fallback to "Unknown"
+                    userName = userName || 'Unknown';
                     
                     const index = authorizedUsers.indexOf(user) + 1;
                     const escapedUserName = this.escapeHtml(userName);
