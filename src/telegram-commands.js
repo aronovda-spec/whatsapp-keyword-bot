@@ -1729,9 +1729,10 @@ class TelegramCommandHandler {
                     await this.bot.sendMessage(chatId, '❌ Reminder system is not available.');
                     return;
                 }
-                reminderManager.resetAllReminders();
+                await reminderManager.resetAllReminders();
                 await this.bot.sendMessage(chatId, '🗑️ All reminders have been reset and storage cleared.');
             } catch (error) {
+                console.error(`❌ Error in /resetall command:`, error);
                 await this.bot.sendMessage(chatId, '❌ Failed to reset reminders. Check logs.');
             }
         });
