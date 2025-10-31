@@ -1,6 +1,6 @@
 {
   "name": "whatsapp-keyword-bot",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "WhatsApp keyword tracking bot for monitoring group messages",
   "main": "src/bot.js",
   "scripts": {
