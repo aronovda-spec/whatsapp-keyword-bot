@@ -30,6 +30,19 @@ class ReminderManager extends EventEmitter {
     }
 
     /**
+     * Escape HTML special characters to prevent parsing errors
+     */
+    escapeHtml(text) {
+        if (!text) return '';
+        return String(text)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    /**
      * Load active reminders from file
      */
     async loadReminders() {
@@ -429,9 +442,10 @@ class ReminderManager extends EventEmitter {
             // Cancel any pending timers
             this.cancelReminderTimer(activeReminder.reminderId);
             
-            // Add to keywords only if not already added
-            if (!activeKeywords.includes(`"${activeReminder.keyword}"`)) {
-                activeKeywords.push(`"${activeReminder.keyword}"`);
+            // Add to keywords only if not already added (escape keyword for HTML)
+            const escapedKeyword = this.escapeHtml(activeReminder.keyword);
+            if (!activeKeywords.includes(`"${escapedKeyword}"`)) {
+                activeKeywords.push(`"${escapedKeyword}"`);
             }
         }
         
@@ -446,9 +460,10 @@ class ReminderManager extends EventEmitter {
             // Cancel any pending timers (shouldn't have any, but be safe)
             this.cancelReminderTimer(r.reminderId);
             
-            // Collect for summary (deduplicate)
-            if (!cancelledKeywords.includes(`"${r.keyword}"`)) {
-                cancelledKeywords.push(`"${r.keyword}"`);
+            // Collect for summary (deduplicate - escape keyword for HTML)
+            const escapedKeyword = this.escapeHtml(r.keyword);
+            if (!cancelledKeywords.includes(`"${escapedKeyword}"`)) {
+                cancelledKeywords.push(`"${escapedKeyword}"`);
             }
         });
                 
@@ -463,9 +478,10 @@ class ReminderManager extends EventEmitter {
             // Cancel any pending timers (shouldn't have any, but be safe)
             this.cancelReminderTimer(r.reminderId);
             
-            // Collect for summary (deduplicate)
-            if (!completedKeywords.includes(`"${r.keyword}"`)) {
-                completedKeywords.push(`"${r.keyword}"`);
+            // Collect for summary (deduplicate - escape keyword for HTML)
+            const escapedKeyword = this.escapeHtml(r.keyword);
+            if (!completedKeywords.includes(`"${escapedKeyword}"`)) {
+                completedKeywords.push(`"${escapedKeyword}"`);
             }
         });
         
