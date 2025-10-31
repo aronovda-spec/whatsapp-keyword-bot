@@ -301,12 +301,27 @@ class WhatsAppConnection {
             [DisconnectReason.multideviceMismatch]: 'Multi-device mismatch - Multiple devices connected'
         };
         
+        // Handle additional WhatsApp Web error codes
+        const additionalErrorCodes = {
+            428: 'Connection terminated (428) - WhatsApp session refresh/maintenance (normal, will auto-reconnect)',
+            429: 'Too Many Requests (429) - Rate limited, will retry',
+            500: 'Server error (500) - WhatsApp server issue, will retry',
+            503: 'Service unavailable (503) - WhatsApp service temporarily down'
+        };
+        
         // Check for specific error messages that indicate different issues
         const errorMessage = lastDisconnect?.error?.message || '';
         
         if (disconnectReason === 408 && errorMessage.includes('QR refs attempts ended')) {
             disconnectMessage = 'QR connection timeout (408) - QR code expired, restarting to get new QR';
             // Force reconnection to get a new QR code
+        } else if (disconnectReason === 428) {
+            // Code 428: Precondition Required - Connection Terminated
+            // This is WhatsApp's normal session refresh/maintenance cycle
+            disconnectMessage = additionalErrorCodes[428];
+            console.log('ℹ️ Code 428 detected - This is WhatsApp\'s normal session maintenance. Reconnecting automatically...');
+        } else if (additionalErrorCodes[disconnectReason]) {
+            disconnectMessage = additionalErrorCodes[disconnectReason];
         } else if (disconnectReasons[disconnectReason]) {
             disconnectMessage = disconnectReasons[disconnectReason];
         } else if (disconnectReason === DisconnectReason.loggedOut) {
