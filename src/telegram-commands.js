@@ -292,11 +292,11 @@ class TelegramCommandHandler {
                     '⚙️ Control Commands:\n' +
                     '/24h - Toggle 24/7 mode\n' +
                     '/admin - Admin panel\n' +
+                    '/stats - Bot statistics\n\n' +
+                    '👑 Admin Only:\n' +
                     '/users - List all users with roles\n' +
                     '/admins - Show admin users only\n' +
-                    '/stats - Bot statistics\n' +
-                    '/antiban - Show anti-ban status (Admin only)\n\n' +
-                    '👑 Admin Only:\n' +
+                    '/antiban - Show anti-ban status\n' +
                     '/approve <user_id> - Approve user\n' +
                     '/reject <user_id> - Reject user\n' +
                     '/pending - Show pending requests\n' +
@@ -338,8 +338,8 @@ class TelegramCommandHandler {
             this.bot.sendMessage(chatId, statusText);
         });
 
-        // Admin command
-        this.bot.onText(/\/admin/, (msg) => {
+        // Admin command - Must use exact match to avoid matching /admins
+        this.bot.onText(/^\/admin$/, (msg) => {
             const chatId = msg.chat.id;
             const userId = msg.from.id;
             
@@ -359,6 +359,8 @@ class TelegramCommandHandler {
             const adminText = '👑 Admin Panel - Help Menu\n\n' +
                 '<b>Available admin-only commands:</b>\n\n' +
                 '<b>User Management:</b>\n' +
+                '/users - List all users with roles\n' +
+                '/admins - Show admin users only\n' +
                 '/approve &lt;user_id&gt; - Approve user\n' +
                 '/reject &lt;user_id&gt; - Reject user\n' +
                 '/remove &lt;user_id&gt; - Remove user (with confirmation)\n' +
@@ -457,8 +459,8 @@ class TelegramCommandHandler {
             await this.bot.sendMessage(chatId, usersText, { parse_mode: 'HTML' });
         });
 
-        // Admins command - Show only admin users
-        this.bot.onText(/\/admins/, async (msg) => {
+        // Admins command - Show only admin users (use exact match for clarity)
+        this.bot.onText(/^\/admins$/, async (msg) => {
             const chatId = msg.chat.id;
             const userId = msg.from.id;
             
