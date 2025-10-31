@@ -81,7 +81,8 @@ class WhatsAppKeywordBot {
 
     addPhone(phoneNumber, sessionPath, description = '') {
         try {
-            const connection = new WhatsAppConnection(sessionPath);
+            // Pass keywordDetector to WhatsAppConnection for early keyword detection
+            const connection = new WhatsAppConnection(sessionPath, this.keywordDetector);
             
             connection.on('message', (messageData) => {
                 this.handleMessage(messageData, phoneNumber);
