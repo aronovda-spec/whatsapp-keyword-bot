@@ -229,13 +229,6 @@ class Notifier {
     formatPersonalAlertMessage(keyword, message, sender, group, messageId, phoneNumber = null, matchType = 'exact', matchedToken = null, attachment = null, reminderCount = 0) {
         const timestamp = new Date().toLocaleString();
         
-        let matchInfo = '';
-        if (matchType === 'fuzzy' && matchedToken) {
-            matchInfo = `\n🔍 <b>Fuzzy Match:</b> "${matchedToken}" → "${keyword}"`;
-        } else if (matchType === 'exact') {
-            matchInfo = `\n✅ <b>Exact Match</b>`;
-        }
-        
         // Add reminder indicator
         let reminderInfo = '';
         if (reminderCount > 0) {
@@ -246,7 +239,8 @@ class Notifier {
         // Add attachment info if present
         let attachmentInfo = '';
         if (attachment) {
-            attachmentInfo = `\n📎 <b>Attachment:</b> ${attachment.type}`;
+            const escapedAttachmentType = this.escapeHtml(attachment.type);
+            attachmentInfo = `\n📎 <b>Attachment:</b> ${escapedAttachmentType}`;
             if (attachment.filename) {
                 attachmentInfo += ` - ${this.escapeHtml(attachment.filename)}`;
             }
@@ -256,15 +250,28 @@ class Notifier {
             }
         }
 
+        // Escape all user-provided content to prevent HTML parsing errors
+        const escapedKeyword = this.escapeHtml(keyword);
+        const escapedSender = this.escapeHtml(sender || 'Unknown');
+        const escapedGroup = this.escapeHtml(group || 'Unknown');
+        const escapedMatchedToken = matchedToken ? this.escapeHtml(matchedToken) : null;
+        
+        let escapedMatchInfo = '';
+        if (matchType === 'fuzzy' && matchedToken) {
+            escapedMatchInfo = `\n🔍 <b>Fuzzy Match:</b> "${escapedMatchedToken}" → "${escapedKeyword}"`;
+        } else if (matchType === 'exact') {
+            escapedMatchInfo = `\n✅ <b>Exact Match</b>`;
+        }
+
         // Update header to indicate type
         const header = reminderCount === 0 
             ? '🚨 <b>Personal Keyword Alert</b>'
             : '⏰ <b>Personal Keyword Alert - Reminder</b>';
         return `${header}
 
-🚨 <b>Keyword:</b> ${this.escapeHtml(keyword)}${matchInfo}
-👤 <b>From:</b> ${this.escapeHtml(sender)}
-📱 <b>Group:</b> ${this.escapeHtml(group)}
+🚨 <b>Keyword:</b> ${escapedKeyword}${escapedMatchInfo}
+👤 <b>From:</b> ${escapedSender}
+📱 <b>Group:</b> ${escapedGroup}
 🕐 <b>Time:</b> ${timestamp}${reminderInfo}${attachmentInfo}
 
 💬 <b>Message:</b>
@@ -313,17 +320,11 @@ ${reminderCount > 0 ? '⏰ Reply /ok to acknowledge and stop reminders.' : '💡
             reminderInfo = `\n⏰ <b>Reminder</b> - ${timeElapsed}`;
         }
         
-        let matchInfo = '';
-        if (matchType === 'fuzzy' && matchedToken) {
-            matchInfo = `\n🔍 <b>Fuzzy Match:</b> "${matchedToken}" → "${keyword}"`;
-        } else if (matchType === 'exact') {
-            matchInfo = `\n✅ <b>Exact Match</b>`;
-        }
-        
         // Add attachment info if present
         let attachmentInfo = '';
         if (attachment) {
-            attachmentInfo = `\n📎 <b>Attachment:</b> ${attachment.type}`;
+            const escapedAttachmentType = this.escapeHtml(attachment.type);
+            attachmentInfo = `\n📎 <b>Attachment:</b> ${escapedAttachmentType}`;
             if (attachment.filename) {
                 attachmentInfo += ` - ${this.escapeHtml(attachment.filename)}`;
             }
@@ -333,17 +334,29 @@ ${reminderCount > 0 ? '⏰ Reply /ok to acknowledge and stop reminders.' : '💡
             }
         }
         
+        const escapedKeyword = this.escapeHtml(keyword);
+        const escapedSender = this.escapeHtml(sender || 'Unknown');
+        const escapedGroup = this.escapeHtml(group || 'Unknown');
+        const escapedMatchedToken = matchedToken ? this.escapeHtml(matchedToken) : null;
+        
+        let escapedMatchInfo = '';
+        if (matchType === 'fuzzy' && matchedToken) {
+            escapedMatchInfo = `\n🔍 <b>Fuzzy Match:</b> "${escapedMatchedToken}" → "${escapedKeyword}"`;
+        } else if (matchType === 'exact') {
+            escapedMatchInfo = `\n✅ <b>Exact Match</b>`;
+        }
+        
         return `${header}
 
-🔍 <b>Keyword:</b> ${keyword}${matchInfo}
-👤 <b>Sender:</b> ${sender || 'Unknown'}
-👥 <b>Group:</b> ${group || 'Unknown'}
+🔍 <b>Keyword:</b> ${escapedKeyword}${escapedMatchInfo}
+👤 <b>Sender:</b> ${escapedSender}
+👥 <b>Group:</b> ${escapedGroup}
 🕐 <b>Time:</b> ${timestamp}${attachmentInfo}${reminderInfo}
 
 💬 <b>Message:</b>
 ${this.escapeHtml(truncatedMessage)}
 
-📱 <b>Message ID:</b> ${messageId || 'N/A'}
+📱 <b>Message ID:</b> ${this.escapeHtml(messageId || 'N/A')}
 ${reminderCount > 0 ? '⏰ Reply /ok to acknowledge and stop reminders.' : '💡 Reply /ok to acknowledge and stop reminders.'}`;
     }
 
@@ -368,7 +381,8 @@ ${reminderCount > 0 ? '⏰ Reply /ok to acknowledge and stop reminders.' : '💡
     }
 
     escapeHtml(text) {
-        return text
+        if (!text) return '';
+        return String(text)
             .replace(/&/g, '&amp;')
             .replace(/</g, '&lt;')
             .replace(/>/g, '&gt;')
