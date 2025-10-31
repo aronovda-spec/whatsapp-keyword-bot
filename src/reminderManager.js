@@ -76,7 +76,7 @@ class ReminderManager extends EventEmitter {
                         };
                         this.reminders.set(reminder.reminderId, reminder);
                         if (reminder.status === 'active') {
-                            this.activeReminders.set(reminder.userId.toString(), reminder.reminderId);
+                            this.activeReminders.set(String(reminder.userId), reminder.reminderId);
                             const nextAt = reminder.nextReminderAt ? reminder.nextReminderAt.getTime() : (now + 60000);
                             if (nextAt <= now) {
                                 reminder.nextReminderAt = new Date(now + this.catchupDelayMs);
@@ -106,7 +106,7 @@ class ReminderManager extends EventEmitter {
                     if (r.nextReminderAt) r.nextReminderAt = new Date(r.nextReminderAt);
                     this.reminders.set(reminderId, r);
                     if (r.status === 'active') {
-                        this.activeReminders.set(r.userId.toString(), reminderId);
+                        this.activeReminders.set(String(r.userId), reminderId);
                         const nextAt = r.nextReminderAt ? r.nextReminderAt.getTime() : (now + 60000);
                         if (nextAt <= now) {
                             r.nextReminderAt = new Date(now + this.catchupDelayMs);
@@ -157,8 +157,9 @@ class ReminderManager extends EventEmitter {
     addReminder(userId, keyword, message, sender, group, messageId, phoneNumber, attachment, isGlobal = false) {
         console.log(`🔍 addReminder START for user ${userId}, keyword "${keyword}"`);
         
-        // Check if user recently pressed /ok (within last 2 seconds - race condition protection)
-        const userIdStr = userId.toString();
+        // Normalize userId to string for consistency (Supabase stores as TEXT, Telegram sends as number)
+        const userIdStr = String(userId);
+        userId = userIdStr; // Store normalized userId in reminder object
         if (this.acknowledgedTime.has(userIdStr)) {
             const acknowledgedTimestamp = this.acknowledgedTime.get(userIdStr);
             const timeSinceAcknowledged = Date.now() - acknowledgedTimestamp;
@@ -173,7 +174,7 @@ class ReminderManager extends EventEmitter {
         // Check if user has acknowledged this keyword (search reminders Map - no need for separate Set)
         // Once acknowledged, keyword is permanently blocked - check reminders directly
         const hasAcknowledgedKeyword = Array.from(this.reminders.values()).some(r => 
-            r.userId.toString() === userIdStr && 
+            String(r.userId) === userIdStr && 
             r.keyword === keyword && 
             r.status === 'acknowledged'
         );
@@ -211,7 +212,7 @@ class ReminderManager extends EventEmitter {
 
         const reminder = {
             reminderId, // Unique ID for this reminder
-            userId,
+            userId: userIdStr, // Store as string for consistency
             keyword,
             message,
             sender,
@@ -364,7 +365,8 @@ class ReminderManager extends EventEmitter {
         console.log(`🔍 activeReminders keys:`, Array.from(this.activeReminders.keys()));
         console.log(`🔍 activeReminders entries:`, Array.from(this.activeReminders.entries()));
         
-        const userIdStr = userId.toString();
+        // Normalize userId to string for consistency (Telegram sends as number, Supabase stores as TEXT)
+        const userIdStr = String(userId);
         const now = Date.now();
         
         // IMPORTANT: Set acknowledgedTime FIRST to protect against race conditions
@@ -375,7 +377,7 @@ class ReminderManager extends EventEmitter {
         
         // Get all reminders for this user since last /ok
         const allUserReminders = Array.from(this.reminders.values()).filter(r => {
-            if (r.userId.toString() !== userIdStr) return false;
+            if (String(r.userId) !== userIdStr) return false;
             const reminderTime = new Date(r.firstDetectedAt).getTime();
             return reminderTime >= lastOkTimestamp;
         });
@@ -404,7 +406,7 @@ class ReminderManager extends EventEmitter {
         if (reminderId) {
             const reminder = this.reminders.get(reminderId);
             // Double-check: verify it's the same user and active status
-            if (reminder && reminder.userId.toString() === userIdStr && reminder.status === 'active') {
+            if (reminder && String(reminder.userId) === userIdStr && reminder.status === 'active') {
                 // Check if it was already in activeKeywords (from activeReminder match)
                 const alreadyProcessed = activeReminder && activeReminder.reminderId === reminderId;
                 
@@ -565,7 +567,8 @@ class ReminderManager extends EventEmitter {
      * Remove reminder by userId (clears the activeReminders mapping)
      */
     removeReminderByUserId(userId) {
-        const userIdStr = userId.toString();
+        // Normalize userId to string for consistency
+        const userIdStr = String(userId);
         const reminderId = this.activeReminders.get(userIdStr);
         if (reminderId) {
             this.activeReminders.delete(userIdStr);
@@ -577,7 +580,8 @@ class ReminderManager extends EventEmitter {
      * Remove reminder for a user
      */
     removeReminder(userId, keepAcknowledgedKeyword = false) {
-        const userIdStr = userId.toString();
+        // Normalize userId to string for consistency
+        const userIdStr = String(userId);
         const reminderId = this.activeReminders.get(userIdStr);
         if (!reminderId) {
             return;
@@ -601,7 +605,8 @@ class ReminderManager extends EventEmitter {
      * Get active reminder for a user
      */
     getReminders(userId) {
-        const userIdStr = userId.toString();
+        // Normalize userId to string for consistency
+        const userIdStr = String(userId);
         const reminderId = this.activeReminders.get(userIdStr);
         if (reminderId) {
             return this.reminders.get(reminderId);
@@ -620,7 +625,8 @@ class ReminderManager extends EventEmitter {
      * Check if user pressed /ok recently
      */
     hasRecentlyAcknowledged(userId, maxSeconds = 60) {
-        const userIdStr = userId.toString();
+        // Normalize userId to string for consistency
+        const userIdStr = String(userId);
         if (!this.acknowledgedTime.has(userIdStr)) {
             return false;
         }
@@ -633,7 +639,8 @@ class ReminderManager extends EventEmitter {
      * Check if user has pending reminder
      */
     hasReminder(userId) {
-        const userIdStr = userId.toString();
+        // Normalize userId to string for consistency
+        const userIdStr = String(userId);
         const reminderId = this.activeReminders.get(userIdStr);
         if (!reminderId) return false;
         const reminder = this.reminders.get(reminderId);
@@ -645,7 +652,8 @@ class ReminderManager extends EventEmitter {
      */
     resetReminderForKeyword(userId, keyword, message, sender, group, messageId, phoneNumber, attachment, isGlobal = false) {
         console.log(`🔍 resetReminderForKeyword called for user ${userId}, keyword "${keyword}"`);
-        const userIdStr = userId.toString();
+        // Normalize userId to string for consistency
+        const userIdStr = String(userId);
         const existingReminderId = this.activeReminders.get(userIdStr);
         const existingReminder = existingReminderId ? this.reminders.get(existingReminderId) : null;
         
