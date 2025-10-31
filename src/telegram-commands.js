@@ -6,6 +6,8 @@
 const TelegramBot = require('node-telegram-bot-api');
 const TelegramAuthorization = require('./telegram-auth');
 const { logBotEvent, logError } = require('./logger');
+const fs = require('fs');
+const path = require('path');
 
 class TelegramCommandHandler {
     constructor(token, authorization, keywordDetector) {
@@ -224,10 +226,34 @@ class TelegramCommandHandler {
             console.log('📨 Received /start from:', userName);
             
             if (this.authorization.isAuthorized(userId)) {
-                this.bot.sendMessage(chatId, '✅ You are authorized! Bot is working!\n\nUse /help to see available commands.');
+                // Differentiate between admin and regular user
+                if (this.authorization.isAdmin(userId)) {
+                    this.bot.sendMessage(chatId, 
+                        '👑 <b>Welcome back, Admin!</b>\n\n' +
+                        '✅ You are authorized and have admin privileges.\n\n' +
+                        '📋 <b>Quick Commands:</b>\n' +
+                        '• <code>/help</code> - See all available commands\n' +
+                        '• <code>/admin</code> - See admin-only commands\n' +
+                        '• <code>/status</code> - Check bot status\n' +
+                        '• <code>/stats</code> - View statistics\n\n' +
+                        '🤖 Bot is working and monitoring for keywords!',
+                        { parse_mode: 'HTML' }
+                    );
             } else {
                 this.bot.sendMessage(chatId, 
-                    '🔐 Access Request\n\n' +
+                        '👑 <b>Welcome back!</b>\n\n' +
+                        '✅ You are authorized and have user privileges.\n\n' +
+                        '📋 <b>Quick Commands:</b>\n' +
+                        '• <code>/help</code> - See all available commands\n' +
+                        '• <code>/status</code> - Check bot status\n' +
+                        '• <code>/stats</code> - View statistics\n\n' +
+                        '🤖 Bot is working and monitoring for keywords!',
+                        { parse_mode: 'HTML' }
+                    );
+                }
+            } else {
+                this.bot.sendMessage(chatId, 
+                    '🔐 <b>Access Request</b>\n\n' +
                     'You are not authorized to use this bot.\n' +
                     'Your request has been sent to administrators for approval.\n\n' +
                     'Request ID: ' + userId + '\n' +
@@ -603,13 +629,30 @@ class TelegramCommandHandler {
             }
             
             console.log('📨 Received /stats from:', msg.from.username || msg.from.first_name);
+            
+            // Get actual statistics
+            const adminUsers = this.authorization.getAdminUsers();
+            const authorizedUsers = this.authorization.getAuthorizedUsers();
+            const keywords = this.keywordDetector ? this.keywordDetector.getKeywords() : [];
+            
+            // Read version from package.json
+            let version = '1.0.0';
+            try {
+                const packagePath = path.join(__dirname, '..', 'package.json');
+                const packageJson = JSON.parse(fs.readFileSync(packagePath, 'utf8'));
+                version = packageJson.version || '1.0.0';
+            } catch (error) {
+                console.warn('⚠️ Could not read package.json for version, using default');
+            }
+            
             const statsText = '📈 Bot Statistics\n\n' +
-                '🤖 Bot Version: 1.0.0\n' +
+                `🤖 Bot Version: ${version}\n` +
                 '⏰ Uptime: Running\n' +
                 '📱 WhatsApp: Connected\n' +
                 '🔔 Telegram: Active\n' +
-                '🔍 Keywords: 33 loaded\n' +
-                '👥 Users: 1\n' +
+                `🔍 Keywords: ${keywords.length} loaded\n` +
+                `👑 Admins: ${adminUsers.length}\n` +
+                `👥 Users: ${authorizedUsers.length}\n` +
                 '📊 Notifications: Ready\n' +
                 `🕐 Last Update: ${new Date().toLocaleString()}`;
             this.bot.sendMessage(chatId, statsText);
@@ -715,7 +758,7 @@ class TelegramCommandHandler {
                     await this.bot.sendMessage(chatId, '❌ You are not authorized to use this bot.');
                     return;
                 }
-
+                
                 console.log('📨 Received /allgroups from:', msg.from.username || msg.from.first_name);
                 
                 // Load discovered groups and subscriptions
@@ -1466,18 +1509,18 @@ class TelegramCommandHandler {
         this.bot.onText(/\/mykeywords/, async (msg) => {
             const chatId = msg.chat.id;
             const userId = msg.from.id;
-            
+
             // Prevent duplicate commands
             if (this.isDuplicateCommand(userId, 'mykeywords')) {
                 console.log('🚫 Duplicate /mykeywords command ignored from:', msg.from.username || msg.from.first_name);
                 return;
             }
-            
+
             if (!this.authorization.isAuthorized(userId)) {
                 await this.bot.sendMessage(chatId, '❌ You are not authorized to use this bot.');
                 return;
             }
-            
+
             // Use keywordDetector's method which checks Supabase first
             const personalKeywords = await this.getPersonalKeywordsFromSupabase(userId);
             let keywordsText = '🔑 <b>Your Personal Keywords:</b>\n\n';
@@ -1783,6 +1826,232 @@ class TelegramCommandHandler {
                 await this.bot.sendMessage(chatId, '❌ Failed to load anti-ban status.');
             }
         });
+
+        // ============================================
+        // ERROR HANDLERS FOR MALFORMED COMMANDS
+        // ============================================
+
+        // Handle commands with missing required parameters
+        // /addkeyword without parameter
+        this.bot.onText(/^\/addkeyword$/, async (msg) => {
+            const chatId = msg.chat.id;
+            const userId = msg.from.id;
+            if (!this.authorization.isAdmin(userId)) {
+                await this.bot.sendMessage(chatId, '❌ Admin access required to add global keywords.');
+                return;
+            }
+            await this.bot.sendMessage(chatId, '❌ <b>Error: Missing parameter</b>\n\n' +
+                'Usage: <code>/addkeyword &lt;word&gt;</code>\n\n' +
+                'Example: <code>/addkeyword urgent</code>', { parse_mode: 'HTML' });
+        });
+
+        // /removekeyword without parameter
+        this.bot.onText(/^\/removekeyword$/, async (msg) => {
+            const chatId = msg.chat.id;
+            const userId = msg.from.id;
+            if (!this.authorization.isAdmin(userId)) {
+                await this.bot.sendMessage(chatId, '❌ Admin access required to remove global keywords.');
+                return;
+            }
+            await this.bot.sendMessage(chatId, '❌ <b>Error: Missing parameter</b>\n\n' +
+                'Usage: <code>/removekeyword &lt;word&gt;</code>\n\n' +
+                'Example: <code>/removekeyword urgent</code>', { parse_mode: 'HTML' });
+        });
+
+        // /addmykeyword without parameter
+        this.bot.onText(/^\/addmykeyword$/, async (msg) => {
+            const chatId = msg.chat.id;
+            const userId = msg.from.id;
+            if (!this.authorization.isAuthorized(userId)) {
+                await this.bot.sendMessage(chatId, '❌ You are not authorized to use this bot.');
+                return;
+            }
+            await this.bot.sendMessage(chatId, '❌ <b>Error: Missing parameter</b>\n\n' +
+                'Usage: <code>/addmykeyword &lt;word&gt;</code>\n\n' +
+                'Example: <code>/addmykeyword test</code>', { parse_mode: 'HTML' });
+        });
+
+        // /removemykeyword without parameter
+        this.bot.onText(/^\/removemykeyword$/, async (msg) => {
+            const chatId = msg.chat.id;
+            const userId = msg.from.id;
+            if (!this.authorization.isAuthorized(userId)) {
+                await this.bot.sendMessage(chatId, '❌ You are not authorized to use this bot.');
+                return;
+            }
+            await this.bot.sendMessage(chatId, '❌ <b>Error: Missing parameter</b>\n\n' +
+                'Usage: <code>/removemykeyword &lt;word&gt;</code>\n\n' +
+                'Example: <code>/removemykeyword test</code>', { parse_mode: 'HTML' });
+        });
+
+        // /approve without parameter
+        this.bot.onText(/^\/approve$/, async (msg) => {
+            const chatId = msg.chat.id;
+            const userId = msg.from.id;
+            if (!this.authorization.isAdmin(userId)) {
+                await this.bot.sendMessage(chatId, '❌ Admin access required.');
+                return;
+            }
+            await this.bot.sendMessage(chatId, '❌ <b>Error: Missing parameter</b>\n\n' +
+                'Usage: <code>/approve &lt;user_id&gt;</code>\n\n' +
+                'Use <code>/pending</code> to see pending requests.', { parse_mode: 'HTML' });
+        });
+
+        // /reject without parameter
+        this.bot.onText(/^\/reject$/, async (msg) => {
+            const chatId = msg.chat.id;
+            const userId = msg.from.id;
+            if (!this.authorization.isAdmin(userId)) {
+                await this.bot.sendMessage(chatId, '❌ Admin access required.');
+                return;
+            }
+            await this.bot.sendMessage(chatId, '❌ <b>Error: Missing parameter</b>\n\n' +
+                'Usage: <code>/reject &lt;user_id&gt;</code>\n\n' +
+                'Use <code>/pending</code> to see pending requests.', { parse_mode: 'HTML' });
+        });
+
+        // /remove without parameter
+        this.bot.onText(/^\/remove$/, async (msg) => {
+            const chatId = msg.chat.id;
+            const userId = msg.from.id;
+            if (!this.authorization.isAdmin(userId)) {
+                await this.bot.sendMessage(chatId, '❌ Admin access required.');
+                return;
+            }
+            await this.bot.sendMessage(chatId, '❌ <b>Error: Missing parameter</b>\n\n' +
+                'Usage: <code>/remove &lt;user_id&gt;</code>\n\n' +
+                'Example: <code>/remove 123456789</code>', { parse_mode: 'HTML' });
+        });
+
+        // /makeadmin without parameter
+        this.bot.onText(/^\/makeadmin$/, async (msg) => {
+            const chatId = msg.chat.id;
+            const userId = msg.from.id;
+            if (!this.authorization.isAdmin(userId)) {
+                await this.bot.sendMessage(chatId, '❌ Admin access required.');
+                return;
+            }
+            await this.bot.sendMessage(chatId, '❌ <b>Error: Missing parameter</b>\n\n' +
+                'Usage: <code>/makeadmin &lt;user_id&gt;</code>\n\n' +
+                'Example: <code>/makeadmin 123456789</code>', { parse_mode: 'HTML' });
+        });
+
+        // /setemail without parameter
+        this.bot.onText(/^\/setemail$/, async (msg) => {
+            const chatId = msg.chat.id;
+            const userId = msg.from.id;
+            if (!this.authorization.isAdmin(userId)) {
+                await this.bot.sendMessage(chatId, '❌ Admin access required.');
+                return;
+            }
+            await this.bot.sendMessage(chatId, '❌ <b>Error: Missing parameters</b>\n\n' +
+                'Usage: <code>/setemail &lt;user_id&gt; &lt;email&gt;</code>\n\n' +
+                'Example: <code>/setemail 123456789 user@example.com</code>', { parse_mode: 'HTML' });
+        });
+
+        // /removeemail without parameter
+        this.bot.onText(/^\/removeemail$/, async (msg) => {
+            const chatId = msg.chat.id;
+            const userId = msg.from.id;
+            if (!this.authorization.isAdmin(userId)) {
+                await this.bot.sendMessage(chatId, '❌ Admin access required.');
+                return;
+            }
+            await this.bot.sendMessage(chatId, '❌ <b>Error: Missing parameters</b>\n\n' +
+                'Usage: <code>/removeemail &lt;user_id&gt; &lt;email&gt;</code>\n\n' +
+                'Example: <code>/removeemail 123456789 user@example.com</code>', { parse_mode: 'HTML' });
+        });
+
+        // /subscribe without parameter
+        this.bot.onText(/^\/subscribe$/, async (msg) => {
+            const chatId = msg.chat.id;
+            const userId = msg.from.id;
+            if (!this.authorization.isAuthorized(userId)) {
+                await this.bot.sendMessage(chatId, '❌ You are not authorized to use this bot.');
+                return;
+            }
+            await this.bot.sendMessage(chatId, '❌ <b>Error: Missing parameter</b>\n\n' +
+                'Usage: <code>/subscribe &lt;group_name&gt;</code>\n\n' +
+                'Use <code>/allgroups</code> to see available groups.', { parse_mode: 'HTML' });
+        });
+
+        // /unsubscribe without parameter
+        this.bot.onText(/^\/unsubscribe$/, async (msg) => {
+            const chatId = msg.chat.id;
+            const userId = msg.from.id;
+            if (!this.authorization.isAuthorized(userId)) {
+                await this.bot.sendMessage(chatId, '❌ You are not authorized to use this bot.');
+                return;
+            }
+            await this.bot.sendMessage(chatId, '❌ <b>Error: Missing parameter</b>\n\n' +
+                'Usage: <code>/unsubscribe &lt;group_name&gt;</code>\n\n' +
+                'Use <code>/mygroups</code> to see your subscribed groups.', { parse_mode: 'HTML' });
+        });
+
+        // /timezone without parameter
+        this.bot.onText(/^\/timezone$/, async (msg) => {
+            const chatId = msg.chat.id;
+            const userId = msg.from.id;
+            if (!this.authorization.isAuthorized(userId)) {
+                await this.bot.sendMessage(chatId, '❌ You are not authorized to use this bot.');
+                return;
+            }
+            await this.bot.sendMessage(chatId, '❌ <b>Error: Missing parameter</b>\n\n' +
+                'Usage: <code>/timezone &lt;tz&gt;</code>\n\n' +
+                'Example: <code>/timezone America/New_York</code>\n\n' +
+                'Or use shortcuts: /israel, /usa, /uk, /japan', { parse_mode: 'HTML' });
+        });
+
+        // Catch-all handler for unrecognized commands (typos, unknown commands)
+        // This MUST be last to catch anything that doesn't match above patterns
+        this.bot.onText(/^\/(.+)$/, async (msg, match) => {
+            const chatId = msg.chat.id;
+            const userId = msg.from.id;
+            const command = match[1].trim();
+            
+            // Skip if this is a restart confirmation check (already handled above)
+            if (this.pendingRestartConfirmations && this.pendingRestartConfirmations.has(userId)) {
+                return;
+            }
+            
+            // Skip if this is a removal confirmation check (already handled above)
+            if (this.pendingRemovalConfirmations && this.pendingRemovalConfirmations.has(userId)) {
+                return;
+            }
+            
+            // Check if user is authorized (for better error message)
+            if (!this.authorization.isAuthorized(userId)) {
+                await this.bot.sendMessage(chatId, '❌ You are not authorized to use this bot.');
+                return;
+            }
+            
+            const escapedCommand = this.escapeHtml(command);
+            
+            // Provide helpful suggestions for common typos
+            const suggestions = [];
+            if (command.toLowerCase().includes('removemykeword') || command.toLowerCase().includes('removemykewyrd')) {
+                suggestions.push('💡 Did you mean <code>/removemykeyword</code>?');
+            } else if (command.toLowerCase().includes('addmykeword') || command.toLowerCase().includes('addmykewyrd')) {
+                suggestions.push('💡 Did you mean <code>/addmykeyword</code>?');
+            } else if (command.toLowerCase().includes('addkeword') || command.toLowerCase().includes('addkewyrd')) {
+                suggestions.push('💡 Did you mean <code>/addkeyword</code>?');
+            } else if (command.toLowerCase().includes('removekeword') || command.toLowerCase().includes('removekewyrd')) {
+                suggestions.push('💡 Did you mean <code>/removekeyword</code>?');
+            }
+            
+            let errorMessage = `❌ <b>Unrecognized command:</b> <code>/${escapedCommand}</code>\n\n`;
+            errorMessage += 'Use <code>/help</code> to see all available commands.\n';
+            if (this.authorization.isAdmin(userId)) {
+                errorMessage += 'Use <code>/admin</code> to see admin-only commands.\n';
+            }
+            
+            if (suggestions.length > 0) {
+                errorMessage += '\n' + suggestions.join('\n');
+            }
+            
+            await this.bot.sendMessage(chatId, errorMessage, { parse_mode: 'HTML' });
+            console.log(`⚠️ Unrecognized command from user ${userId}: /${command}`);
+        });
     }
 
     // Load discovered groups from file
@@ -1925,18 +2194,18 @@ class TelegramCommandHandler {
             console.log(`📨 Received /ok from user ${userId} (chatId: ${chatId})`);
             
             try {
-                if (!this.authorization.isAuthorized(userId)) {
+            if (!this.authorization.isAuthorized(userId)) {
                     await bot.sendMessage(chatId, '❌ You are not authorized to use this bot.');
-                    return;
-                }
+                return;
+            }
 
-                if (this.isDuplicateCommand(userId, 'ok')) {
+            if (this.isDuplicateCommand(userId, 'ok')) {
                     console.log(`⚠️ Duplicate /ok command from user ${userId} - ignoring`);
-                    return;
-                }
+                return;
+            }
 
                 // Get reminder manager with error handling
-                const reminderManager = this.getReminderManager();
+            const reminderManager = this.getReminderManager();
                 if (!reminderManager) {
                     console.error(`❌ ReminderManager is null for user ${userId}`);
                     await bot.sendMessage(chatId, '❌ Reminder system is not available. Please contact an administrator.');
@@ -1990,17 +2259,17 @@ class TelegramCommandHandler {
             console.log(`📨 Received /reminders from user ${userId} (chatId: ${chatId})`);
             
             try {
-                if (!this.authorization.isAuthorized(userId)) {
+            if (!this.authorization.isAuthorized(userId)) {
                     await bot.sendMessage(chatId, '❌ You are not authorized to use this bot.');
-                    return;
-                }
+                return;
+            }
 
-                if (this.isDuplicateCommand(userId, 'reminders')) {
+            if (this.isDuplicateCommand(userId, 'reminders')) {
                     console.log(`⚠️ Duplicate /reminders command from user ${userId} - ignoring`);
-                    return;
-                }
+                return;
+            }
 
-                const reminderManager = this.getReminderManager();
+            const reminderManager = this.getReminderManager();
                 if (!reminderManager) {
                     console.error(`❌ ReminderManager is null for user ${userId}`);
                     await bot.sendMessage(chatId, '❌ Reminder system is not available. Please contact an administrator.');
@@ -2008,20 +2277,20 @@ class TelegramCommandHandler {
                 }
 
                 try {
-                    const reminder = reminderManager.getReminders(userId);
-                    if (reminder) {
-                        const timeElapsed = this.calculateTimeElapsed(reminder.firstDetectedAt);
-                        const response = `⏰ Active Reminder\n\n` +
-                            `Keyword: ${reminder.keyword}\n` +
-                            `From: ${reminder.sender}\n` +
-                            `Group: ${reminder.group}\n` +
-                            `Detected: ${timeElapsed}\n` +
-                            `Reminders sent: ${reminder.reminderCount}/4\n\n` +
-                            `Message:\n"${reminder.message.substring(0, 100)}${reminder.message.length > 100 ? '...' : ''}"\n\n` +
-                            `Reply /ok to acknowledge and stop.`;
+                const reminder = reminderManager.getReminders(userId);
+                if (reminder) {
+                    const timeElapsed = this.calculateTimeElapsed(reminder.firstDetectedAt);
+                    const response = `⏰ Active Reminder\n\n` +
+                        `Keyword: ${reminder.keyword}\n` +
+                        `From: ${reminder.sender}\n` +
+                        `Group: ${reminder.group}\n` +
+                        `Detected: ${timeElapsed}\n` +
+                        `Reminders sent: ${reminder.reminderCount}/4\n\n` +
+                        `Message:\n"${reminder.message.substring(0, 100)}${reminder.message.length > 100 ? '...' : ''}"\n\n` +
+                        `Reply /ok to acknowledge and stop.`;
                         await bot.sendMessage(chatId, response);
                         console.log(`✅ Successfully sent reminder info to user ${userId}`);
-                    } else {
+                } else {
                         await bot.sendMessage(chatId, 'ℹ️ No active reminders.');
                     }
                 } catch (error) {
