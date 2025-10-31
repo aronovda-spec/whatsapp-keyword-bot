@@ -1,4 +1,4 @@
-const pdfParse = require('pdf-parse');
+const { PDFParse } = require('pdf-parse');
 const XLSX = require('xlsx');
 const mammoth = require('mammoth');
 const { createWorker } = require('tesseract.js');
@@ -97,8 +97,12 @@ class FileExtractor {
         if (!this.enabled.pdf) return '';
         
         try {
-            const data = await pdfParse(buffer);
-            return data.text || '';
+            const parser = new PDFParse({});
+            // pdf-parse v2.4.5 load() expects an object with url or data property
+            await parser.load({ data: buffer });
+            const text = await parser.getText();
+            await parser.destroy();
+            return text || '';
         } catch (error) {
             logError(error, { context: 'pdf_extraction' });
             return '';
