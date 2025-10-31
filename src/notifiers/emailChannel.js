@@ -151,33 +151,72 @@ class EmailChannel {
         return userEmails ? [userEmails] : null; // Convert single email to array
     }
 
-    async sendKeywordAlert(keyword, message, sender, group, messageId, phoneNumber = null, matchType = 'exact', matchedToken = null, attachment = null) {
+    async sendKeywordAlert(keyword, message, sender, group, messageId, phoneNumber = null, matchType = 'exact', matchedToken = null, attachment = null, authorizedUsers = null) {
         if (!this.enabled) {
             console.log('📧 Email channel disabled, skipping email notification');
             return false;
         }
 
-        console.log(`📧 Preparing to send email for global keyword: "${keyword}" to ${this.recipients.length} recipients`);
-
         try {
             const emailContent = this.formatEmail(keyword, message, sender, group, messageId, phoneNumber, matchType, matchedToken, attachment);
             
+            // Collect all recipient emails
+            const allRecipients = new Set(); // Use Set to avoid duplicates
+            
+            // If authorized users are provided, send to each user's email from database
+            if (authorizedUsers && authorizedUsers.length > 0) {
+                console.log(`📧 Fetching emails for ${authorizedUsers.length} authorized user(s) from database`);
+                
+                // Get emails for each authorized user from database
+                const userEmailPromises = authorizedUsers.map(async (userId) => {
+                    const userEmails = await this.getEmailForUser(userId);
+                    return userEmails || [];
+                });
+                
+                const userEmailArrays = await Promise.all(userEmailPromises);
+                
+                // Flatten and add to recipients
+                userEmailArrays.forEach(emails => {
+                    if (emails && Array.isArray(emails)) {
+                        emails.forEach(email => {
+                            if (email) allRecipients.add(email);
+                        });
+                    }
+                });
+                
+                console.log(`📧 Found ${allRecipients.size} unique email(s) from ${authorizedUsers.length} user(s) in database`);
+            }
+            
+            // Fallback: If no user emails found, use global EMAIL_TO
+            if (allRecipients.size === 0 && this.recipients.length > 0) {
+                console.log(`📧 No user emails found; falling back to global EMAIL_TO (${this.recipients.length} recipient(s))`);
+                this.recipients.forEach(email => allRecipients.add(email));
+            }
+            
+            if (allRecipients.size === 0) {
+                console.warn(`⚠️ No email recipients found for global keyword alert: "${keyword}"`);
+                return false;
+            }
+            
+            console.log(`📧 Preparing to send email for global keyword: "${keyword}" to ${allRecipients.size} recipient(s)`);
+            
             // Send to all recipients
+            const recipientsArray = Array.from(allRecipients);
             const results = await Promise.allSettled(
-                this.recipients.map(recipient => this.sendWithRetry(emailContent, recipient))
+                recipientsArray.map(recipient => this.sendWithRetry(emailContent, recipient))
             );
 
             const successCount = results.filter(result => result.status === 'fulfilled').length;
             const failureCount = results.filter(result => result.status === 'rejected').length;
 
-            console.log(`📧 Email sent to ${successCount}/${this.recipients.length} recipients for keyword: "${keyword}"`);
+            console.log(`📧 Email sent to ${successCount}/${allRecipients.size} recipients for keyword: "${keyword}"`);
             if (failureCount > 0) {
                 console.warn(`⚠️ Failed to send email to ${failureCount} recipients for keyword: "${keyword}"`);
                 
                 // Log detailed failure reasons
                 results.forEach((result, index) => {
                     if (result.status === 'rejected') {
-                        console.error(`❌ Email to ${this.recipients[index]} failed:`, result.reason?.message || result.reason);
+                        console.error(`❌ Email to ${recipientsArray[index]} failed:`, result.reason?.message || result.reason);
                     }
                 });
             }
@@ -188,7 +227,8 @@ class EmailChannel {
                 group,
                 messageId,
                 successCount,
-                failureCount
+                failureCount,
+                totalRecipients: allRecipients.size
             });
 
             return successCount > 0;
