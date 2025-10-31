@@ -1,6 +1,7 @@
 const EventEmitter = require('events');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { logError, logBotEvent } = require('./logger');
 const SupabaseManager = require('./supabase');
 
@@ -14,7 +15,6 @@ class ReminderManager extends EventEmitter {
         this.acknowledgedTime = new Map(); // userId → timestamp when /ok was pressed
         this.lastOkAt = new Map(); // userId → timestamp when /ok was last pressed (for tracking history)
         // NOTE: acknowledgedKeywords Set removed - we check reminders Map directly for acknowledged status (saves memory)
-        this.reminderIdCounter = 0; // Counter for unique reminder IDs
         this.storagePath = path.join(__dirname, '../config/active-reminders.json');
         this.maxReminders = 7; // 0 min, 1 min, 2 min, 5 min, 15 min, 60 min, 90 min
         this.weeklyResetTimer = null; // Timer for weekly acknowledged reminders reset
@@ -206,8 +206,8 @@ class ReminderManager extends EventEmitter {
             // DON'T delete from activeReminders - we'll update it with new reminderId
         }
 
-        // Generate unique reminder ID
-        const reminderId = `reminder_${++this.reminderIdCounter}_${userId}_${Date.now()}`;
+        // Generate unique reminder ID as UUID
+        const reminderId = crypto.randomUUID();
 
         const reminder = {
             reminderId, // Unique ID for this reminder

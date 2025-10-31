@@ -66,25 +66,26 @@ class Notifier {
             try {
                 const alertMessage = this.formatAlertMessage(keyword, message, sender, group, messageId, phoneNumber, matchType, matchedToken, attachment, isReminder, reminderCount);
                 
-                // Send to all authorized chat IDs only
-                const authorizedChatIds = this.chatIds.filter(chatId => 
-                    this.authorization.isAuthorized(chatId)
-                );
+                // Send to ALL authorized users (not just chatIds)
+                const authorizedUsers = this.authorization.getAuthorizedUsers();
+                console.log(`📤 Sending global keyword alert to ${authorizedUsers.length} authorized user(s)`);
                 
-                if (authorizedChatIds.length > 0) {
+                if (authorizedUsers.length > 0) {
                     const results = await Promise.allSettled(
-                        authorizedChatIds.map(chatId => this.sendWithRetry(alertMessage, chatId))
+                        authorizedUsers.map(userId => this.sendWithRetry(alertMessage, userId))
                     );
                     
                     const successCount = results.filter(result => result.status === 'fulfilled').length;
                     const failureCount = results.filter(result => result.status === 'rejected').length;
                     
-                    console.log(`📤 Telegram alert sent to ${successCount}/${authorizedChatIds.length} users`);
+                    console.log(`📤 Telegram alert sent to ${successCount}/${authorizedUsers.length} users`);
                     if (failureCount > 0) {
                         console.warn(`⚠️ Failed to send Telegram to ${failureCount} users`);
                     }
                     
                     telegramSuccess = successCount > 0;
+                } else {
+                    console.warn('⚠️ No authorized users found for global keyword alert');
                 }
             } catch (error) {
                 logError(error, {
