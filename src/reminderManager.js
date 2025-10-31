@@ -476,7 +476,7 @@ class ReminderManager extends EventEmitter {
             // Mark as acknowledged (even though it completed)
             r.status = 'acknowledged';
             r.acknowledgedAt = new Date();
-            
+                
             // Cancel any pending timers (shouldn't have any, but be safe)
             this.cancelReminderTimer(r.reminderId);
             

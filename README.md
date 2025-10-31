@@ -141,10 +141,11 @@ NODE_ENV=production
 ```
 
 ### Supabase Tables (emails)
-- `users.email`: legacy single email (still read as fallback)
-- `user_emails`: multiple emails per user for personal alerts
+- `user_emails`: multiple emails per user for personal alerts (primary storage)
   - Columns: `id uuid`, `user_id text`, `email text`, `updated_at timestamptz`
-  - Unique index on (`user_id`, `email`)
+  - Unique index on (`user_id`, `email`) - prevents duplicate emails per user
+  - Managed via `/setemail` and `/removeemail` commands
+  - Duplicate email detection: Adding the same email twice will be rejected with a clear error message
 
 ### Keywords (config/keywords.json)
 ```json

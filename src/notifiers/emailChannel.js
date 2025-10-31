@@ -123,21 +123,14 @@ class EmailChannel {
         // If not found in local map, query Supabase (runtime sync)
         if (!userEmails && this.supabase && this.supabase.isEnabled()) {
             try {
-                // Prefer multi-email table; fallback to single email field
+                // Get emails from user_emails table (users.email is deprecated)
                 const emails = await this.supabase.getUserEmails(userIdStr);
                 if (emails && emails.length > 0) {
                     this.userEmailMap.set(userIdStr, emails);
                     userEmails = emails;
                     console.log(`📧 Loaded ${emails.length} email(s) from Supabase for user ${userIdStr}`);
                 } else {
-                    const email = await this.supabase.getUserEmail(userIdStr);
-                    if (email) {
-                        this.userEmailMap.set(userIdStr, [email]);
-                        userEmails = [email];
-                        console.log(`📧 Loaded email from Supabase for user ${userIdStr}`);
-                    } else {
-                        this.userEmailMap.set(userIdStr, null);
-                    }
+                    this.userEmailMap.set(userIdStr, null);
                 }
             } catch (error) {
                 console.error(`❌ Error querying Supabase for user ${userIdStr} email:`, error.message);
@@ -267,7 +260,7 @@ class EmailChannel {
         } else {
             if (fallbackEnabled) {
                 console.log('📧 No personal email on file; falling back to EMAIL_TO for personal alert');
-                return await this.sendKeywordAlert(keyword, message, sender, group, messageId, phoneNumber, matchType, matchedToken, attachment);
+            return await this.sendKeywordAlert(keyword, message, sender, group, messageId, phoneNumber, matchType, matchedToken, attachment);
             }
             console.log(`📧 Skipping personal email: no email configured for user ${targetUserId}`);
             return false;
