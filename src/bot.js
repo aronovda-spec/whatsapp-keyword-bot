@@ -99,6 +99,14 @@ class WhatsAppKeywordBot {
                 logBotEvent('phone_disconnected', { phoneNumber });
                 
                 // Send status update to admins only during development stage
+                // Skip notifications for code 428 (normal WhatsApp session refresh/maintenance)
+                const isNormalMaintenance = disconnectInfo?.reason === 428;
+                
+                if (isNormalMaintenance) {
+                    console.log('ℹ️ Code 428 - Normal WhatsApp session maintenance, skipping notification (will auto-reconnect)');
+                    return; // Don't send notification for normal maintenance
+                }
+                
                 let details = '';
                 if (disconnectInfo) {
                     if (disconnectInfo.isVirtualNumberExpired) {
@@ -247,6 +255,14 @@ class WhatsAppKeywordBot {
 
         this.whatsapp.on('disconnected', (disconnectInfo) => {
             logBotEvent('bot_disconnected', disconnectInfo);
+            
+            // Skip notifications for code 428 (normal WhatsApp session refresh/maintenance)
+            const isNormalMaintenance = disconnectInfo?.reason === 428;
+            
+            if (isNormalMaintenance) {
+                console.log('ℹ️ Code 428 - Normal WhatsApp session maintenance, skipping notification (will auto-reconnect)');
+                return; // Don't send notification for normal maintenance
+            }
             
             let statusMessage = 'Bot lost connection to WhatsApp';
             let details = '';
