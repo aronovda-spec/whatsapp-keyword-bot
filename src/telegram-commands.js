@@ -62,7 +62,8 @@ class TelegramCommandHandler {
                     return;
                 }
                 
-                if (messageText === 'CONFIRM RESTART') {
+                // Check for RESTART confirmation (case-insensitive)
+                if (messageText && messageText.trim().toUpperCase() === 'RESTART') {
                     // Confirmed restart
                     this.pendingRestartConfirmations.delete(userId);
                     
@@ -86,7 +87,7 @@ class TelegramCommandHandler {
                     }, 3000);
                     
                 } else {
-                    // Cancelled restart
+                    // Cancelled restart (anything other than "RESTART")
                     this.pendingRestartConfirmations.delete(userId);
                     
                     this.bot.sendMessage(confirmation.chatId, 
@@ -99,7 +100,7 @@ class TelegramCommandHandler {
                     console.log(`🔄 Admin ${userId} cancelled bot restart`);
                 }
                 
-                // Return early to prevent other handlers
+                // IMPORTANT: Return early to prevent message from being processed as broadcast or other commands
                 return;
             }
             
@@ -308,6 +309,12 @@ class TelegramCommandHandler {
                 return;
             }
             
+            // Authorization check
+            if (!this.authorization.isAuthorized(userId)) {
+                this.bot.sendMessage(chatId, '❌ You are not authorized to use this bot.');
+                return;
+            }
+            
             console.log('📨 Received /status from:', msg.from.username || msg.from.first_name);
             const statusText = '📊 Bot Status\n\n' +
                 '✅ Bot is running\n' +
@@ -329,34 +336,48 @@ class TelegramCommandHandler {
                 return;
             }
             
+            // Authorization check - Admin only
+            if (!this.authorization.isAdmin(userId)) {
+                this.bot.sendMessage(chatId, '❌ Admin access required.');
+                return;
+            }
+            
             console.log('📨 Received /admin from:', msg.from.username || msg.from.first_name);
-            const adminText = '👑 Admin Panel\n\n' +
-                'Available admin commands:\n' +
-                '/users - List all users with roles\n' +
-                '/admins - Show admin users only\n' +
-                '/keywords - Show keywords\n' +
-                '/stats - Bot statistics\n' +
-                '/restart - Restart bot (preserves all data)\n' +
-                '/addkeyword <word> - Add global keyword\n' +
-                '/removekeyword <word> - Remove global keyword\n' +
+            const adminText = '👑 Admin Panel - Help Menu\n\n' +
+                '<b>Available admin-only commands:</b>\n\n' +
+                '<b>User Management:</b>\n' +
                 '/approve <user_id> - Approve user\n' +
                 '/reject <user_id> - Reject user\n' +
                 '/remove <user_id> - Remove user (with confirmation)\n' +
                 '/pending - Show pending requests\n' +
-                '/setemail <user_id> <email> - Set user email\n' +
-                '/removeemail <user_id> - Remove user email\n' +
-                '/makeadmin <user_id> - Promote user to admin';
-            this.bot.sendMessage(chatId, adminText);
+                '/makeadmin <user_id> - Promote user to admin\n' +
+                '/setemail <user_id> <email> - Add user email\n' +
+                '/removeemail <user_id> <email> - Remove user email\n\n' +
+                '<b>Keyword Management:</b>\n' +
+                '/addkeyword <word> - Add global keyword\n' +
+                '/removekeyword <word> - Remove global keyword\n\n' +
+                '<b>Bot Control:</b>\n' +
+                '/restart - Restart bot (preserves all data)\n' +
+                '/resetall - Reset all reminders\n' +
+                '/antiban - Show anti-ban status\n\n' +
+                '<b>Note:</b> For information commands available to all users, see /help';
+            this.bot.sendMessage(chatId, adminText, { parse_mode: 'HTML' });
         });
 
         // Users command
-        this.bot.onText(/\/users/, (msg) => {
+        this.bot.onText(/\/users/, async (msg) => {
             const chatId = msg.chat.id;
             const userId = msg.from.id;
             
             // Prevent duplicate commands
             if (this.isDuplicateCommand(userId, 'users')) {
                 console.log('🚫 Duplicate /users command ignored from:', msg.from.username || msg.from.first_name);
+                return;
+            }
+            
+            // Authorization check - Admin only (sensitive info)
+            if (!this.authorization.isAdmin(userId)) {
+                await this.bot.sendMessage(chatId, '❌ Admin access required.');
                 return;
             }
             
@@ -371,19 +392,46 @@ class TelegramCommandHandler {
             if (authorizedUsers.length === 0) {
                 usersText += '❌ No authorized users found.';
             } else {
-                authorizedUsers.forEach((user, index) => {
+                // Fetch emails for all users
+                for (const user of authorizedUsers) {
                     const isAdmin = adminUsers.includes(user);
                     const adminBadge = isAdmin ? '👑' : '👤';
                     const adminStatus = isAdmin ? 'Admin' : 'User';
                     const adminEmoji = isAdmin ? '✅' : '👤';
                     const userName = this.authorization.getUserName(user) || 'Unknown';
                     
-                    usersText += `${adminBadge} <b>User ${index + 1} - ${userName}</b>\n`;
+                    // Get user emails
+                    let userEmails = [];
+                    if (this.supabase && this.supabase.isEnabled()) {
+                        try {
+                            const emails = await this.supabase.getUserEmails(user);
+                            if (emails && emails.length > 0) {
+                                userEmails = emails;
+                            } else {
+                                // Fallback to legacy single email
+                                const legacyEmail = await this.supabase.getUserEmail(user);
+                                if (legacyEmail) {
+                                    userEmails = [legacyEmail];
+                                }
+                            }
+                        } catch (error) {
+                            console.error(`Error fetching emails for user ${user}:`, error.message);
+                        }
+                    }
+                    
+                    const index = authorizedUsers.indexOf(user) + 1;
+                    usersText += `${adminBadge} <b>User ${index} - ${userName}</b>\n`;
                     usersText += `   📱 ID: ${user}\n`;
                     usersText += `   ${adminEmoji} Role: ${adminStatus}\n`;
                     usersText += `   ✅ Status: Active\n`;
-                    usersText += `   🔔 Notifications: Enabled\n\n`;
-                });
+                    usersText += `   🔔 Notifications: Enabled\n`;
+                    if (userEmails.length > 0) {
+                        usersText += `   📧 Email(s): ${userEmails.join(', ')}\n`;
+                    } else {
+                        usersText += `   📧 Email(s): Not configured\n`;
+                    }
+                    usersText += `\n`;
+                }
                 
                 usersText += `📊 <b>Summary:</b>\n`;
                 usersText += `   👥 Total Users: ${authorizedUsers.length}\n`;
@@ -391,17 +439,23 @@ class TelegramCommandHandler {
                 usersText += `   👤 Regular Users: ${authorizedUsers.length - adminUsers.length}\n`;
             }
             
-            this.bot.sendMessage(chatId, usersText, { parse_mode: 'HTML' });
+            await this.bot.sendMessage(chatId, usersText, { parse_mode: 'HTML' });
         });
 
         // Admins command - Show only admin users
-        this.bot.onText(/\/admins/, (msg) => {
+        this.bot.onText(/\/admins/, async (msg) => {
             const chatId = msg.chat.id;
             const userId = msg.from.id;
             
             // Prevent duplicate commands
             if (this.isDuplicateCommand(userId, 'admins')) {
                 console.log('🚫 Duplicate /admins command ignored from:', msg.from.username || msg.from.first_name);
+                return;
+            }
+            
+            // Authorization check - Admin only (sensitive info)
+            if (!this.authorization.isAdmin(userId)) {
+                await this.bot.sendMessage(chatId, '❌ Admin access required.');
                 return;
             }
             
@@ -415,22 +469,50 @@ class TelegramCommandHandler {
             if (adminUsers.length === 0) {
                 adminsText += '❌ No admin users found.';
             } else {
-                adminUsers.forEach((adminId, index) => {
+                // Fetch emails for all admins
+                for (let index = 0; index < adminUsers.length; index++) {
+                    const adminId = adminUsers[index];
                     const adminName = this.authorization.getUserName(adminId) || 'Unknown';
+                    
+                    // Get admin emails
+                    let adminEmails = [];
+                    if (this.supabase && this.supabase.isEnabled()) {
+                        try {
+                            const emails = await this.supabase.getUserEmails(adminId);
+                            if (emails && emails.length > 0) {
+                                adminEmails = emails;
+                            } else {
+                                // Fallback to legacy single email
+                                const legacyEmail = await this.supabase.getUserEmail(adminId);
+                                if (legacyEmail) {
+                                    adminEmails = [legacyEmail];
+                                }
+                            }
+                        } catch (error) {
+                            console.error(`Error fetching emails for admin ${adminId}:`, error.message);
+                        }
+                    }
+                    
                     adminsText += `👑 <b>Admin ${index + 1} - ${adminName}</b>\n`;
                     adminsText += `   📱 ID: ${adminId}\n`;
                     adminsText += `   ✅ Role: Admin\n`;
                     adminsText += `   ✅ Status: Active\n`;
                     adminsText += `   🔔 Notifications: Enabled\n`;
-                    adminsText += `   🛠️ Admin Commands: Available\n\n`;
-                });
+                    adminsText += `   🛠️ Admin Commands: Available\n`;
+                    if (adminEmails.length > 0) {
+                        adminsText += `   📧 Email(s): ${adminEmails.join(', ')}\n`;
+                    } else {
+                        adminsText += `   📧 Email(s): Not configured\n`;
+                    }
+                    adminsText += `\n`;
+                }
                 
                 adminsText += `📊 <b>Summary:</b>\n`;
                 adminsText += `   👑 Total Admins: ${adminUsers.length}\n`;
-                adminsText += `   🛠️ Admin Commands: /approve, /reject, /pending, /addkeyword, /removekeyword, /restart\n`;
+                adminsText += `   🛠️ Admin Commands: /approve, /reject, /pending, /remove, /makeadmin, /setemail, /removeemail, /addkeyword, /removekeyword, /restart, /resetall, /antiban\n`;
             }
             
-            this.bot.sendMessage(chatId, adminsText, { parse_mode: 'HTML' });
+            await this.bot.sendMessage(chatId, adminsText, { parse_mode: 'HTML' });
         });
 
         // Keywords command
@@ -491,6 +573,12 @@ class TelegramCommandHandler {
             // Prevent duplicate commands
             if (this.isDuplicateCommand(userId, 'stats')) {
                 console.log('🚫 Duplicate /stats command ignored from:', msg.from.username || msg.from.first_name);
+                return;
+            }
+            
+            // Authorization check
+            if (!this.authorization.isAuthorized(userId)) {
+                this.bot.sendMessage(chatId, '❌ You are not authorized to use this bot.');
                 return;
             }
             
@@ -1476,7 +1564,7 @@ class TelegramCommandHandler {
             
             console.log('📨 Received /restart from:', msg.from.username || msg.from.first_name);
             
-            // First confirmation prompt
+            // Alert confirmation prompt
             this.bot.sendMessage(chatId, 
                 '⚠️ <b>RESTART CONFIRMATION REQUIRED</b>\n\n' +
                 '🔄 <b>Are you sure you want to restart the bot?</b>\n\n' +
@@ -1491,7 +1579,7 @@ class TelegramCommandHandler {
                 '• Global keywords\n' +
                 '• Personal keywords\n' +
                 '• Bot configurations\n\n' +
-                '🔴 <b>Type "CONFIRM RESTART" to proceed</b>\n' +
+                '🔴 <b>Type "RESTART" to confirm and proceed</b>\n' +
                 '❌ <b>Type anything else to cancel</b>',
                 { parse_mode: 'HTML' }
             );

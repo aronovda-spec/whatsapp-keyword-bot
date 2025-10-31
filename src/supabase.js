@@ -219,6 +219,52 @@ class SupabaseManager {
         }
     }
 
+    // Multiple user emails (user_emails table)
+    async getUserEmails(userId) {
+        if (!this.enabled) return null;
+        try {
+            const { data, error } = await this.client
+                .from('user_emails')
+                .select('email')
+                .eq('user_id', userId.toString());
+            if (error) throw error;
+            return (data || []).map(r => r.email).filter(Boolean);
+        } catch (error) {
+            console.error('Supabase getUserEmails error:', error.message);
+            return null;
+        }
+    }
+
+    async addUserEmail(userId, email) {
+        if (!this.enabled) return false;
+        try {
+            const { error } = await this.client
+                .from('user_emails')
+                .insert({ user_id: userId.toString(), email, updated_at: new Date().toISOString() });
+            if (error) throw error;
+            return true;
+        } catch (error) {
+            console.error('Supabase addUserEmail error:', error.message);
+            return false;
+        }
+    }
+
+    async removeUserEmail(userId, email) {
+        if (!this.enabled) return false;
+        try {
+            const { error } = await this.client
+                .from('user_emails')
+                .delete()
+                .eq('user_id', userId.toString())
+                .eq('email', email);
+            if (error) throw error;
+            return true;
+        } catch (error) {
+            console.error('Supabase removeUserEmail error:', error.message);
+            return false;
+        }
+    }
+
     // Personal Keywords
     async getPersonalKeywords(userId) {
         if (!this.enabled) return null;

@@ -123,15 +123,21 @@ class EmailChannel {
         // If not found in local map, query Supabase (runtime sync)
         if (!userEmails && this.supabase && this.supabase.isEnabled()) {
             try {
-                const email = await this.supabase.getUserEmail(userIdStr);
-                if (email) {
-                    // Cache in local map for next time
-                    this.userEmailMap.set(userIdStr, email);
-                    userEmails = email;
-                    console.log(`📧 Loaded email from Supabase for user ${userIdStr}`);
+                // Prefer multi-email table; fallback to single email field
+                const emails = await this.supabase.getUserEmails(userIdStr);
+                if (emails && emails.length > 0) {
+                    this.userEmailMap.set(userIdStr, emails);
+                    userEmails = emails;
+                    console.log(`📧 Loaded ${emails.length} email(s) from Supabase for user ${userIdStr}`);
                 } else {
-                    // User has no email in Supabase
-                    this.userEmailMap.set(userIdStr, null); // Cache negative result
+                    const email = await this.supabase.getUserEmail(userIdStr);
+                    if (email) {
+                        this.userEmailMap.set(userIdStr, [email]);
+                        userEmails = [email];
+                        console.log(`📧 Loaded email from Supabase for user ${userIdStr}`);
+                    } else {
+                        this.userEmailMap.set(userIdStr, null);
+                    }
                 }
             } catch (error) {
                 console.error(`❌ Error querying Supabase for user ${userIdStr} email:`, error.message);
