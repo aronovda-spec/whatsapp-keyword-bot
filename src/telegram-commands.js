@@ -526,7 +526,7 @@ class TelegramCommandHandler {
                 
                 adminsText += `📊 <b>Summary:</b>\n`;
                 adminsText += `   👑 Total Admins: ${adminUsers.length}\n`;
-                adminsText += `   🛠️ Admin Commands: /approve, /reject, /pending, /remove, /makeadmin, /setemail, /removeemail, /addkeyword, /removekeyword, /restart, /resetall, /antiban\n`;
+                adminsText += `   💡 To see admin commands, use /admin\n`;
             }
             
             await this.bot.sendMessage(chatId, adminsText, { parse_mode: 'HTML' });
