@@ -8,7 +8,7 @@ const FileExtractor = require('./fileExtractor');
 const SupabaseManager = require('./supabase');
 
 class WhatsAppConnection {
-    constructor(sessionPath) {
+    constructor(sessionPath, keywordDetector = null) {
         this.sock = null;
         this.isConnected = false;
         this.sessionPath = sessionPath || process.env.WHATSAPP_SESSION_PATH || './sessions';
@@ -18,10 +18,14 @@ class WhatsAppConnection {
         this.monitoredGroups = new Set(); // Track monitored groups
         this.fileExtractor = new FileExtractor(); // File content extractor
         this.supabase = new SupabaseManager(); // Supabase for session backup
+        this.keywordDetector = keywordDetector; // Keyword detector for early detection
         this.phoneNumber = null; // Will be set when connected
         this.phoneNumberForBackup = null; // Phone number without device ID for consistent backup
         this.configPhoneNumber = sessionPath ? sessionPath.split(/[/\\]/).pop() : 'phone1'; // Extract phone identifier from path
         this.groupNames = new Map(); // Cache group names
+        // Track recent keyword alerts with 45-second context window (chatId -> timestamp)
+        this.recentKeywordAlerts = new Map(); // Map<chatId, timestamp[]>
+        this.contextWindowMs = 45000; // 45 seconds
         this.loadGroupConfig();
         this.init();
     }
@@ -251,6 +255,13 @@ class WhatsAppConnection {
             // Non-critical, continue anyway
         }
         
+        // Setup periodic cleanup of old keyword alerts (every 60 seconds)
+        if (!this.cleanupInterval) {
+            this.cleanupInterval = setInterval(() => {
+                this.cleanupOldKeywordAlerts();
+            }, 60000); // Clean up every 60 seconds
+        }
+        
         logBotEvent('whatsapp_connected');
         console.log('✅ WhatsApp connected successfully!');
         console.log('🤖 Bot is now monitoring for keywords...');
@@ -468,40 +479,119 @@ class WhatsAppConnection {
                 return;
             }
 
-            // If attachment exists, download and extract text from file content
-            let extractedText = '';
-            if (attachment && this.fileExtractor && attachment.filename) {
+            // Extract message metadata for chatId (needed for context window)
+            const chatId = message.key.remoteJid;
+
+            // OPTIMIZATION: Detect keywords in message text AND filename FIRST (before file extraction)
+            // If keyword found, skip file extraction to avoid redundant notifications
+            let shouldSkipFileExtraction = false;
+            if (this.keywordDetector && (messageText.trim() || attachment?.filename)) {
                 try {
-                    console.log(`📥 Downloading and extracting content from: ${attachment.filename}`);
+                    // Get group name for keyword detection
+                    const isGroup = chatId && chatId.includes('@g.us');
+                    const groupName = isGroup ? this.getGroupName(chatId) : null;
                     
-                    // Download the file
-                    const fileBuffer = await this.downloadAndExtractFile(message);
+                    // Prepare text for keyword detection (message text + filename if present)
+                    // This matches the logic in bot.js - check both message text and filename
+                    let textToSearch = messageText || '';
+                    if (attachment && attachment.filename) {
+                        textToSearch = (textToSearch ? textToSearch + '\n' : '') + attachment.filename;
+                    }
                     
-                    if (fileBuffer) {
-                        // Extract text from file content
-                        extractedText = await this.extractFileContent(
-                            fileBuffer,
-                            attachment.mimetype,
-                            attachment.filename
-                        );
+                    // Detect keywords in message text AND filename (not file content yet)
+                    const detectedKeywords = await this.keywordDetector.detectKeywords(textToSearch, groupName);
+                    
+                    if (detectedKeywords.length > 0) {
+                        // Determine where keyword was found for better logging
+                        let msgHasKeyword = false;
+                        let fileHasKeyword = false;
                         
-                        if (extractedText) {
-                            console.log(`✅ Extracted ${extractedText.length} characters from file`);
-                            // Add extracted text to message text for keyword detection
-                            messageText += (messageText ? '\n\n[File Content]\n' : '') + extractedText;
+                        if (messageText.trim()) {
+                            const msgKeywords = await this.keywordDetector.detectKeywords(messageText, groupName);
+                            msgHasKeyword = msgKeywords.length > 0;
+                        }
+                        
+                        if (attachment?.filename) {
+                            const fileKeywords = await this.keywordDetector.detectKeywords(attachment.filename, groupName);
+                            fileHasKeyword = fileKeywords.length > 0;
+                        }
+                        
+                        let source = '';
+                        if (msgHasKeyword && fileHasKeyword) {
+                            source = 'message text and filename';
+                        } else if (msgHasKeyword) {
+                            source = 'message text';
+                        } else if (fileHasKeyword) {
+                            source = 'filename';
+                        } else {
+                            source = 'message text or filename';
+                        }
+                        
+                        console.log(`🔍 Keyword detected in ${source} - skipping file extraction for redundant notification prevention`);
+                        shouldSkipFileExtraction = true;
+                        
+                        // Track this keyword alert in the context window
+                        this.trackKeywordAlert(chatId);
+                    } else {
+                        // Check if we're within 45 seconds of a recent keyword alert
+                        if (this.isWithinContextWindow(chatId)) {
+                            console.log(`🔍 Within 45-second context window of recent keyword alert - skipping file extraction`);
+                            shouldSkipFileExtraction = true;
+                        }
+                    }
+                } catch (error) {
+                    logError(error, {
+                        context: 'early_keyword_detection',
+                        chatId
+                    });
+                    // Continue with file extraction if detection fails
+                }
+            }
+
+            // If attachment exists, download and extract text from file content
+            // BUT ONLY if no keyword was found in message text OR filename (to avoid redundant notifications)
+            let extractedText = '';
+            if (attachment && this.fileExtractor && attachment.filename && !shouldSkipFileExtraction) {
+                try {
+                    // Check file size before downloading (if size info is available)
+                    // Hard limit: 20MB to prevent memory issues on free tier
+                    if (attachment.size && attachment.size > 20 * 1024 * 1024) {
+                        console.warn(`⚠️ File ${attachment.filename} too large (${(attachment.size / 1024 / 1024).toFixed(2)}MB), skipping extraction`);
+                    } else {
+                        console.log(`📥 Downloading and extracting content from: ${attachment.filename}`);
+                        
+                        // Download the file
+                        const fileBuffer = await this.downloadAndExtractFile(message);
+                        
+                        if (fileBuffer) {
+                            // Extract text from file content (with built-in size and timeout limits)
+                            extractedText = await this.extractFileContent(
+                                fileBuffer,
+                                attachment.mimetype,
+                                attachment.filename
+                            );
+                            
+                            if (extractedText) {
+                                console.log(`✅ Extracted ${extractedText.length} characters from file`);
+                                // Add extracted text to message text for keyword detection
+                                messageText += (messageText ? '\n\n[File Content]\n' : '') + extractedText;
+                            }
                         }
                     }
                 } catch (error) {
                     logError(error, {
                         context: 'file_content_extraction_in_message',
-                        filename: attachment.filename
+                        filename: attachment.filename,
+                        fileSize: attachment.size
                     });
+                    // Continue processing message even if extraction fails
                 }
+            } else if (attachment && shouldSkipFileExtraction) {
+                console.log(`⏭️ Skipping file extraction - keyword already detected in message text (context window: 45s)`);
             }
 
-            // Extract message metadata
+            // Extract message metadata (chatId already extracted above)
             const sender = message.key.participant || message.key.remoteJid;
-            const chatId = message.key.remoteJid;
             const isGroup = chatId.includes('@g.us');
             const isPrivate = chatId.includes('@s.whatsapp.net');
             const isBroadcast = chatId.includes('@broadcast');
@@ -587,6 +677,66 @@ class WhatsAppConnection {
 
     isGroupMessage(jid) {
         return jid?.endsWith('@g.us');
+    }
+
+    /**
+     * Track keyword alert in context window (30 seconds)
+     */
+    trackKeywordAlert(chatId) {
+        if (!chatId) return;
+        
+        const now = Date.now();
+        const chatIdStr = String(chatId);
+        
+        // Get existing timestamps for this chat
+        let timestamps = this.recentKeywordAlerts.get(chatIdStr) || [];
+        
+        // Remove timestamps older than context window
+        timestamps = timestamps.filter(ts => now - ts < this.contextWindowMs);
+        
+        // Add current timestamp
+        timestamps.push(now);
+        
+        // Update map
+        this.recentKeywordAlerts.set(chatIdStr, timestamps);
+    }
+
+    /**
+     * Check if we're within 45-second context window of a recent keyword alert
+     */
+    isWithinContextWindow(chatId) {
+        if (!chatId) return false;
+        
+        const now = Date.now();
+        const chatIdStr = String(chatId);
+        const timestamps = this.recentKeywordAlerts.get(chatIdStr);
+        
+        if (!timestamps || timestamps.length === 0) {
+            return false;
+        }
+        
+        // Check if any timestamp is within the context window
+        return timestamps.some(ts => now - ts < this.contextWindowMs);
+    }
+
+    /**
+     * Clean up old keyword alert timestamps (called periodically)
+     */
+    cleanupOldKeywordAlerts() {
+        const now = Date.now();
+        
+        for (const [chatId, timestamps] of this.recentKeywordAlerts.entries()) {
+            // Remove timestamps older than context window
+            const filtered = timestamps.filter(ts => now - ts < this.contextWindowMs);
+            
+            if (filtered.length === 0) {
+                // Remove entry if no timestamps remain
+                this.recentKeywordAlerts.delete(chatId);
+            } else {
+                // Update with filtered timestamps
+                this.recentKeywordAlerts.set(chatId, filtered);
+            }
+        }
     }
 
     getGroupName(jid) {
