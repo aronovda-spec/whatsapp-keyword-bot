@@ -129,7 +129,7 @@ class SupabaseManager {
         }));
     }
 
-    async addUser(userId, username = null, firstName = null, isAdmin = false, email = null) {
+    async addUser(userId, username = null, firstName = null, isAdmin = false) {
         if (!this.enabled) return false;
 
         try {
@@ -140,7 +140,6 @@ class SupabaseManager {
                     username: username,
                     first_name: firstName,
                     is_admin: isAdmin,
-                    email: email,
                     active: true,
                     updated_at: new Date().toISOString()
                 });
@@ -154,7 +153,7 @@ class SupabaseManager {
     }
 
     async addAuthorizedUser(userId, isAdmin = false) {
-        return await this.addUser(userId, null, null, isAdmin, null);
+        return await this.addUser(userId, null, null, isAdmin);
     }
 
     async promoteToAdmin(userId) {
@@ -203,7 +202,7 @@ class SupabaseManager {
         try {
             const { data, error } = await this.client
                 .from('users')
-                .select('first_name, username, email, is_admin')
+                .select('first_name, username, is_admin, timezone, notification_channels, active')
                 .eq('user_id', userId.toString())
                 .single();
 
@@ -219,26 +218,12 @@ class SupabaseManager {
         }
     }
 
+    // Deprecated: getUserEmail() - emails are stored in user_emails table only
+    // Kept for backward compatibility but always returns null (users.email is never populated)
     async getUserEmail(userId) {
-        if (!this.enabled) return null;
-
-        try {
-            const { data, error } = await this.client
-                .from('users')
-                .select('email')
-                .eq('user_id', userId.toString())
-                .single();
-
-            if (error) {
-                if (error.code === 'PGRST116') return null;
-                throw error;
-            }
-
-            return data?.email || null;
-        } catch (error) {
-            console.error('Supabase getUserEmail error:', error.message);
-            return null;
-        }
+        // Emails are managed via /setemail command → user_emails table
+        // users.email field is deprecated and never written to
+        return null;
     }
 
     // Multiple user emails (user_emails table)
@@ -258,16 +243,37 @@ class SupabaseManager {
     }
 
     async addUserEmail(userId, email) {
-        if (!this.enabled) return false;
+        if (!this.enabled) return { success: false, error: 'Supabase not enabled' };
         try {
+            // Check if email already exists for this user
+            const { data: existing, error: checkError } = await this.client
+                .from('user_emails')
+                .select('email')
+                .eq('user_id', userId.toString())
+                .eq('email', email)
+                .maybeSingle();
+            
+            if (checkError && checkError.code !== 'PGRST116') { // PGRST116 = no rows found (not an error)
+                throw checkError;
+            }
+            
+            if (existing) {
+                return { success: false, error: 'duplicate', message: `Email already exists for user ${userId}: ${email}` };
+            }
+            
+            // Insert the email
             const { error } = await this.client
                 .from('user_emails')
                 .insert({ user_id: userId.toString(), email, updated_at: new Date().toISOString() });
             if (error) throw error;
-            return true;
+            return { success: true };
         } catch (error) {
             console.error('Supabase addUserEmail error:', error.message);
-            return false;
+            // Check if it's a unique constraint violation
+            if (error.code === '23505' || error.message?.includes('duplicate') || error.message?.includes('unique')) {
+                return { success: false, error: 'duplicate', message: `Email already exists for user ${userId}: ${email}` };
+            }
+            return { success: false, error: 'database_error', message: error.message };
         }
     }
 
@@ -394,23 +400,22 @@ class SupabaseManager {
         }
     }
 
-    // User Preferences
+    // User Preferences (migrated to users table)
     async getUserPreferences(userId) {
         if (!this.enabled) return null;
 
         try {
-            const { data, error } = await this.client
-                .from('user_preferences')
-                .select('*')
-                .eq('user_id', userId.toString())
-                .single();
+            // Get user info from users table (includes timezone and other preferences)
+            const userInfo = await this.getUserInfo(userId);
+            
+            if (!userInfo) return null;
 
-            if (error) {
-                if (error.code === 'PGRST116') return null; // Not found
-                throw error;
-            }
-
-            return data;
+            // Return preferences object matching old format for backward compatibility
+            const prefs = {};
+            if (userInfo.timezone) prefs.timezone = userInfo.timezone;
+            if (userInfo.notification_channels) prefs.notification_channels = userInfo.notification_channels;
+            
+            return Object.keys(prefs).length > 0 ? prefs : null;
         } catch (error) {
             console.error('Supabase getUserPreferences error:', error.message);
             return null;
@@ -421,13 +426,33 @@ class SupabaseManager {
         if (!this.enabled) return false;
 
         try {
+            // Update users table with preferences
+            const updateData = {
+                updated_at: new Date().toISOString()
+            };
+            
+            // Map preferences to users table columns
+            if (preferences.timezone !== undefined) updateData.timezone = preferences.timezone;
+            if (preferences.notification_channels !== undefined) updateData.notification_channels = preferences.notification_channels;
+            
+            // Get existing user info to preserve other fields
+            const existingUser = await this.getUserInfo(userId);
+            const userData = {
+                user_id: userId.toString(),
+                ...updateData
+            };
+            
+            // Preserve existing fields if user exists
+            if (existingUser) {
+                userData.username = existingUser.username;
+                userData.first_name = existingUser.first_name;
+                userData.is_admin = existingUser.is_admin;
+                userData.active = existingUser.active !== false; // Default to true if not set
+            }
+
             const { error } = await this.client
-                .from('user_preferences')
-                .upsert({
-                    user_id: userId.toString(),
-                    ...preferences,
-                    updated_at: new Date().toISOString()
-                });
+                .from('users')
+                .upsert(userData);
 
             if (error) throw error;
             return true;

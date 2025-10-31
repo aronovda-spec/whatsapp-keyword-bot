@@ -260,7 +260,7 @@ class Notifier {
                 attachmentInfo += ` (${sizeKB} KB)`;
             }
         }
-
+        
         // Escape all user-provided content to prevent HTML parsing errors
         const escapedKeyword = this.escapeHtml(keyword);
         const escapedSender = this.escapeHtml(sender || 'Unknown');

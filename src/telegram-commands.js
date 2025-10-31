@@ -327,7 +327,7 @@ class TelegramCommandHandler {
                     '/reject <user_id> - Reject user\n' +
                     '/pending - Show pending requests\n' +
                     '/remove <user_id> - Remove user (with confirmation)\n' +
-                    '/setemail <user_id> <email> - Add user email (supports multiple)\n' +
+                    '/setemail <user_id> <email> - Add user email (supports multiple, duplicate detection)\n' +
                     '/removeemail <user_id> <email> - Remove specific user email\n' +
                     '/makeadmin <user_id> - Promote user to admin\n' +
                     '/restart - Restart bot (preserves all data)\n' +
@@ -392,8 +392,8 @@ class TelegramCommandHandler {
                 '/remove &lt;user_id&gt; - Remove user (with confirmation)\n' +
                 '/pending - Show pending requests\n' +
                 '/makeadmin &lt;user_id&gt; - Promote user to admin\n' +
-                '/setemail &lt;user_id&gt; &lt;email&gt; - Add user email\n' +
-                '/removeemail &lt;user_id&gt; &lt;email&gt; - Remove user email\n\n' +
+                '/setemail &lt;user_id&gt; &lt;email&gt; - Add user email (supports multiple, duplicate detection)\n' +
+                '/removeemail &lt;user_id&gt; &lt;email&gt; - Remove specific user email\n\n' +
                 '<b>Keyword Management:</b>\n' +
                 '/addkeyword &lt;word&gt; - Add global keyword\n' +
                 '/removekeyword &lt;word&gt; - Remove global keyword\n\n' +
@@ -455,29 +455,17 @@ class TelegramCommandHandler {
                                 userName = userInfo.first_name || userInfo.username || null;
                                 
                                 // Get emails
+                                // Get emails from user_emails table (users.email is deprecated)
                                 const emails = await this.keywordDetector.supabase.getUserEmails(user);
                                 if (emails && emails.length > 0) {
                                     userEmails = emails;
-                                } else if (userInfo.email) {
-                                    userEmails = [userInfo.email];
-                                } else {
-                                    // Fallback to legacy single email
-                                    const legacyEmail = await this.keywordDetector.supabase.getUserEmail(user);
-                                    if (legacyEmail) {
-                                        userEmails = [legacyEmail];
-                                    }
                                 }
                             } else {
-                                // User not in Supabase, try legacy email method
+                                // User not in Supabase, try email lookup
                                 try {
                                     const emails = await this.keywordDetector.supabase.getUserEmails(user);
                                     if (emails && emails.length > 0) {
                                         userEmails = emails;
-                                    } else {
-                                        const legacyEmail = await this.keywordDetector.supabase.getUserEmail(user);
-                                        if (legacyEmail) {
-                                            userEmails = [legacyEmail];
-                                        }
                                     }
                                 } catch (emailError) {
                                     // Silently fail for email lookup
@@ -485,16 +473,11 @@ class TelegramCommandHandler {
                             }
                         } catch (error) {
                             console.error(`Error fetching user info for ${user}:`, error.message);
-                            // Try fallback email method
+                            // Try email lookup from user_emails table
                             try {
                                 const emails = await this.keywordDetector.supabase.getUserEmails(user);
                                 if (emails && emails.length > 0) {
                                     userEmails = emails;
-                                } else {
-                                    const legacyEmail = await this.keywordDetector.supabase.getUserEmail(user);
-                                    if (legacyEmail) {
-                                        userEmails = [legacyEmail];
-                                    }
                                 }
                             } catch (emailError) {
                                 // Silently fail for email lookup
@@ -587,15 +570,10 @@ class TelegramCommandHandler {
                     let adminEmails = [];
                     if (this.keywordDetector && this.keywordDetector.supabase && this.keywordDetector.supabase.isEnabled()) {
                         try {
+                            // Get emails from user_emails table (users.email is deprecated)
                             const emails = await this.keywordDetector.supabase.getUserEmails(adminId);
                             if (emails && emails.length > 0) {
                                 adminEmails = emails;
-                            } else {
-                                // Fallback to legacy single email
-                                const legacyEmail = await this.keywordDetector.supabase.getUserEmail(adminId);
-                                if (legacyEmail) {
-                                    adminEmails = [legacyEmail];
-                                }
                             }
                         } catch (error) {
                             console.error(`Error fetching emails for admin ${adminId}:`, error.message);
@@ -1282,11 +1260,13 @@ class TelegramCommandHandler {
             // Add email in Supabase (user_emails table)
             if (this.keywordDetector && this.keywordDetector.supabase && this.keywordDetector.supabase.isEnabled()) {
                 this.keywordDetector.supabase.addUserEmail(userId, email)
-                    .then(success => {
-                        if (success) {
+                    .then(result => {
+                        if (result.success) {
                             this.bot.sendMessage(chatId, `✅ Email added for user ${userId}: ${email}`);
+                        } else if (result.error === 'duplicate') {
+                            this.bot.sendMessage(chatId, `❌ Email already exists for user ${userId}: ${email}`);
                         } else {
-                            this.bot.sendMessage(chatId, `❌ Failed to add email for user ${userId}`);
+                            this.bot.sendMessage(chatId, `❌ Failed to add email for user ${userId}: ${result.message || 'Unknown error'}`);
                         }
                     })
                     .catch(err => {
@@ -2199,19 +2179,24 @@ class TelegramCommandHandler {
         }
     }
 
-    // Get user's timezone preference from Supabase first, fallback to file
+    // Get user's timezone preference from Supabase (users table) first, fallback to file
     async getUserTimezone(chatId) {
         try {
-            // Try Supabase first if enabled
+            // Try Supabase first if enabled (now uses users.timezone instead of user_preferences)
             if (this.keywordDetector && this.keywordDetector.supabase && this.keywordDetector.supabase.isEnabled()) {
                 try {
+                    // Get user info directly from users table
+                    const userInfo = await this.keywordDetector.supabase.getUserInfo(chatId.toString());
+                    if (userInfo && userInfo.timezone) {
+                        console.log(`📊 Loaded timezone preference from Supabase (users table) for user ${chatId}: ${userInfo.timezone}`);
+                        return userInfo.timezone;
+                    }
+                    
+                    // Also try getUserPreferences for backward compatibility
                     const prefs = await this.keywordDetector.supabase.getUserPreferences(chatId.toString());
                     if (prefs && prefs.timezone) {
                         console.log(`📊 Loaded timezone preference from Supabase for user ${chatId}: ${prefs.timezone}`);
                         return prefs.timezone;
-                    } else if (prefs !== null) {
-                        // Supabase returned data but no timezone preference
-                        return 'Asia/Jerusalem'; // Default to Israeli time
                     }
                 } catch (error) {
                     console.warn(`⚠️ Failed to load timezone preference from Supabase for user ${chatId}, falling back to file:`, error.message);

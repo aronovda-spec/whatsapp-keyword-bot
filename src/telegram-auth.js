@@ -90,7 +90,7 @@ class TelegramAuthorization {
         return this.adminUsers.has(userId.toString());
     }
 
-    addAuthorizedUser(userId, addedBy = null, userName = null) {
+    addAuthorizedUser(userId, addedBy = null, userName = null, username = null, firstName = null) {
         this.authorizedUsers.add(userId.toString());
         
         // Store user name if provided
@@ -99,12 +99,12 @@ class TelegramAuthorization {
             this.userNames.set(userId.toString(), userName);
         }
         
-        console.log(`✅ User ${userId} (${userName || 'Unknown'}) authorized by ${addedBy || 'system'}`);
+        console.log(`✅ User ${userId} (${userName || firstName || username || 'Unknown'}) authorized by ${addedBy || 'system'}`);
         this.saveConfig();
         
-        // Save to Supabase if enabled
+        // Save to Supabase if enabled (with username and first_name)
         if (this.supabase.isEnabled()) {
-            this.supabase.addAuthorizedUser(userId, false); // Not admin by default
+            this.supabase.addUser(userId, username, firstName, false); // Not admin by default
         }
         
         return true;
@@ -172,9 +172,14 @@ class TelegramAuthorization {
             return false;
         }
         
+        // Get username and firstName from pending approvals before deleting
+        const pendingInfo = this.pendingApprovals.get(userIdStr);
+        const username = pendingInfo?.username || null;
+        const firstName = pendingInfo?.firstName || null;
+        
         this.pendingApprovals.delete(userIdStr);
-        this.addAuthorizedUser(userId, approvedBy, userName);
-        console.log(`✅ User ${userId} (${userName || 'Unknown'}) approved by ${approvedBy}`);
+        this.addAuthorizedUser(userId, approvedBy, userName || firstName || username, username, firstName);
+        console.log(`✅ User ${userId} (${userName || firstName || username || 'Unknown'}) approved by ${approvedBy}`);
         return true;
     }
 
