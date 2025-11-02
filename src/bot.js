@@ -517,16 +517,21 @@ class WhatsAppKeywordBot {
                     }
                 }
 
-                console.log(`🚨 Keywords detected: Global: ${globalKeywords.length}, Personal: ${personalKeywords.length} from ${messageData.sender} in ${messageData.group} (via ${phoneNumber})`);
+                // Get actual phone number for logging
+                const actualPhone = connection ? this.getActualPhoneNumber(connection, phoneNumber) : phoneNumber;
+                console.log(`🚨 Keywords detected: Global: ${globalKeywords.length}, Personal: ${personalKeywords.length} from ${messageData.sender} in ${messageData.group} (via ${actualPhone})`);
             }
 
         } catch (error) {
             this.stats.errors++;
+            // Get actual phone number for error logging
+            const connection = phoneNumber ? this.connections.get(phoneNumber) : null;
+            const actualPhone = connection ? this.getActualPhoneNumber(connection, phoneNumber) : phoneNumber;
             logError(error, {
                 context: 'handle_message',
                 messageId: messageData?.id,
                 sender: messageData?.sender,
-                phoneNumber
+                phoneNumber: actualPhone
             });
         }
     }
