@@ -372,6 +372,9 @@ class WhatsAppKeywordBot {
                 const globalKeywords = detectedKeywords.filter(k => k.type === 'global');
                 const personalKeywords = detectedKeywords.filter(k => k.type === 'personal');
 
+                // Get actual phone number from connection for notifications
+                const actualPhone = this.getActualPhoneNumber(connection, phoneNumber);
+
                 // Send notifications for global keywords to ALL authorized users
                 for (const keywordData of globalKeywords) {
                     try {
@@ -381,7 +384,7 @@ class WhatsAppKeywordBot {
                             messageData.sender,
                             messageData.group,
                             messageData.id,
-                            phoneNumber,
+                            actualPhone,
                             keywordData.matchType,
                             keywordData.token,
                             messageData.attachment,
@@ -418,7 +421,7 @@ class WhatsAppKeywordBot {
                                         messageData.sender,
                                         messageData.group,
                                         messageData.id,
-                                        phoneNumber,
+                                        actualPhone,
                                         messageData.attachment,
                                         true // isGlobal
                                     );
@@ -431,7 +434,7 @@ class WhatsAppKeywordBot {
                                         messageData.sender,
                                         messageData.group,
                                         messageData.id,
-                                        phoneNumber,
+                                        actualPhone,
                                         messageData.attachment,
                                         true // isGlobal
                                     );
@@ -443,7 +446,7 @@ class WhatsAppKeywordBot {
                             context: 'global_keyword_notification_error',
                             keyword: keywordData.keyword,
                             messageId: messageData.id,
-                            phoneNumber
+                            phoneNumber: actualPhone
                         });
                     }
                 }
@@ -457,7 +460,7 @@ class WhatsAppKeywordBot {
                             messageData.sender,
                             messageData.group,
                             messageData.id,
-                            phoneNumber,
+                            actualPhone,
                             keywordData.userId,
                             keywordData.matchType,
                             keywordData.token,
@@ -489,7 +492,7 @@ class WhatsAppKeywordBot {
                                     messageData.sender,
                                     messageData.group,
                                     messageData.id,
-                                    phoneNumber,
+                                    actualPhone,
                                     messageData.attachment
                                 );
                             } else {
@@ -501,7 +504,7 @@ class WhatsAppKeywordBot {
                                     messageData.sender,
                                     messageData.group,
                                     messageData.id,
-                                    phoneNumber,
+                                    actualPhone,
                                     messageData.attachment
                                 );
                             }
@@ -512,13 +515,12 @@ class WhatsAppKeywordBot {
                             keyword: keywordData.keyword,
                             userId: keywordData.userId,
                             messageId: messageData.id,
-                            phoneNumber
+                            phoneNumber: actualPhone
                         });
                     }
                 }
 
-                // Get actual phone number for logging
-                const actualPhone = connection ? this.getActualPhoneNumber(connection, phoneNumber) : phoneNumber;
+                // Get actual phone number for logging (already calculated above)
                 console.log(`🚨 Keywords detected: Global: ${globalKeywords.length}, Personal: ${personalKeywords.length} from ${messageData.sender} in ${messageData.group} (via ${actualPhone})`);
             }
 
