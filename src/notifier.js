@@ -3,6 +3,8 @@ const { logError, logBotEvent } = require('./logger');
 const TelegramAuthorization = require('./telegram-auth');
 const EmailChannel = require('./notifiers/emailChannel');
 const ReminderManager = require('./reminderManager');
+const fs = require('fs');
+const path = require('path');
 
 class Notifier {
     constructor() {
@@ -14,10 +16,72 @@ class Notifier {
         this.authorization = new TelegramAuthorization(); // Authorization system
         this.emailChannel = new EmailChannel(); // Email notifications
         this.reminderManager = new ReminderManager(); // Reminder system
+        this.sleepConfig = null; // Sleep hours configuration
+        this.loadSleepConfig();
         this.init();
         
         // Listen for reminder events
         this.reminderManager.on('sendReminder', this.handleReminder.bind(this));
+    }
+
+    loadSleepConfig() {
+        try {
+            const configPath = path.join(__dirname, '../config/non-active-hours.json');
+            if (fs.existsSync(configPath)) {
+                const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+                this.sleepConfig = config.nonActiveHours || null;
+            }
+        } catch (error) {
+            console.warn('⚠️ Failed to load sleep config:', error.message);
+            this.sleepConfig = null;
+        }
+    }
+
+    // Check if currently in sleep hours (1 AM - 6 AM Israeli time)
+    isSleepHours() {
+        if (!this.sleepConfig || !this.sleepConfig.enabled) {
+            return false; // Sleep not enabled
+        }
+
+        const now = new Date();
+        const timezone = this.sleepConfig.timezone || 'Asia/Jerusalem';
+        const localTime = new Date(now.toLocaleString("en-US", {timeZone: timezone}));
+        const currentTime = localTime.toTimeString().substring(0, 5); // HH:MM format
+        const currentDay = localTime.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
+
+        for (const schedule of this.sleepConfig.schedules || []) {
+            if (!schedule.enabled) continue;
+            if (!schedule.days.includes(currentDay)) continue;
+            if (schedule.behavior !== 'sleep') continue; // Only check sleep behavior
+
+            if (this.isTimeInRange(currentTime, schedule.start, schedule.end)) {
+                return true; // Currently in sleep hours
+            }
+        }
+
+        return false; // Not in sleep hours
+    }
+
+    // Helper function to check if time is in range
+    // End time is exclusive (e.g., 01:00 to 06:00 means sleep from 1:00 AM until 6:00 AM, but 6:00 AM is wake time)
+    isTimeInRange(currentTime, startTime, endTime) {
+        const current = this.timeToMinutes(currentTime);
+        const start = this.timeToMinutes(startTime);
+        const end = this.timeToMinutes(endTime);
+
+        if (start <= end) {
+            // Same day range (e.g., 01:00 to 06:00) - end is exclusive
+            return current >= start && current < end;
+        } else {
+            // Overnight range (e.g., 23:00 to 07:00) - end is exclusive
+            return current >= start || current < end;
+        }
+    }
+
+    // Convert time string to minutes for comparison
+    timeToMinutes(timeString) {
+        const [hours, minutes] = timeString.split(':').map(Number);
+        return hours * 60 + minutes;
     }
 
     init() {
@@ -58,6 +122,12 @@ class Notifier {
     }
 
     async sendKeywordAlert(keyword, message, sender, group, messageId, phoneNumber = null, matchType = 'exact', matchedToken = null, attachment = null, isReminder = false, reminderCount = 0, targetUsers = null) {
+        // Check sleep hours - skip keyword alerts during sleep
+        if (this.isSleepHours()) {
+            console.log(`😴 Sleep hours active - skipping keyword alert: ${keyword}`);
+            return false;
+        }
+
         let telegramSuccess = false;
         let emailSuccess = false;
 
@@ -139,6 +209,12 @@ class Notifier {
     }
 
     async sendPersonalKeywordAlert(keyword, message, sender, group, messageId, phoneNumber = null, targetUserId = null, matchType = 'exact', matchedToken = null, attachment = null, isReminder = false) {
+        // Check sleep hours - skip personal keyword alerts during sleep
+        if (this.isSleepHours()) {
+            console.log(`😴 Sleep hours active - skipping personal keyword alert: ${keyword}`);
+            return false;
+        }
+
         let telegramSuccess = false;
         let emailSuccess = false;
 
@@ -403,6 +479,13 @@ ${reminderCount > 0 ? '⏰ Reply /ok to acknowledge and stop reminders.' : '💡
 
     async sendBotStatus(status, details = '', adminOnly = false) {
         if (!this.enabled) return;
+
+        // Check sleep hours - skip non-critical status updates during sleep
+        // Allow "Shutting Down" to go through even during sleep
+        if (this.isSleepHours() && status !== 'Shutting Down') {
+            console.log(`😴 Sleep hours active - skipping bot status notification: ${status}`);
+            return;
+        }
 
         try {
             const message = `🤖 <b>Bot Status Update</b>
