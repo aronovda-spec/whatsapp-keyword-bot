@@ -89,15 +89,19 @@ class WhatsAppKeywordBot {
             });
 
             connection.on('connected', () => {
-                console.log(`✅ Phone ${phoneNumber} connected successfully!`);
-                logBotEvent('phone_connected', { phoneNumber, description });
+                // Get actual phone number from connection, fallback to config number
+                const actualPhone = this.getActualPhoneNumber(connection, phoneNumber);
+                console.log(`✅ Phone ${actualPhone} connected successfully!`);
+                logBotEvent('phone_connected', { phoneNumber: actualPhone, description });
                 // Send status update to admins only during development stage
-                this.notifier.sendBotStatus('Connected', `Phone ${phoneNumber} is now connected and monitoring WhatsApp messages`, true);
+                this.notifier.sendBotStatus('Connected', `Phone ${actualPhone} is now connected and monitoring WhatsApp messages`, true);
             });
 
             connection.on('disconnected', (disconnectInfo) => {
-                console.log(`❌ Phone ${phoneNumber} disconnected`);
-                logBotEvent('phone_disconnected', { phoneNumber });
+                // Get actual phone number from connection, fallback to config number
+                const actualPhone = this.getActualPhoneNumber(connection, phoneNumber);
+                console.log(`❌ Phone ${actualPhone} disconnected`);
+                logBotEvent('phone_disconnected', { phoneNumber: actualPhone });
                 
                 // Send status update to admins only during development stage
                 // Skip notifications for code 428 (normal session refresh) and 503 (temporary server issue)
@@ -121,11 +125,11 @@ class WhatsAppKeywordBot {
                                  '💡 Check logs for more details';
                         this.notifier.sendCriticalAlert('Virtual Number Expired', details);
                     } else {
-                        details = `Phone: ${phoneNumber}\nDisconnect reason: ${disconnectInfo.reason || 'Unknown'}\nMessage: ${disconnectInfo.message || 'Bot lost connection to WhatsApp'}`;
+                        details = `Phone: ${actualPhone}\nDisconnect reason: ${disconnectInfo.reason || 'Unknown'}\nMessage: ${disconnectInfo.message || 'Bot lost connection to WhatsApp'}`;
                         this.notifier.sendBotStatus('Disconnected', details, true);
                     }
                 } else {
-                    this.notifier.sendBotStatus('Disconnected', `Phone ${phoneNumber} lost connection to WhatsApp`, true);
+                    this.notifier.sendBotStatus('Disconnected', `Phone ${actualPhone} lost connection to WhatsApp`, true);
                 }
             });
 
@@ -135,6 +139,26 @@ class WhatsAppKeywordBot {
         } catch (error) {
             logError(error, { context: 'add_phone', phoneNumber });
             console.error(`❌ Failed to add phone ${phoneNumber}:`, error.message);
+        }
+    }
+
+    /**
+     * Get actual phone number from connection object, with fallback to config number
+     * @param {WhatsAppConnection} connection - The WhatsApp connection object
+     * @param {string} configPhoneNumber - The phone number from config (may be placeholder)
+     * @returns {string} - The actual phone number or config phone number as fallback
+     */
+    getActualPhoneNumber(connection, configPhoneNumber) {
+        if (connection.phoneNumberForBackup && connection.phoneNumberForBackup !== 'default') {
+            return connection.phoneNumberForBackup;
+        } else if (connection.phoneNumber && connection.phoneNumber !== 'default') {
+            // Extract clean phone number from full ID if needed
+            // e.g. "PHONE_PLACEHOLDER:4@s.whatsapp.net" → "PHONE_PLACEHOLDER"
+            const phoneMatch = connection.phoneNumber.match(/^(\d+):/);
+            return phoneMatch ? phoneMatch[1] : connection.phoneNumber;
+        } else {
+            // Fallback to config phone number
+            return configPhoneNumber;
         }
     }
 
@@ -549,7 +573,10 @@ class WhatsAppKeywordBot {
                 // Send daily status update
             const connectedPhones = Array.from(this.connections.entries())
                 .filter(([phone, connection]) => connection.getConnectionStatus())
-                .map(([phone]) => phone);
+                .map(([phone, connection]) => {
+                    // Use actual phone number from connection, fallback to config number
+                    return this.getActualPhoneNumber(connection, phone);
+                });
             
             if (connectedPhones.length > 0 && this.notifier.isEnabled()) {
                     const uptimeMinutes = Math.floor((Date.now() - this.stats.startTime.getTime()) / 1000 / 60);
@@ -594,13 +621,13 @@ class WhatsAppKeywordBot {
                 }
                 
                 // Use actual WhatsApp phone if available, otherwise use config phone
-                const actualPhone = connection.phoneNumber || phoneNumber;
+                const actualPhone = this.getActualPhoneNumber(connection, phoneNumber);
                 console.log(`📱 Phone ${actualPhone}:`);
                 connection.antiBan.logSafetyMetrics();
                 
                 // Check if approaching rate limits
                 if (connection.antiBan.isApproachingRateLimit()) {
-                    console.warn(`⚠️ Phone ${phoneNumber} is approaching rate limits!`);
+                    console.warn(`⚠️ Phone ${actualPhone} is approaching rate limits!`);
                 }
             }
         } catch (error) {
