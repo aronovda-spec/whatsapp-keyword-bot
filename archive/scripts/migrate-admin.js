@@ -27,8 +27,14 @@ async function migrateAdmin() {
 
     console.log('✅ Connected to Supabase\n');
 
-    // Your admin user ID (from telegram-auth.js)
-    const adminUserId = '1022850808';
+    // Get admin user ID from environment variable or require input
+    const adminUserId = process.env.TELEGRAM_CHAT_ID || process.env.ADMIN_USER_ID;
+    if (!adminUserId) {
+        console.error('❌ Admin user ID not found!');
+        console.log('Please set TELEGRAM_CHAT_ID or ADMIN_USER_ID in .env file, or pass as argument.');
+        console.log('Usage: ADMIN_USER_ID=YOUR_USER_ID node migrate-admin.js');
+        process.exit(1);
+    }
 
     console.log(`👑 Adding admin user: ${adminUserId}\n`);
 
