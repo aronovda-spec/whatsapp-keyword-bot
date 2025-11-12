@@ -38,17 +38,25 @@ async function updateUserEmail() {
     // Get the first email if multiple (comma-separated)
     const userEmail = email.split(',')[0].trim();
 
-    console.log(`📧 Updating email for user: 1022850808`);
+    // Get user ID from environment variable
+    const userId = process.env.TELEGRAM_CHAT_ID || process.env.ADMIN_USER_ID;
+    if (!userId) {
+        console.error('❌ User ID not found!');
+        console.log('Please set TELEGRAM_CHAT_ID or ADMIN_USER_ID in .env file.');
+        process.exit(1);
+    }
+
+    console.log(`📧 Updating email for user: ${userId}`);
     console.log(`📧 New email: ${userEmail}\n`);
 
     // Update user in database
-    const success = await updateEmail(supabase, '1022850808', userEmail);
+    const success = await updateEmail(supabase, userId, userEmail);
     
     if (success) {
         console.log('✅ Email updated successfully!\n');
         console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
         console.log('📊 Summary:');
-        console.log(`   👤 User ID: 1022850808`);
+        console.log(`   👤 User ID: ${userId}`);
         console.log(`   👑 Role: Admin`);
         console.log(`   📧 Email: ${userEmail}`);
         console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');

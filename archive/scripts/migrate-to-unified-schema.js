@@ -50,10 +50,15 @@ async function migrateToUnifiedSchema() {
 
     // Step 3: Create unified users in new table
     if (!authorizedUsers || authorizedUsers.length === 0) {
-        console.log('⚠️ No users found to migrate. Creating you as admin...');
+        console.log('⚠️ No users found to migrate. Creating admin user...');
         
-        // Add you as admin
-        const adminUserId = '1022850808';
+        // Get admin user ID from environment variable
+        const adminUserId = process.env.TELEGRAM_CHAT_ID || process.env.ADMIN_USER_ID;
+        if (!adminUserId) {
+            console.error('❌ Admin user ID not found!');
+            console.log('Please set TELEGRAM_CHAT_ID or ADMIN_USER_ID in .env file.');
+            process.exit(1);
+        }
         const userEmail = emailMap.get(adminUserId) || null;
         const emailValue = userEmail ? (Array.isArray(userEmail) ? userEmail[0] : userEmail) : null;
         
