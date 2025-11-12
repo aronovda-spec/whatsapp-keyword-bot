@@ -48,7 +48,7 @@ Add these in Render dashboard under **"Environment"** section:
 NODE_ENV=production
 PORT=10000
 TELEGRAM_BOT_TOKEN=your_actual_token_here
-TELEGRAM_CHAT_ID=1022850808
+TELEGRAM_CHAT_ID=your_telegram_chat_id_here
 ```
 
 #### Email Configuration
