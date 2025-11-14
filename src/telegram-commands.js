@@ -413,7 +413,9 @@ class TelegramCommandHandler {
                 if (this.botInstance.connections && this.botInstance.connections.size > 0) {
                     for (const [phone, connection] of this.botInstance.connections) {
                         if (connection.getConnectionStatus && connection.getConnectionStatus()) {
-                            connectedPhones.push(phone);
+                            // Use getActualPhoneNumber to get real phone number instead of config placeholder
+                            const actualPhone = this.botInstance.getActualPhoneNumber(connection, phone);
+                            connectedPhones.push(actualPhone);
                         }
                     }
                     if (connectedPhones.length > 0) {
