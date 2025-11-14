@@ -667,7 +667,8 @@ class WhatsAppKeywordBot {
                         this.commandHandler = new TelegramCommandHandler(
                             process.env.TELEGRAM_BOT_TOKEN,
                             this.notifier.authorization,
-                            this.keywordDetector // Pass keywordDetector to command handler
+                            this.keywordDetector, // Pass keywordDetector to command handler
+                            this // Pass bot instance for real status access
                         );
                         // Inject reminder manager into command handler
                         if (this.commandHandler) {
