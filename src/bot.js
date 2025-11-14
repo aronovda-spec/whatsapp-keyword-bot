@@ -585,7 +585,7 @@ class WhatsAppKeywordBot {
                     return this.getActualPhoneNumber(connection, phone);
                 });
             
-            if (connectedPhones.length > 0 && this.notifier.isEnabled()) {
+            if (this.notifier.isEnabled()) {
                     const uptimeMinutes = Math.floor((Date.now() - this.stats.startTime.getTime()) / 1000 / 60);
                     const uptimeHours = Math.floor(uptimeMinutes / 60);
                     const uptimeDays = Math.floor(uptimeHours / 24);
@@ -599,10 +599,19 @@ class WhatsAppKeywordBot {
                         uptimeStr = `${uptimeMinutes} minute(s)`;
                     }
                     
-                    this.notifier.sendBotStatus('Running', 
-                        `Uptime: ${uptimeStr}\nMessages: ${this.stats.messagesProcessed}\nKeywords: ${this.stats.keywordsDetected}\nConnected phones: ${connectedPhones.join(', ')}`,
-                        true // adminOnly = true
-                    );
+                    if (connectedPhones.length > 0) {
+                        // Bot is connected - send normal status
+                        this.notifier.sendBotStatus('Running', 
+                            `Uptime: ${uptimeStr}\nMessages: ${this.stats.messagesProcessed}\nKeywords: ${this.stats.keywordsDetected}\nConnected phones: ${connectedPhones.join(', ')}`,
+                            true // adminOnly = true
+                        );
+                    } else {
+                        // Bot is disconnected - send alert
+                        this.notifier.sendBotStatus('Disconnected', 
+                            `⚠️ Bot is currently disconnected from WhatsApp.\n\nUptime: ${uptimeStr}\nMessages: ${this.stats.messagesProcessed}\nKeywords: ${this.stats.keywordsDetected}\n\nPlease check the bot status and reconnect if needed.`,
+                            true // adminOnly = true
+                        );
+                    }
                 }
                 
                 // Schedule next day's update
