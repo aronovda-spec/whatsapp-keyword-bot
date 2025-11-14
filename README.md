@@ -107,6 +107,7 @@ A cloud-based bot that monitors WhatsApp group messages for specific keywords an
 - `/removeemail <user_id> <email>` - Remove specific user email
 - `/addkeyword <word>` - Add global keyword
 - `/removekeyword <word>` - Remove global keyword
+- `/qrcode [phone]` - Generate QR code for reconnection (check Render logs, requires confirmation)
 - `/restart` - Restart bot (preserves all data)
 - `/resetall` - Reset all reminders (clears active-reminders storage)
 
