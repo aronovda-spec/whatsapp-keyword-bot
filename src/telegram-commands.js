@@ -55,6 +55,50 @@ class TelegramCommandHandler {
                 this.authorization.setUserName(userId, userName);
             }
             
+            // Check if this is a QR code confirmation
+            if (this.pendingQRConfirmations && this.pendingQRConfirmations.has(userId)) {
+                const confirmation = this.pendingQRConfirmations.get(userId);
+                
+                // Clean up expired confirmations (5 minutes)
+                if (Date.now() - confirmation.timestamp > 300000) {
+                    this.pendingQRConfirmations.delete(userId);
+                    return;
+                }
+                
+                // Check for QR confirmation (case-insensitive, accepts "YES", "CONFIRM", "CONFIRM QR")
+                const upperText = messageText ? messageText.trim().toUpperCase() : '';
+                if (upperText === 'YES' || upperText === 'CONFIRM' || upperText === 'CONFIRM QR') {
+                    // Confirmed QR code generation
+                    this.pendingQRConfirmations.delete(userId);
+                    
+                    this.bot.sendMessage(confirmation.chatId, 
+                        '✅ <b>QR Code Generation Confirmed!</b>\n\n' +
+                        '🔄 Generating QR code... Please wait.',
+                        { parse_mode: 'HTML' }
+                    );
+                    
+                    console.log(`📱 Admin ${userId} confirmed QR code generation`);
+                    
+                    // Execute QR code generation
+                    this.executeQRCodeGeneration(confirmation.chatId, confirmation.phoneNumber);
+                } else {
+                    // Cancelled QR code generation (anything other than YES/CONFIRM)
+                    this.pendingQRConfirmations.delete(userId);
+                    
+                    this.bot.sendMessage(confirmation.chatId, 
+                        '❌ <b>QR Code Generation Cancelled</b>\n\n' +
+                        '✅ Bot will continue running normally.\n' +
+                        '🔄 Use /qrcode again if you need to generate a QR code later.',
+                        { parse_mode: 'HTML' }
+                    );
+                    
+                    console.log(`📱 Admin ${userId} cancelled QR code generation`);
+                }
+                
+                // IMPORTANT: Return early to prevent message from being processed as other commands
+                return;
+            }
+            
             // Check if this is a restart confirmation
             if (this.pendingRestartConfirmations && this.pendingRestartConfirmations.has(userId)) {
                 const confirmation = this.pendingRestartConfirmations.get(userId);
@@ -332,7 +376,8 @@ class TelegramCommandHandler {
                     '/removeemail <user_id> <email> - Remove specific user email\n' +
                     '/makeadmin <user_id> - Promote user to admin\n' +
                     '/restart - Restart bot (preserves all data)\n' +
-                    '/resetall - Reset all reminders (clears active reminders)\n\n' +
+                    '/resetall - Reset all reminders (clears active reminders)\n' +
+                    '/qrcode [phone] - Generate QR code for reconnection (check Render logs)\n\n' +
                     '💬 Broadcast:\n' +
                     'Send any message (not a command) to broadcast to all authorized users';
             await this.bot.sendMessage(chatId, helpText);
@@ -431,6 +476,7 @@ class TelegramCommandHandler {
                 '/addkeyword &lt;word&gt; - Add global keyword\n' +
                 '/removekeyword &lt;word&gt; - Remove global keyword\n\n' +
                 '<b>Bot Control:</b>\n' +
+                '/qrcode [phone] - Generate QR code for reconnection (check Render logs)\n' +
                 '/restart - Restart bot (preserves all data)\n' +
                 '/resetall - Reset all reminders\n' +
                 '/antiban - Show anti-ban status\n\n' +
@@ -802,6 +848,87 @@ class TelegramCommandHandler {
                 `🕐 Last Update: ${new Date().toLocaleString()}`;
             this.bot.sendMessage(chatId, statsText);
         });
+
+        // QR Code command - Admin only with confirmation
+        this.bot.onText(/\/qrcode(?:\s+(.+))?/, async (msg, match) => {
+            const chatId = msg.chat.id;
+            const userId = msg.from.id;
+            const phoneNumber = match && match[1] ? match[1].trim() : null;
+            
+            // Prevent duplicate commands
+            if (this.isDuplicateCommand(userId, 'qrcode')) {
+                console.log('🚫 Duplicate /qrcode command ignored from:', msg.from.username || msg.from.first_name);
+                return;
+            }
+            
+            // Authorization check - Admin only
+            if (!this.authorization.isAdmin(userId)) {
+                this.bot.sendMessage(chatId, '❌ Admin access required.');
+                return;
+            }
+            
+            console.log('📨 Received /qrcode from:', msg.from.username || msg.from.first_name, phoneNumber ? `for phone: ${phoneNumber}` : 'for all phones');
+            
+            if (!this.botInstance) {
+                await this.bot.sendMessage(chatId, '❌ Bot instance not available.');
+                return;
+            }
+            
+            // Show confirmation prompt
+            const confirmationMessage = '⚠️ <b>QR CODE GENERATION CONFIRMATION</b>\n\n' +
+                '🔄 <b>Are you sure you want to generate a new QR code?</b>\n\n' +
+                '⚠️ <b>This will:</b>\n' +
+                '• Disconnect the bot from WhatsApp (if connected)\n' +
+                '• Delete the current session file (creds.json)\n' +
+                '• Generate a new QR code for scanning\n' +
+                '• Require scanning the QR code to reconnect\n\n' +
+                '📱 <b>After scanning:</b>\n' +
+                '• Bot will reconnect automatically\n' +
+                '• Session will be saved to Supabase\n' +
+                '• Auto-retry: Up to 3 attempts if not scanned\n\n' +
+                '✅ <b>Type "YES" or "CONFIRM" to proceed</b>\n' +
+                '❌ <b>Type anything else to cancel</b>';
+            
+            await this.bot.sendMessage(chatId, confirmationMessage, { parse_mode: 'HTML' });
+            
+            // Store pending QR confirmation
+            this.pendingQRConfirmations = this.pendingQRConfirmations || new Map();
+            this.pendingQRConfirmations.set(userId, {
+                chatId: chatId,
+                phoneNumber: phoneNumber,
+                timestamp: Date.now()
+            });
+        });
+
+        // Execute QR code generation (called after confirmation)
+        this.executeQRCodeGeneration = async (chatId, phoneNumber) => {
+            try {
+                // Force QR code generation
+                const results = await this.botInstance.forceQRCode(phoneNumber);
+                
+                // Send results
+                const resultText = results.messages.join('\n');
+                await this.bot.sendMessage(chatId, resultText);
+                
+                if (results.success) {
+                    await this.bot.sendMessage(chatId, 
+                        '📱 <b>Next Steps:</b>\n\n' +
+                        '1. Check Render logs for the QR code\n' +
+                        '2. Open WhatsApp on your phone\n' +
+                        '3. Go to Settings → Linked Devices\n' +
+                        '4. Tap "Link a Device"\n' +
+                        '5. Scan the QR code from Render logs\n' +
+                        '6. Bot will connect automatically after scanning\n\n' +
+                        '⏰ QR code expires in 60 seconds\n' +
+                        '🔄 Auto-retry: Up to 3 attempts if not scanned',
+                        { parse_mode: 'HTML' }
+                    );
+                }
+            } catch (error) {
+                console.error('❌ Error in QR code generation:', error);
+                await this.bot.sendMessage(chatId, `❌ Error generating QR code: ${error.message}`);
+            }
+        };
 
         // Groups command
         this.bot.onText(/\/groups/, async (msg) => {
@@ -2158,6 +2285,11 @@ class TelegramCommandHandler {
             
             // Skip if this is a restart confirmation check (already handled above)
             if (this.pendingRestartConfirmations && this.pendingRestartConfirmations.has(userId)) {
+                return;
+            }
+            
+            // Skip if this is a QR confirmation check (already handled above)
+            if (this.pendingQRConfirmations && this.pendingQRConfirmations.has(userId)) {
                 return;
             }
             
