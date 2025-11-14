@@ -10,11 +10,12 @@ const fs = require('fs');
 const path = require('path');
 
 class TelegramCommandHandler {
-    constructor(token, authorization, keywordDetector) {
+    constructor(token, authorization, keywordDetector, botInstance = null) {
         try {
             this.bot = new TelegramBot(token, { polling: true, onlyFirstMatch: true });
             this.authorization = authorization;
             this.keywordDetector = keywordDetector; // Store keywordDetector reference
+            this.botInstance = botInstance; // Store bot instance for real status access
             this.reminderManager = null; // Will be set by bot
             this.lastCommandTime = new Map(); // Track last command time per user
             this.setupCommandHandlers();
@@ -355,11 +356,43 @@ class TelegramCommandHandler {
             }
             
             console.log('📨 Received /status from:', msg.from.username || msg.from.first_name);
+            
+            // Get real status from bot instance
+            let whatsappStatus = '❌ Disconnected';
+            let connectedPhones = [];
+            let telegramStatus = '❌ Disabled';
+            let keywordStatus = '❌ Disabled';
+            
+            if (this.botInstance) {
+                // Check WhatsApp connection status
+                if (this.botInstance.connections && this.botInstance.connections.size > 0) {
+                    for (const [phone, connection] of this.botInstance.connections) {
+                        if (connection.getConnectionStatus && connection.getConnectionStatus()) {
+                            connectedPhones.push(phone);
+                        }
+                    }
+                    if (connectedPhones.length > 0) {
+                        whatsappStatus = `✅ Connected (${connectedPhones.length} phone${connectedPhones.length > 1 ? 's' : ''})`;
+                    }
+                }
+                
+                // Check Telegram status
+                if (this.botInstance.notifier && this.botInstance.notifier.isEnabled()) {
+                    telegramStatus = '✅ Active';
+                }
+                
+                // Check keyword monitoring status
+                if (this.botInstance.keywordDetector && this.botInstance.keywordDetector.isEnabled()) {
+                    keywordStatus = '✅ Active';
+                }
+            }
+            
             const statusText = '📊 Bot Status\n\n' +
                 '✅ Bot is running\n' +
-                '✅ WhatsApp connected\n' +
-                '✅ Telegram notifications active\n' +
-                '✅ Keyword monitoring active\n' +
+                `${whatsappStatus}\n` +
+                `${telegramStatus === '✅ Active' ? '✅' : '❌'} Telegram notifications: ${telegramStatus === '✅ Active' ? 'Active' : 'Disabled'}\n` +
+                `${keywordStatus === '✅ Active' ? '✅' : '❌'} Keyword monitoring: ${keywordStatus === '✅ Active' ? 'Active' : 'Disabled'}\n` +
+                (connectedPhones.length > 0 ? `📱 Connected phones: ${connectedPhones.join(', ')}\n` : '') +
                 `🕐 Time: ${new Date().toLocaleString()}`;
             this.bot.sendMessage(chatId, statusText);
         });
@@ -688,15 +721,84 @@ class TelegramCommandHandler {
                 console.warn('⚠️ Could not read package.json for version, using default');
             }
             
+            // Get real statistics from bot instance
+            let uptime = 'Unknown';
+            let whatsappStatus = '❌ Disconnected';
+            let connectedPhoneCount = 0;
+            let telegramStatus = '❌ Disabled';
+            let keywordStatus = '❌ Disabled';
+            let messagesProcessed = 0;
+            let keywordsDetected = 0;
+            let notificationsSent = 0;
+            let errors = 0;
+            
+            if (this.botInstance) {
+                // Calculate real uptime
+                if (this.botInstance.stats && this.botInstance.stats.startTime) {
+                    // Handle both Date object and date string
+                    const startTime = this.botInstance.stats.startTime instanceof Date 
+                        ? this.botInstance.stats.startTime.getTime() 
+                        : new Date(this.botInstance.stats.startTime).getTime();
+                    const uptimeMs = Date.now() - startTime;
+                    const seconds = Math.floor(uptimeMs / 1000);
+                    const minutes = Math.floor(seconds / 60);
+                    const hours = Math.floor(minutes / 60);
+                    const days = Math.floor(hours / 24);
+                    
+                    if (days > 0) {
+                        uptime = `${days}d ${hours % 24}h ${minutes % 60}m`;
+                    } else if (hours > 0) {
+                        uptime = `${hours}h ${minutes % 60}m ${seconds % 60}s`;
+                    } else if (minutes > 0) {
+                        uptime = `${minutes}m ${seconds % 60}s`;
+                    } else {
+                        uptime = `${seconds}s`;
+                    }
+                }
+                
+                // Check WhatsApp connection status
+                if (this.botInstance.connections && this.botInstance.connections.size > 0) {
+                    for (const [phone, connection] of this.botInstance.connections) {
+                        if (connection.getConnectionStatus && connection.getConnectionStatus()) {
+                            connectedPhoneCount++;
+                        }
+                    }
+                    if (connectedPhoneCount > 0) {
+                        whatsappStatus = `✅ Connected (${connectedPhoneCount} phone${connectedPhoneCount > 1 ? 's' : ''})`;
+                    }
+                }
+                
+                // Check Telegram status
+                if (this.botInstance.notifier && this.botInstance.notifier.isEnabled()) {
+                    telegramStatus = '✅ Active';
+                }
+                
+                // Check keyword monitoring status
+                if (this.botInstance.keywordDetector && this.botInstance.keywordDetector.isEnabled()) {
+                    keywordStatus = '✅ Active';
+                }
+                
+                // Get real statistics
+                if (this.botInstance.stats) {
+                    messagesProcessed = this.botInstance.stats.messagesProcessed || 0;
+                    keywordsDetected = this.botInstance.stats.keywordsDetected || 0;
+                    notificationsSent = this.botInstance.stats.notificationsSent || 0;
+                    errors = this.botInstance.stats.errors || 0;
+                }
+            }
+            
             const statsText = '📈 Bot Statistics\n\n' +
                 `🤖 Bot Version: ${version}\n` +
-                '⏰ Uptime: Running\n' +
-                '📱 WhatsApp: Connected\n' +
-                '🔔 Telegram: Active\n' +
-                `🔍 Keywords: ${keywords.length} loaded\n` +
+                `⏰ Uptime: ${uptime}\n` +
+                `📱 WhatsApp: ${whatsappStatus}\n` +
+                `🔔 Telegram: ${telegramStatus}\n` +
+                `🔍 Keywords: ${keywords.length} loaded (${keywordStatus})\n` +
                 `👑 Admins: ${adminUsers.length}\n` +
                 `👥 Users: ${authorizedUsers.length}\n` +
-                '📊 Notifications: Ready\n' +
+                `📨 Messages Processed: ${messagesProcessed}\n` +
+                `🎯 Keywords Detected: ${keywordsDetected}\n` +
+                `📬 Notifications Sent: ${notificationsSent}\n` +
+                `❌ Errors: ${errors}\n` +
                 `🕐 Last Update: ${new Date().toLocaleString()}`;
             this.bot.sendMessage(chatId, statsText);
         });
