@@ -223,30 +223,39 @@ class WhatsAppConnection {
 
         // Set timeout for QR code expiration - infinite loop (keep regenerating)
         this.qrTimeoutId = setTimeout(async () => {
-            if (!this.isConnected) {
+            // Double-check connection status before regenerating (prevent race condition)
+            if (!this.isConnected && this.qrTimeoutId) {
                 console.log(`⏰ QR code expired (Attempt ${this.qrAttempts})`);
                 console.log(`🔄 Automatically generating new QR code (Attempt ${this.qrAttempts + 1})...`);
                 // Wait a moment before regenerating
                 await new Promise(resolve => setTimeout(resolve, 2000));
-                // Reconnect to get new QR code (infinite loop)
-                await this.connect();
+                // Check connection status again after delay (connection might have happened)
+                if (!this.isConnected && this.qrTimeoutId) {
+                    // Reconnect to get new QR code (infinite loop)
+                    await this.connect();
+                } else {
+                    console.log('✅ Connection established during delay, skipping QR regeneration');
+                }
+            } else {
+                console.log('✅ Connection already established, skipping QR regeneration');
             }
         }, this.qrTimeout);
     }
 
     async handleConnection() {
+        // Clear QR timeout FIRST to prevent race condition
+        if (this.qrTimeoutId) {
+            clearTimeout(this.qrTimeoutId);
+            this.qrTimeoutId = null;
+            console.log('🛑 QR code regeneration stopped - connection established');
+        }
+        
         this.isConnected = true;
         
         // Reset QR attempts on successful connection
         if (this.qrAttempts > 0) {
             console.log(`✅ Connection successful! QR attempts reset.`);
             this.qrAttempts = 0;
-        }
-        
-        // Clear QR timeout if connection successful
-        if (this.qrTimeoutId) {
-            clearTimeout(this.qrTimeoutId);
-            this.qrTimeoutId = null;
         }
         
         // Get phone number from connection

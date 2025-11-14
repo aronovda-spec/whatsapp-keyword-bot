@@ -268,7 +268,9 @@ class WhatsAppKeywordBot {
         this.app.get('/health', (req, res) => {
             const phoneStatus = {};
             for (const [phone, connection] of this.connections) {
-                phoneStatus[phone] = connection.getConnectionStatus();
+                // Use actual phone number instead of config placeholder
+                const actualPhone = this.getActualPhoneNumber(connection, phone);
+                phoneStatus[actualPhone] = connection.getConnectionStatus();
             }
             
             res.json({
@@ -284,8 +286,12 @@ class WhatsAppKeywordBot {
         // Stats endpoint (protected)
         this.app.get('/stats', requireAuth, (req, res) => {
             const phoneStatus = {};
+            const enabledPhones = [];
             for (const [phone, connection] of this.connections) {
-                phoneStatus[phone] = connection.getConnectionStatus();
+                // Use actual phone number instead of config placeholder
+                const actualPhone = this.getActualPhoneNumber(connection, phone);
+                phoneStatus[actualPhone] = connection.getConnectionStatus();
+                enabledPhones.push(actualPhone);
             }
             
             res.json({
@@ -296,7 +302,7 @@ class WhatsAppKeywordBot {
                     keywordsEnabled: this.keywordDetector.isEnabled(),
                     telegramEnabled: this.notifier.isEnabled(),
                     totalPhones: this.connections.size,
-                    enabledPhones: Array.from(this.connections.keys())
+                    enabledPhones: enabledPhones
                 }
             });
         });
