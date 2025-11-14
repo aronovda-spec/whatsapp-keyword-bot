@@ -26,8 +26,7 @@ class WhatsAppConnection {
         // Track recent keyword alerts with 45-second context window (chatId -> timestamp)
         this.recentKeywordAlerts = new Map(); // Map<chatId, timestamp[]>
         this.contextWindowMs = 45000; // 45 seconds
-        this.qrAttempts = 0; // Track QR code generation attempts
-        this.maxQRAttempts = 3; // Maximum QR code attempts before giving up
+        this.qrAttempts = 0; // Track QR code generation attempts (for logging)
         this.qrTimeoutId = null; // Store timeout ID for QR code expiration
         this.loadGroupConfig();
         this.init();
@@ -210,8 +209,9 @@ class WhatsAppConnection {
 
     handleQRCode(qr) {
         this.qrAttempts++;
-        console.log(`\n📱 QR Code Attempt ${this.qrAttempts}/${this.maxQRAttempts}`);
+        console.log(`\n📱 QR Code Attempt ${this.qrAttempts}`);
         console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        // Use smallest QR code size possible
         qrcode.generate(qr, { small: true });
         console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
         console.log('⏰ QR code will expire in 60 seconds...\n');
@@ -221,22 +221,15 @@ class WhatsAppConnection {
             clearTimeout(this.qrTimeoutId);
         }
 
-        // Set timeout for QR code expiration
+        // Set timeout for QR code expiration - infinite loop (keep regenerating)
         this.qrTimeoutId = setTimeout(async () => {
             if (!this.isConnected) {
-                console.log(`⏰ QR code expired (Attempt ${this.qrAttempts}/${this.maxQRAttempts})`);
-                
-                if (this.qrAttempts < this.maxQRAttempts) {
-                    console.log(`🔄 Automatically generating new QR code (Attempt ${this.qrAttempts + 1}/${this.maxQRAttempts})...`);
-                    // Wait a moment before regenerating
-                    await new Promise(resolve => setTimeout(resolve, 2000));
-                    // Reconnect to get new QR code
-                    await this.connect();
-                } else {
-                    console.log(`❌ Maximum QR code attempts (${this.maxQRAttempts}) reached.`);
-                    console.log('💡 Please use /qrcode command to generate a new QR code.');
-                    this.qrAttempts = 0; // Reset for next manual attempt
-                }
+                console.log(`⏰ QR code expired (Attempt ${this.qrAttempts})`);
+                console.log(`🔄 Automatically generating new QR code (Attempt ${this.qrAttempts + 1})...`);
+                // Wait a moment before regenerating
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                // Reconnect to get new QR code (infinite loop)
+                await this.connect();
             }
         }, this.qrTimeout);
     }

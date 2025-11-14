@@ -920,7 +920,7 @@ class TelegramCommandHandler {
                         '5. Scan the QR code from Render logs\n' +
                         '6. Bot will connect automatically after scanning\n\n' +
                         '⏰ QR code expires in 60 seconds\n' +
-                        '🔄 Auto-retry: Up to 3 attempts if not scanned',
+                        '🔄 Auto-retry: Continuously regenerates until scanned',
                         { parse_mode: 'HTML' }
                     );
                 }
