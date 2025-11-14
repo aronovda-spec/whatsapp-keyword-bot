@@ -162,6 +162,76 @@ class WhatsAppKeywordBot {
         }
     }
 
+    /**
+     * Force QR code generation for a specific phone or all phones
+     * @param {string} phoneNumber - Optional phone number, if not provided, generates for all phones
+     * @returns {Promise<Object>} Result object with success status and messages
+     */
+    async forceQRCode(phoneNumber = null) {
+        const results = {
+            success: false,
+            messages: [],
+            phones: []
+        };
+
+        try {
+            if (phoneNumber) {
+                // Force QR code for specific phone
+                const connection = this.connections.get(phoneNumber);
+                if (!connection) {
+                    results.messages.push(`❌ Phone ${phoneNumber} not found`);
+                    return results;
+                }
+
+                const actualPhone = this.getActualPhoneNumber(connection, phoneNumber);
+                results.messages.push(`🔄 Forcing QR code for phone: ${actualPhone}`);
+                
+                const success = await connection.forceQRCode();
+                if (success) {
+                    results.success = true;
+                    results.phones.push(actualPhone);
+                    results.messages.push(`✅ QR code generation initiated for ${actualPhone}. Check Render logs for QR code.`);
+                } else {
+                    results.messages.push(`❌ Failed to generate QR code for ${actualPhone}`);
+                }
+            } else {
+                // Force QR code for all phones
+                if (this.connections.size === 0) {
+                    results.messages.push('❌ No phones configured');
+                    return results;
+                }
+
+                results.messages.push(`🔄 Forcing QR code for all ${this.connections.size} phone(s)...`);
+                
+                for (const [phone, connection] of this.connections) {
+                    const actualPhone = this.getActualPhoneNumber(connection, phone);
+                    results.messages.push(`🔄 Processing phone: ${actualPhone}`);
+                    
+                    const success = await connection.forceQRCode();
+                    if (success) {
+                        results.phones.push(actualPhone);
+                        results.messages.push(`✅ QR code generation initiated for ${actualPhone}`);
+                    } else {
+                        results.messages.push(`❌ Failed to generate QR code for ${actualPhone}`);
+                    }
+                    
+                    // Small delay between phones to avoid rate limiting
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                }
+                
+                if (results.phones.length > 0) {
+                    results.success = true;
+                    results.messages.push(`✅ QR code generation initiated for ${results.phones.length} phone(s). Check Render logs for QR codes.`);
+                }
+            }
+        } catch (error) {
+            console.error('❌ Error in forceQRCode:', error);
+            results.messages.push(`❌ Error: ${error.message}`);
+        }
+
+        return results;
+    }
+
     setupExpress() {
         // Middleware
         this.app.use(express.json({ limit: '10mb' }));

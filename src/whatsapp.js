@@ -26,6 +26,9 @@ class WhatsAppConnection {
         // Track recent keyword alerts with 45-second context window (chatId -> timestamp)
         this.recentKeywordAlerts = new Map(); // Map<chatId, timestamp[]>
         this.contextWindowMs = 45000; // 45 seconds
+        this.qrAttempts = 0; // Track QR code generation attempts
+        this.maxQRAttempts = 3; // Maximum QR code attempts before giving up
+        this.qrTimeoutId = null; // Store timeout ID for QR code expiration
         this.loadGroupConfig();
         this.init();
     }
@@ -206,22 +209,52 @@ class WhatsAppConnection {
     }
 
     handleQRCode(qr) {
-        console.log('\n📱 Scan this QR code with your WhatsApp:');
+        this.qrAttempts++;
+        console.log(`\n📱 QR Code Attempt ${this.qrAttempts}/${this.maxQRAttempts}`);
         console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
         qrcode.generate(qr, { small: true });
         console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
         console.log('⏰ QR code will expire in 60 seconds...\n');
 
-        // Set timeout for QR code
-        setTimeout(() => {
+        // Clear any existing timeout
+        if (this.qrTimeoutId) {
+            clearTimeout(this.qrTimeoutId);
+        }
+
+        // Set timeout for QR code expiration
+        this.qrTimeoutId = setTimeout(async () => {
             if (!this.isConnected) {
-                console.log('⏰ QR code expired. Please restart the bot.');
+                console.log(`⏰ QR code expired (Attempt ${this.qrAttempts}/${this.maxQRAttempts})`);
+                
+                if (this.qrAttempts < this.maxQRAttempts) {
+                    console.log(`🔄 Automatically generating new QR code (Attempt ${this.qrAttempts + 1}/${this.maxQRAttempts})...`);
+                    // Wait a moment before regenerating
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                    // Reconnect to get new QR code
+                    await this.connect();
+                } else {
+                    console.log(`❌ Maximum QR code attempts (${this.maxQRAttempts}) reached.`);
+                    console.log('💡 Please use /qrcode command to generate a new QR code.');
+                    this.qrAttempts = 0; // Reset for next manual attempt
+                }
             }
         }, this.qrTimeout);
     }
 
     async handleConnection() {
         this.isConnected = true;
+        
+        // Reset QR attempts on successful connection
+        if (this.qrAttempts > 0) {
+            console.log(`✅ Connection successful! QR attempts reset.`);
+            this.qrAttempts = 0;
+        }
+        
+        // Clear QR timeout if connection successful
+        if (this.qrTimeoutId) {
+            clearTimeout(this.qrTimeoutId);
+            this.qrTimeoutId = null;
+        }
         
         // Get phone number from connection
         try {
@@ -387,6 +420,60 @@ class WhatsAppConnection {
                 this.connect();
             }
         }, this.reconnectDelay);
+    }
+
+    /**
+     * Force QR code generation by deleting session and reconnecting
+     * This allows generating a new QR code without restarting the bot
+     */
+    async forceQRCode() {
+        try {
+            console.log('🔄 Forcing QR code generation...');
+            
+            // Reset QR attempts counter for manual QR code generation
+            this.qrAttempts = 0;
+            
+            // Clear any existing QR timeout
+            if (this.qrTimeoutId) {
+                clearTimeout(this.qrTimeoutId);
+                this.qrTimeoutId = null;
+            }
+            
+            // Close existing socket if connected
+            if (this.sock) {
+                console.log('🔌 Closing existing connection...');
+                this.isConnected = false;
+                try {
+                    await this.sock.end();
+                } catch (error) {
+                    console.log('⚠️ Error closing socket:', error.message);
+                }
+                this.sock = null;
+            }
+            
+            // Delete creds.json to force new QR code
+            const credsPath = path.join(this.sessionPath, 'creds.json');
+            if (fs.existsSync(credsPath)) {
+                console.log('🗑️ Deleting creds.json to force new QR code...');
+                fs.unlinkSync(credsPath);
+                console.log('✅ creds.json deleted');
+            } else {
+                console.log('ℹ️ No creds.json found - QR code will be generated on reconnect');
+            }
+            
+            // Wait a moment before reconnecting
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            // Reconnect which will trigger QR code generation
+            console.log('🔄 Reconnecting to generate QR code...');
+            await this.connect();
+            
+            return true;
+        } catch (error) {
+            console.error('❌ Error forcing QR code:', error.message);
+            logError(error, { context: 'force_qr_code' });
+            return false;
+        }
     }
 
     async handleMessages(m) {
