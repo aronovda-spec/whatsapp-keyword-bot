@@ -32,6 +32,8 @@ class WhatsAppKeywordBot {
         this.connections = new Map(); // Store multiple WhatsApp connections
         this.keepAlive = new KeepAliveService(); // Anti-sleep mechanism
         this.commandHandler = null; // Telegram command handler
+        this._lastDisconnectWasSoft = false; // Track soft disconnects for legacy handler
+        this._softDisconnectTimeout = null; // Timeout for soft disconnect reconnection check
         this.stats = {
             startTime: new Date(),
             messagesProcessed: 0,
@@ -93,6 +95,22 @@ class WhatsAppKeywordBot {
                 const actualPhone = this.getActualPhoneNumber(connection, phoneNumber);
                 console.log(`✅ Phone ${actualPhone} connected successfully!`);
                 logBotEvent('phone_connected', { phoneNumber: actualPhone, description });
+                
+                // Clear any pending soft disconnect timeout since we reconnected
+                if (connection._softDisconnectTimeout) {
+                    clearTimeout(connection._softDisconnectTimeout);
+                    connection._softDisconnectTimeout = null;
+                    console.log('✅ Cleared soft disconnect timeout - reconnected successfully');
+                }
+                
+                // Skip connected notification if last disconnect was "soft" (auto-reconnects)
+                // This prevents notification spam for temporary disconnections
+                if (connection._lastDisconnectWasSoft) {
+                    console.log('ℹ️ Skipping connected notification (last disconnect was soft/auto-reconnect)');
+                    connection._lastDisconnectWasSoft = false; // Reset flag
+                    return;
+                }
+                
                 // Send status update to admins only during development stage
                 this.notifier.sendBotStatus('Connected', `Phone ${actualPhone} is now connected and monitoring WhatsApp messages`, true);
             });
@@ -103,14 +121,53 @@ class WhatsAppKeywordBot {
                 console.log(`❌ Phone ${actualPhone} disconnected`);
                 logBotEvent('phone_disconnected', { phoneNumber: actualPhone });
                 
-                // Send status update to admins only during development stage
-                // Skip notifications for code 428 (normal session refresh) and 503 (temporary server issue)
-                if (disconnectInfo?.reason === 428) {
-                    console.log('ℹ️ Code 428 - Normal WhatsApp session maintenance, skipping notification (will auto-reconnect)');
-                    return; // Don't send notification for normal maintenance
-                } else if (disconnectInfo?.reason === 503) {
-                    console.log('ℹ️ Code 503 - WhatsApp service temporarily unavailable, skipping notification (will auto-reconnect)');
-                    return; // Don't send notification for temporary server issue
+                // Define "soft" disconnect codes that auto-reconnect and don't need notifications
+                // These are temporary issues that resolve automatically
+                const softDisconnectCodes = [428, 503]; // 428: normal maintenance, 503: service unavailable
+                
+                // Check if this is a soft disconnect (auto-reconnects, no user action needed)
+                const isSoftDisconnect = disconnectInfo?.reason && softDisconnectCodes.includes(disconnectInfo.reason);
+                
+                if (isSoftDisconnect) {
+                    // Clear any existing soft disconnect timeout (in case of rapid re-disconnects)
+                    if (connection._softDisconnectTimeout) {
+                        clearTimeout(connection._softDisconnectTimeout);
+                        connection._softDisconnectTimeout = null;
+                        console.log('ℹ️ Cleared previous soft disconnect timeout');
+                    }
+                    
+                    // Mark as soft disconnect so we also skip the connected notification
+                    connection._lastDisconnectWasSoft = true;
+                    console.log(`ℹ️ Code ${disconnectInfo.reason} - Soft disconnect (auto-reconnects), skipping immediate notification`);
+                    
+                    // Set a timeout: if reconnection doesn't happen within 60 seconds, send notification
+                    // This ensures we're notified if the soft disconnect doesn't actually recover
+                    const softDisconnectTimeout = 60000; // 60 seconds
+                    // Capture disconnectInfo in closure to avoid issues if another disconnect happens
+                    const capturedDisconnectInfo = { ...disconnectInfo };
+                    connection._softDisconnectTimeout = setTimeout(() => {
+                        // Check if still disconnected
+                        if (!connection.isConnected) {
+                            const actualPhone = this.getActualPhoneNumber(connection, phoneNumber);
+                            console.log(`⚠️ Soft disconnect (code ${capturedDisconnectInfo.reason}) did not reconnect within ${softDisconnectTimeout/1000}s - sending notification`);
+                            const details = `Phone: ${actualPhone}\nDisconnect reason: ${capturedDisconnectInfo.reason || 'Unknown'}\nMessage: ${capturedDisconnectInfo.message || 'Bot lost connection to WhatsApp'}\n\n⚠️ Reconnection failed after ${softDisconnectTimeout/1000} seconds`;
+                            this.notifier.sendBotStatus('Disconnected', details, true);
+                            connection._lastDisconnectWasSoft = false; // Reset so we'll notify on reconnect
+                        }
+                        connection._softDisconnectTimeout = null;
+                    }, softDisconnectTimeout);
+                    
+                    return; // Don't send immediate notification for soft disconnects
+                }
+                
+                // Reset soft disconnect flag for hard disconnects
+                connection._lastDisconnectWasSoft = false;
+                
+                // Clear any pending soft disconnect timeout since we're handling this as a hard disconnect
+                if (connection._softDisconnectTimeout) {
+                    clearTimeout(connection._softDisconnectTimeout);
+                    connection._softDisconnectTimeout = null;
+                    console.log('ℹ️ Cleared soft disconnect timeout - hard disconnect detected');
                 }
                 
                 let details = '';
@@ -352,19 +409,73 @@ class WhatsAppKeywordBot {
         // Handle WhatsApp connection events
         this.whatsapp.on('connected', () => {
             logBotEvent('bot_started');
+            
+            // Clear any pending soft disconnect timeout since we reconnected
+            if (this._softDisconnectTimeout) {
+                clearTimeout(this._softDisconnectTimeout);
+                this._softDisconnectTimeout = null;
+                console.log('✅ Cleared soft disconnect timeout - reconnected successfully');
+            }
+            
+            // Skip connected notification if last disconnect was "soft" (auto-reconnects)
+            // This prevents notification spam for temporary disconnections
+            if (this._lastDisconnectWasSoft) {
+                console.log('ℹ️ Skipping connected notification (last disconnect was soft/auto-reconnect)');
+                this._lastDisconnectWasSoft = false; // Reset flag
+                return;
+            }
+            
             this.notifier.sendBotStatus('Connected', 'Bot is now monitoring WhatsApp messages', true);
         });
 
         this.whatsapp.on('disconnected', (disconnectInfo) => {
             logBotEvent('bot_disconnected', disconnectInfo);
             
-            // Skip notifications for code 428 (normal session refresh) and 503 (temporary server issue)
-            if (disconnectInfo?.reason === 428) {
-                console.log('ℹ️ Code 428 - Normal WhatsApp session maintenance, skipping notification (will auto-reconnect)');
-                return; // Don't send notification for normal maintenance
-            } else if (disconnectInfo?.reason === 503) {
-                console.log('ℹ️ Code 503 - WhatsApp service temporarily unavailable, skipping notification (will auto-reconnect)');
-                return; // Don't send notification for temporary server issue
+            // Define "soft" disconnect codes that auto-reconnect and don't need notifications
+            // These are temporary issues that resolve automatically
+            const softDisconnectCodes = [428, 503]; // 428: normal maintenance, 503: service unavailable
+            
+            // Check if this is a soft disconnect (auto-reconnects, no user action needed)
+            const isSoftDisconnect = disconnectInfo?.reason && softDisconnectCodes.includes(disconnectInfo.reason);
+            
+            if (isSoftDisconnect) {
+                // Clear any existing soft disconnect timeout (in case of rapid re-disconnects)
+                if (this._softDisconnectTimeout) {
+                    clearTimeout(this._softDisconnectTimeout);
+                    this._softDisconnectTimeout = null;
+                    console.log('ℹ️ Cleared previous soft disconnect timeout');
+                }
+                
+                // Mark as soft disconnect so we also skip the connected notification
+                this._lastDisconnectWasSoft = true;
+                console.log(`ℹ️ Code ${disconnectInfo.reason} - Soft disconnect (auto-reconnects), skipping immediate notification`);
+                
+                // Set a timeout: if reconnection doesn't happen within 60 seconds, send notification
+                // This ensures we're notified if the soft disconnect doesn't actually recover
+                // Note: If reconnection succeeds, this timeout will be cleared in the 'connected' handler
+                const softDisconnectTimeout = 60000; // 60 seconds
+                // Capture disconnectInfo in closure to avoid issues if another disconnect happens
+                const capturedDisconnectInfo = { ...disconnectInfo };
+                this._softDisconnectTimeout = setTimeout(() => {
+                    // If this timeout fires, it means we didn't reconnect (timeout would be cleared on reconnect)
+                    console.log(`⚠️ Soft disconnect (code ${capturedDisconnectInfo.reason}) did not reconnect within ${softDisconnectTimeout/1000}s - sending notification`);
+                    const details = `Disconnect reason: ${capturedDisconnectInfo.reason || 'Unknown'}\nMessage: ${capturedDisconnectInfo.message || 'Bot lost connection to WhatsApp'}\n\n⚠️ Reconnection failed after ${softDisconnectTimeout/1000} seconds`;
+                    this.notifier.sendBotStatus('Disconnected', details, true);
+                    this._lastDisconnectWasSoft = false; // Reset so we'll notify on reconnect
+                    this._softDisconnectTimeout = null;
+                }, softDisconnectTimeout);
+                
+                return; // Don't send immediate notification for soft disconnects
+            }
+            
+            // Reset soft disconnect flag for hard disconnects
+            this._lastDisconnectWasSoft = false;
+            
+            // Clear any pending soft disconnect timeout since we're handling this as a hard disconnect
+            if (this._softDisconnectTimeout) {
+                clearTimeout(this._softDisconnectTimeout);
+                this._softDisconnectTimeout = null;
+                console.log('ℹ️ Cleared soft disconnect timeout - hard disconnect detected');
             }
             
             let statusMessage = 'Bot lost connection to WhatsApp';
