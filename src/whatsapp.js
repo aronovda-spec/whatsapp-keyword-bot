@@ -64,14 +64,12 @@ class WhatsAppConnection {
                 console.log('🔍 Supabase enabled, attempting session restore...');
                 try {
                     // Try multiple possible paths where sessions might be stored
+                    // Priority: configPhoneNumber (from sessionPath), then 'phone1' default
                     const restorePaths = [
-                        'PHONE_PLACEHOLDER', // Phone number without device ID (NEW consistent path - first priority)
-                        'phone1', // Config default
-                        'PHONE_PLACEHOLDER:12@s.whatsapp.net', // Most recent old backup with device ID 12
-                        'PHONE_PLACEHOLDER:11@s.whatsapp.net', // Another old backup
-                        'PHONE_PLACEHOLDER:4@s.whatsapp.net', // Another old backup
-                        'PHONE_PLACEHOLDER:1@s.whatsapp.net', // First old backup
-                        this.configPhoneNumber // Fallback
+                        this.configPhoneNumber, // First priority: use configured phone identifier
+                        'phone1', // Config default fallback
+                        // Note: Additional restore paths can be added here if needed for migration
+                        // but should not contain hardcoded phone numbers
                     ];
                     
                     let restored = false;
@@ -265,7 +263,7 @@ class WhatsAppConnection {
             this.phoneNumber = fullId;
             
             // Extract phone number without device ID for consistent backup path
-            // e.g. "PHONE_PLACEHOLDER:4@s.whatsapp.net" → "PHONE_PLACEHOLDER"
+            // e.g. "1234567890:4@s.whatsapp.net" → "1234567890"
             const phoneMatch = fullId.match(/^(\d+):/);
             this.phoneNumberForBackup = phoneMatch ? phoneMatch[1] : this.phoneNumber;
             

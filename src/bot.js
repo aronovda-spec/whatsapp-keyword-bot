@@ -210,7 +210,7 @@ class WhatsAppKeywordBot {
             return connection.phoneNumberForBackup;
         } else if (connection.phoneNumber && connection.phoneNumber !== 'default') {
             // Extract clean phone number from full ID if needed
-            // e.g. "PHONE_PLACEHOLDER:4@s.whatsapp.net" → "PHONE_PLACEHOLDER"
+            // e.g. "1234567890:4@s.whatsapp.net" → "1234567890"
             const phoneMatch = connection.phoneNumber.match(/^(\d+):/);
             return phoneMatch ? phoneMatch[1] : connection.phoneNumber;
         } else {
